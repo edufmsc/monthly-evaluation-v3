@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#8f3b12">
+  <meta name="color-scheme" content="light">
+  <meta name="robots" content="noindex,nofollow">
+  <title>月考核系統 V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">鬍鬚張｜教育中心</p>
+        <h1>月考核系統 V3</h1>
+      </div>
+      <span id="connectionBadge" class="status-badge status-badge--checking">檢查連線中</span>
+    </header>
+
+    <main class="app-main">
+      <section id="configErrorCard" class="notice-card notice-card--danger" hidden>
+        <h2>尚未設定後端網址</h2>
+        <p>請先打開 <code>api_config.js</code>，把 Apps Script 正式部署的 <code>/exec</code> 網址貼入，再重新上傳到 GitHub。</p>
+      </section>
+
+      <section id="loginView" class="card login-card" aria-labelledby="loginTitle">
+        <div class="card-heading">
+          <p class="step-label">登入測試</p>
+          <h2 id="loginTitle">使用工號與 4 碼密碼登入</h2>
+          <p>不需要 Google 帳號。帳號資料由教育中心在員工主檔管理。</p>
+        </div>
+
+        <form id="loginForm" novalidate>
+          <div class="field-group">
+            <label for="employeeId">員工工號</label>
+            <input
+              id="employeeId"
+              name="employeeId"
+              type="text"
+              inputmode="text"
+              autocomplete="username"
+              maxlength="40"
+              placeholder="例如 0000 或 FMSC0000123"
+              required
+            >
+            <p class="field-hint">工號會保留英文字母與前導 0。</p>
+          </div>
+
+          <div class="field-group">
+            <label for="password">登入密碼</label>
+            <div class="password-wrap">
+              <input
+                id="password"
+                name="password"
+                type="password"
+                inputmode="numeric"
+                autocomplete="current-password"
+                maxlength="4"
+                pattern="[0-9]{4}"
+                placeholder="4 碼數字"
+                required
+              >
+              <button id="togglePassword" class="icon-button" type="button" aria-label="顯示密碼" aria-pressed="false">顯示</button>
+            </div>
+            <p class="field-hint">例如 0578，系統會保留前導 0。</p>
+          </div>
+
+          <div id="loginMessage" class="form-message" role="alert" aria-live="polite" hidden></div>
+
+          <button id="loginButton" class="primary-button" type="submit">
+            <span class="button-label">登入</span>
+            <span class="button-spinner" aria-hidden="true"></span>
+          </button>
+        </form>
+
+        <div class="privacy-note">
+          <strong>隱私提醒</strong>
+          <p>此頁不會下載其他人員密碼，也不會要求 Google 登入。登入成功後僅保存本次瀏覽器分頁的 Session。</p>
+        </div>
+      </section>
+
+      <section id="dashboardView" class="dashboard" hidden aria-labelledby="dashboardTitle">
+        <article class="card profile-card">
+          <div class="profile-topline">
+            <div>
+              <p class="step-label">登入成功</p>
+              <h2 id="dashboardTitle"><span id="userName">—</span>，您好</h2>
+            </div>
+            <span id="userRole" class="role-badge">—</span>
+          </div>
+
+          <dl class="profile-grid">
+            <div>
+              <dt>員工工號</dt>
+              <dd id="userEmployeeId">—</dd>
+            </div>
+            <div>
+              <dt>部門／營業處</dt>
+              <dd id="userDepartment">—</dd>
+            </div>
+            <div>
+              <dt>區域</dt>
+              <dd id="userArea">—</dd>
+            </div>
+            <div>
+              <dt>店別</dt>
+              <dd id="userStore">—</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="card phase-card">
+          <h3>第 5 階段登入測試</h3>
+          <p>目前只驗證：未登入 Google、工號密碼登入、Session、角色顯示與登出。</p>
+          <div class="action-grid">
+            <button id="refreshSessionButton" class="secondary-button" type="button">重新驗證登入狀態</button>
+            <button id="healthCheckButton" class="secondary-button" type="button">測試後端連線</button>
+            <button id="logoutButton" class="danger-button" type="button">登出</button>
+          </div>
+          <div id="dashboardMessage" class="form-message" role="status" aria-live="polite" hidden></div>
+        </article>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span id="appVersion">V3</span>
+      <span>手機優先測試版</span>
+    </footer>
+  </div>
+
+  <script src="api_config.js" defer></script>
+  <script src="api_client.js" defer></script>
+  <script src="auth_service.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
