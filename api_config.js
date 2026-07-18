@@ -8,7 +8,7 @@
 window.V3_CONFIG = Object.freeze({
   APP_NAME: '月考核系統 V3',
   APP_VERSION: '5.0.0-login-test',
-  API_URL:https://script.google.com/macros/s/AKfycbxf7aaodz2V7F5EWnKd3FlI0KMEGzaGw1XPMVg6Mw7ynPW078YksIHlZt2ljouAp_Lo/exec,
+  API_URL:'https://script.google.com/macros/s/AKfycbxf7aaodz2V7F5EWnKd3FlI0KMEGzaGw1XPMVg6Mw7ynPW078YksIHlZt2ljouAp_Lo/exec',
   REQUEST_TIMEOUT_MS: 20000,
   SESSION_STORAGE_KEY: 'monthlyEvaluationV3Session'
 });
