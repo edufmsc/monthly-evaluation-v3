@@ -57,6 +57,15 @@
     },
     getMySignaturePreview: function (source, evaluationNo) {
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
+    },
+    generatePdf: function (evaluationNo, requestId) {
+      return call('generatePdf', { evaluationNo: String(evaluationNo || '') }, requestId);
+    },
+    downloadPdf: function (evaluationNo) {
+      return call('downloadPdf', { evaluationNo: String(evaluationNo || '') });
+    },
+    verifyPdfTemplate: function () {
+      return call('verifyPdfTemplate', {});
     }
   });
 })();
