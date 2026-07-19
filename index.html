@@ -156,13 +156,63 @@
           </div>
           <div id="adminSystemMessage" class="form-message" role="status" aria-live="polite" hidden></div>
           <article id="adminSystemResult" class="card admin-result-card" hidden></article>
+
+          <article class="card test-dispatch-card">
+            <div class="test-dispatch-heading">
+              <div>
+                <p class="step-label">流程測試工具</p>
+                <h3>建立測試月考核表</h3>
+                <p>一次只建立一位受評人員的 R0 測試表。建立前先預覽完整上呈路線，正式每月派發尚未啟用。</p>
+              </div>
+              <button id="refreshTestCandidatesButton" class="secondary-button secondary-button--small" type="button">重新載入人員</button>
+            </div>
+
+            <form id="testDispatchForm" class="test-dispatch-form" novalidate>
+              <label class="field-group">
+                <span>受評人員</span>
+                <select id="testDispatchEmployee" required>
+                  <option value="">請先載入並選擇受評人員</option>
+                </select>
+                <small id="testDispatchEmployeeHint" class="field-hint">僅列出員工主檔中在職的受評人員。</small>
+              </label>
+
+              <label class="field-group">
+                <span>考核月份</span>
+                <input id="testDispatchMonth" type="text" inputmode="numeric" maxlength="9" placeholder="例如 115/08/01" required>
+                <small class="field-hint">固定使用完整民國日期 YYY/MM/01。</small>
+              </label>
+
+              <label class="field-group test-dispatch-reason">
+                <span>建立原因</span>
+                <textarea id="testDispatchReason" rows="3" maxlength="300" placeholder="例如：驗證營一區完整流程" required></textarea>
+              </label>
+
+              <div class="test-dispatch-actions">
+                <button id="previewTestDispatchButton" class="secondary-button" type="submit">預覽上呈路線</button>
+              </div>
+            </form>
+
+            <div id="testDispatchMessage" class="form-message" role="status" aria-live="polite" hidden></div>
+
+            <section id="testDispatchPreview" class="test-dispatch-preview" hidden>
+              <div id="testDispatchPreviewContent"></div>
+              <label class="confirm-row">
+                <input id="testDispatchConfirm" type="checkbox">
+                <span>我已確認受評人員、月份、門市與完整簽核路線，確定建立一張 R0 測試月考核表。</span>
+              </label>
+              <button id="createTestDispatchButton" class="primary-button" type="button" disabled>
+                <span class="button-label">建立測試月考核表</span>
+                <span class="button-spinner" aria-hidden="true"></span>
+              </button>
+            </section>
+          </article>
         </section>
       </section>
     </main>
 
     <footer class="app-footer">
       <span id="appVersion">V3</span>
-      <span>手機版流程測試</span>
+      <span>V3 流程與派發測試</span>
     </footer>
   </div>
 
