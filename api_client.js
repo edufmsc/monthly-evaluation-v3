@@ -37,7 +37,8 @@
     var defaultTimeout = Number(config.REQUEST_TIMEOUT_MS || 20000);
     var actionTimeouts = {
       generatePdf: 120000,
-      downloadPdf: 60000,
+      publishPdf: 60000,
+      publicPdfView: 60000,
       verifyPdfTemplate: 60000
     };
     var timeoutMs = Number(actionTimeouts[String(action || '')] || defaultTimeout);
