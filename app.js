@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.2.0-test-dispatch';
+  var APP_BUILD = '6.3.0-evaluation-ux';
   var elements = {};
   var state = {
     session: null,
@@ -267,9 +267,9 @@
   function summaryHtml(record) {
     return '<div class="summary-grid">' +
       metaItem('考核單號', record['考核單號']) +
-      metaItem('考核月份', record['考核月份']) +
+      metaItem('考核月份', formatRocDateDisplay(record['考核月份'])) +
       metaItem('受評人員', joinText(record['受評人員工號'], record['受評人員姓名'])) +
-      metaItem('轉任日', record['受評人員轉任日']) +
+      metaItem('轉任日', formatRocDateDisplay(record['受評人員轉任日'])) +
       metaItem('店別', joinStore(record['目前店號'] || record['建立時店號'], record['目前店名'] || record['建立時店名'])) +
       metaItem('目前狀態', record['流程狀態']) +
       metaItem('目前承辦角色', record['目前指派角色']) +
@@ -287,7 +287,10 @@
       ['教育中心評核', [
         ['職能積分累計', record['職能積分累計']], ['職能積分得分', record['職能積分得分']],
         ['OJT完成篇數', record['OJT完成篇數']], ['OJT得分', record['OJT得分']],
-        ['每週進度回報', record['每週進度回報得分']], ['培訓課程狀況', record['培訓課程狀況得分']],
+        ['回報錯誤次數', record['每週回報錯誤次數']], ['未回報次數', record['每週未回報次數']],
+        ['每週進度回報得分', record['每週進度回報得分']],
+        ['培訓出勤異常次數', record['培訓出勤異常次數']], ['作業遲繳天數', record['作業遲繳天數']],
+        ['培訓課程狀況得分', record['培訓課程狀況得分']],
         ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']],
         ['主管評語', record['教育中心主管評語']]
       ]],
@@ -358,9 +361,11 @@
     state.signatureController = null;
     state.draftLoaded = false;
     elements.evaluationActionForm.innerHTML = window.V3EvaluationForm.renderActionForm(state.currentDetail || {}, action);
+    window.V3EvaluationForm.initializeInteractiveControls(elements.evaluationActionForm);
     elements.submitEvaluationButton.querySelector('.button-label').textContent = window.V3EvaluationForm.ACTION_LABELS[action] || '送出';
     initializeSignatureIfNeeded();
     await loadDraftForCurrentAction();
+    window.V3EvaluationForm.refreshInteractiveControls(elements.evaluationActionForm);
   }
 
   async function initializeSignatureIfNeeded() {
@@ -812,6 +817,7 @@
     configureRoleBasedInterface(session);
     elements.loginView.hidden = true;
     elements.dashboardView.hidden = false;
+    switchTab('pending');
   }
 
   function configureRoleBasedInterface(session) {
@@ -943,9 +949,25 @@
       SIGNATURE_REQUIRED: '請使用預存簽名或完成手寫簽名。',
       SAVED_SIGNATURE_NOT_FOUND: '沒有可用的預存簽名，請改用手寫簽名。',
       REASON_REQUIRED: '退回原因為必填。',
-      ABNORMAL_REPORT_REQUIRED: '教育中心異常回報必填；沒有異常請填「無」。'
+      ABNORMAL_REPORT_REQUIRED: '教育中心異常回報為必填，請完成確認後輸入內容。',
+      MANAGER_COMMENT_REQUIRED: '門市店主管評語為必填。',
+      AREA_COMMENT_REQUIRED: '區主管評語為必填。',
+      PHASE63_UPGRADE_REQUIRED: '資料表尚未完成第6.3階段升級，請聯絡教育中心。'
     };
     return messages[code] || String(error && error.message || '系統處理失敗。');
+  }
+
+  function formatRocDateDisplay(value) {
+    var text = String(value === null || value === undefined ? '' : value).trim();
+    if (!text) return '';
+    text = text.replace(/\s+00:00:00(?:\s+.*)?$/, '');
+    var match = /^0*(\d{3})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/.exec(text);
+    if (match) return padNumber(Number(match[1]), 3) + '/' + padNumber(Number(match[2]), 2) + '/' + padNumber(Number(match[3]), 2);
+    var western = /^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/.exec(text);
+    if (western && Number(western[1]) >= 1912) {
+      return padNumber(Number(western[1]) - 1911, 3) + '/' + padNumber(Number(western[2]), 2) + '/' + padNumber(Number(western[3]), 2);
+    }
+    return text;
   }
 
   function valueOrDash(value) {
