@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.0.0-workflow';
+  var APP_BUILD = '6.1.0-history-admin';
   var elements = {};
   var state = {
     session: null,
@@ -40,10 +40,12 @@
       'connectionBadge', 'configErrorCard', 'loginView', 'dashboardView', 'loginForm',
       'employeeId', 'password', 'togglePassword', 'loginMessage', 'loginButton',
       'userName', 'userRole', 'userEmployeeId', 'profileRole', 'userDepartment', 'profileDepartment',
-      'userArea', 'userStore', 'profileStore', 'refreshSessionButton', 'healthCheckButton', 'logoutButton',
-      'dashboardMessage', 'appVersion', 'pendingCountBadge', 'pendingPanel', 'historyPanel', 'profilePanel',
+      'userArea', 'userStore', 'profileStore', 'logoutButton', 'systemTabButton',
+      'dashboardMessage', 'appVersion', 'pendingCountBadge', 'pendingPanel', 'historyPanel', 'profilePanel', 'systemPanel',
       'refreshPendingButton', 'pendingList', 'historyFilterForm', 'historyMonth', 'historyEmployeeId',
-      'historyStatus', 'historyList', 'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
+      'historyEmployeeFilter', 'historyStatus', 'historyList', 'historyScopeText',
+      'adminRefreshSessionButton', 'adminHealthCheckButton', 'adminSystemHealthButton',
+      'adminSystemMessage', 'adminSystemResult', 'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
       'draftStatus', 'saveDraftButton', 'submitEvaluationButton', 'evaluationDialogTitle'
@@ -57,9 +59,10 @@
     elements.togglePassword.addEventListener('click', togglePasswordVisibility);
     elements.password.addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); });
     elements.employeeId.addEventListener('input', function () { this.value = this.value.toUpperCase(); });
-    elements.refreshSessionButton.addEventListener('click', refreshSession);
-    elements.healthCheckButton.addEventListener('click', function () { checkHealth(true); });
     elements.logoutButton.addEventListener('click', handleLogout);
+    elements.adminRefreshSessionButton.addEventListener('click', runAdminSessionCheck);
+    elements.adminHealthCheckButton.addEventListener('click', runAdminConnectionCheck);
+    elements.adminSystemHealthButton.addEventListener('click', runAdminSystemHealth);
     elements.refreshPendingButton.addEventListener('click', loadPending);
     elements.historyFilterForm.addEventListener('submit', function (event) {
       event.preventDefault();
@@ -498,19 +501,65 @@
     renderEvaluationDetail();
   }
 
-  async function refreshSession() {
-    setDashboardMessage('info', '正在重新驗證登入狀態…');
-    elements.refreshSessionButton.disabled = true;
+  async function runAdminSessionCheck() {
+    showAdminMessage('info', '正在重新驗證登入狀態…');
+    elements.adminRefreshSessionButton.disabled = true;
     try {
       state.session = await window.V3AuthService.validateSession();
       showDashboardShell(state.session);
-      setDashboardMessage('success', '登入狀態有效。');
+      showAdminMessage('success', '登入狀態有效，角色與組織資料已更新。');
     } catch (error) {
       showLogin();
       showLoginMessage('error', friendlyError(error));
     } finally {
-      elements.refreshSessionButton.disabled = false;
+      elements.adminRefreshSessionButton.disabled = false;
     }
+  }
+
+  async function runAdminConnectionCheck() {
+    showAdminMessage('info', '正在測試後端連線…');
+    elements.adminHealthCheckButton.disabled = true;
+    try {
+      var result = await window.V3ApiClient.health();
+      var data = result.data || {};
+      setConnectionStatus('online', data.status === 'ok' ? '後端正常' : '已連線');
+      showAdminMessage('success', '後端連線正常。API版本：' + valueOrDash(result.apiVersion || data.apiVersion) + '；伺服器時間：' + valueOrDash(data.serverTime));
+    } catch (error) {
+      setConnectionStatus('offline', '後端無法連線');
+      showAdminMessage('error', friendlyError(error));
+    } finally {
+      elements.adminHealthCheckButton.disabled = false;
+    }
+  }
+
+  async function runAdminSystemHealth() {
+    showAdminMessage('info', '正在執行系統健檢…');
+    elements.adminSystemHealthButton.disabled = true;
+    elements.adminSystemResult.hidden = true;
+    try {
+      var result = await window.V3WorkflowService.systemHealth();
+      var data = result.data || {};
+      elements.adminSystemResult.innerHTML = adminSystemResultHtml(data);
+      elements.adminSystemResult.hidden = false;
+      showAdminMessage(data.status === 'ok' ? 'success' : 'info', data.status === 'ok' ? '系統健檢完成，未發現必要工作表缺漏。' : '系統健檢完成，請查看下方檢查結果。');
+    } catch (error) {
+      showAdminMessage('error', friendlyError(error));
+    } finally {
+      elements.adminSystemHealthButton.disabled = false;
+    }
+  }
+
+  function adminSystemResultHtml(data) {
+    var missing = Array.isArray(data.missingSheets) ? data.missingSheets : [];
+    return '<h3>系統健檢結果</h3><div class="admin-result-grid">' +
+      metaItem('檢查狀態', data.status === 'ok' ? '正常' : '需注意') +
+      metaItem('檢查時間', data.checkedAt) +
+      metaItem('必要工作表', data.requiredSheetCount) +
+      metaItem('缺少工作表', missing.length ? missing.join('、') : '0') +
+      metaItem('考核資料筆數', data.evaluationCount) +
+      metaItem('停留超過24小時', data.claimedOver24Hours) +
+      metaItem('PDF失敗數', data.pdfFailedCount) +
+    '</div><p class="section-help">此健檢只讀取資料，不會修改、清空或刪除任何工作表內容。</p>';
   }
 
   async function handleLogout() {
@@ -554,8 +603,33 @@
     elements.userArea.textContent = valueOrDash(user.area);
     elements.userStore.textContent = joinStore(user.storeCode, user.storeName);
     elements.profileStore.textContent = joinStore(user.storeCode, user.storeName);
+    configureRoleBasedInterface(session);
     elements.loginView.hidden = true;
     elements.dashboardView.hidden = false;
+  }
+
+  function configureRoleBasedInterface(session) {
+    var user = session && session.user ? session.user : {};
+    var permissions = session && session.permissions ? session.permissions : {};
+    var isEducation = Boolean(permissions.canManage) || user.role === '教育中心成員' || user.role === '教育中心主管';
+    elements.systemTabButton.hidden = !isEducation;
+    if (!isEducation && !elements.systemPanel.hidden) switchTab('pending');
+
+    var scopeMap = {
+      '受評人員': '僅顯示您自己的月考核歷史紀錄。',
+      '門市店主管': '顯示您自己的考核紀錄，以及您曾經實際評核過的人員紀錄。',
+      '區主管': '顯示目前轄區的歷史資料、您自己的考核紀錄，以及您過去實際簽核過的紀錄。',
+      '營業處副總': '顯示目前營業處的歷史資料、您自己的考核紀錄，以及您過去實際簽核過的紀錄。',
+      '營業處協理': '顯示目前營業處的歷史資料、您自己的考核紀錄，以及您過去實際簽核過的紀錄。',
+      '教育中心成員': '可查詢全公司所有月考核紀錄。',
+      '教育中心主管': '可查詢全公司所有月考核紀錄。',
+      '總經理': '可查詢全公司所有月考核紀錄。'
+    };
+    elements.historyScopeText.textContent = scopeMap[user.role] || '查詢您有權限查看的月考核紀錄。';
+
+    var ownOnly = user.role === '受評人員';
+    elements.historyEmployeeFilter.hidden = ownOnly;
+    if (ownOnly) elements.historyEmployeeId.value = '';
   }
 
   function showLogin() {
@@ -565,10 +639,11 @@
   }
 
   function switchTab(tab) {
-    var map = { pending: elements.pendingPanel, history: elements.historyPanel, profile: elements.profilePanel };
+    var map = { pending: elements.pendingPanel, history: elements.historyPanel, profile: elements.profilePanel, system: elements.systemPanel };
     Object.keys(map).forEach(function (name) { map[name].hidden = name !== tab; });
     elements.tabButtons.forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-tab') === tab); });
     if (tab === 'history' && !state.history.length) loadHistory();
+    if (tab === 'system' && elements.systemTabButton.hidden) switchTab('pending');
   }
 
   function togglePasswordVisibility() {
@@ -622,6 +697,7 @@
   function clearLoginMessage() { clearMessage(elements.loginMessage); }
   function setDashboardMessage(type, text) { showMessage(elements.dashboardMessage, type, text); }
   function clearDashboardMessage() { clearMessage(elements.dashboardMessage); }
+  function showAdminMessage(type, text) { showMessage(elements.adminSystemMessage, type, text); }
   function showEvaluationMessage(type, text) { showMessage(elements.evaluationMessage, type, text); }
   function clearEvaluationMessage() { clearMessage(elements.evaluationMessage); }
 
