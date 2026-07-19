@@ -820,3 +820,36 @@ button:disabled { cursor: not-allowed; opacity: 0.58; }
   .current-score-card { grid-template-columns: 1fr; }
   .current-score-card p { grid-column: 1; }
 }
+
+/* ================================================================
+ * V3 6.3.5｜手機流程追蹤穩定性與選填欄位提示
+ * ================================================================ */
+.field-group textarea::placeholder {
+  color: #9a918b;
+  opacity: 1;
+  font-weight: 500;
+}
+
+.overlay {
+  overscroll-behavior: contain;
+}
+
+.sheet-dialog {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 760px) {
+  .sheet-dialog {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .sheet-header {
+    min-height: 88px;
+  }
+}
