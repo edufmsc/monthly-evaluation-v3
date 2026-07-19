@@ -344,3 +344,25 @@ button:disabled { cursor: not-allowed; opacity: 0.58; }
   .tab-button { font-size: 0.86rem; padding: 4px; }
   .panel-heading { align-items: center; }
 }
+
+/* Phase 6.1: education-center-only system management */
+.tab-bar { grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); }
+.profile-security-note { margin: 18px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-soft); }
+.admin-tool-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.admin-tool-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; border: 1px solid var(--line); border-radius: 18px; padding: 16px; background: var(--surface); box-shadow: 0 8px 22px rgba(72,42,26,0.06); }
+.admin-tool-card h3 { margin: 0; }
+.admin-tool-card p { flex: 1; margin: 0 0 8px; font-size: 0.86rem; }
+.admin-result-card { margin-top: 14px; padding: 18px; }
+.admin-result-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.admin-result-grid div { min-width: 0; border-radius: 12px; padding: 11px; background: var(--surface-soft); }
+.admin-result-grid span { display: block; color: var(--muted); font-size: 0.76rem; }
+.admin-result-grid strong { display: block; margin-top: 3px; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .admin-tool-grid { grid-template-columns: 1fr; }
+  .admin-result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .admin-result-grid { grid-template-columns: 1fr; }
+}
