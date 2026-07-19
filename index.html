@@ -75,6 +75,7 @@
           <button class="tab-button is-active" data-tab="pending" type="button">待我處理 <span id="pendingCountBadge" class="count-badge">0</span></button>
           <button class="tab-button" data-tab="history" type="button">歷史紀錄</button>
           <button class="tab-button" data-tab="profile" type="button">我的資料</button>
+          <button id="systemTabButton" class="tab-button" data-tab="system" type="button" hidden>系統管理</button>
         </nav>
 
         <div id="dashboardMessage" class="form-message" role="status" aria-live="polite" hidden></div>
@@ -94,12 +95,12 @@
           <div class="panel-heading">
             <div>
               <h2>歷史紀錄</h2>
-              <p>查詢您有權限查看的已送出、結案或作廢紀錄。</p>
+              <p id="historyScopeText">查詢您有權限查看的已送出、結案或作廢紀錄。</p>
             </div>
           </div>
           <form id="historyFilterForm" class="filter-grid">
             <label><span>月份／日期</span><input id="historyMonth" name="month" type="text" placeholder="例如 115/08"></label>
-            <label><span>受評人員工號</span><input id="historyEmployeeId" name="employeeId" type="text" placeholder="可留白"></label>
+            <label id="historyEmployeeFilter"><span>受評人員工號</span><input id="historyEmployeeId" name="employeeId" type="text" placeholder="可留白"></label>
             <label><span>狀態</span>
               <select id="historyStatus" name="status">
                 <option value="">全部狀態</option>
@@ -124,11 +125,37 @@
               <div><dt>店別</dt><dd id="profileStore">—</dd></div>
               <div><dt>登入狀態</dt><dd>有效</dd></div>
             </dl>
-            <div class="action-grid">
-              <button id="refreshSessionButton" class="secondary-button" type="button">重新驗證登入</button>
-              <button id="healthCheckButton" class="secondary-button" type="button">測試後端連線</button>
-            </div>
+<p class="section-help profile-security-note">系統會在開啟頁面與每次操作時自動驗證登入狀態及後端連線。</p>
           </article>
+        </section>
+
+        <section id="systemPanel" class="tab-panel" hidden>
+          <div class="panel-heading">
+            <div>
+              <h2>系統管理</h2>
+              <p>僅供教育中心進行系統檢測、登入驗證與異常排除。</p>
+            </div>
+          </div>
+
+          <div class="admin-tool-grid">
+            <article class="admin-tool-card">
+              <h3>登入狀態檢查</h3>
+              <p>重新向後端確認目前 Session、帳號狀態與最新角色資料。</p>
+              <button id="adminRefreshSessionButton" class="secondary-button" type="button">重新驗證登入</button>
+            </article>
+            <article class="admin-tool-card">
+              <h3>後端連線測試</h3>
+              <p>測試 GitHub Pages 是否能正常連線至 Apps Script 公開健康端點。</p>
+              <button id="adminHealthCheckButton" class="secondary-button" type="button">測試後端連線</button>
+            </article>
+            <article class="admin-tool-card">
+              <h3>系統健檢</h3>
+              <p>檢查必要工作表、考核資料量、停留超過24小時案件與 PDF 失敗數。</p>
+              <button id="adminSystemHealthButton" class="primary-button" type="button">執行系統健檢</button>
+            </article>
+          </div>
+          <div id="adminSystemMessage" class="form-message" role="status" aria-live="polite" hidden></div>
+          <article id="adminSystemResult" class="card admin-result-card" hidden></article>
         </section>
       </section>
     </main>
