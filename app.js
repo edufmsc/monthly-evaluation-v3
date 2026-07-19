@@ -381,7 +381,8 @@
       drawnRadio: section.querySelector('[data-signature-drawn]'),
       modePanelSaved: section.querySelector('[data-saved-panel]'),
       modePanelDrawn: section.querySelector('[data-drawn-panel]'),
-      savedStatus: section.querySelector('[data-saved-status]')
+      savedStatus: section.querySelector('[data-saved-status]'),
+      savePersonalCheckbox: section.querySelector('[data-save-personal]')
     });
     var hasSaved = Boolean(state.currentDetail && state.currentDetail.mySignature && state.currentDetail.mySignature.hasSavedSignature);
     if (!hasSaved) {
