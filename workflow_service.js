@@ -33,6 +33,18 @@
     getDraft: function (evaluationNo) { return call('getDraft', { evaluationNo: evaluationNo }); },
     deleteDraft: function (evaluationNo) { return call('deleteDraft', { evaluationNo: evaluationNo }); },
     systemHealth: function () { return call('systemHealth', {}); },
+    listTestDispatchCandidates: function (keyword) {
+      return call('listTestDispatchCandidates', { keyword: String(keyword || '') });
+    },
+    previewTestEvaluation: function (employeeId, evaluationMonth) {
+      return call('previewTestEvaluation', {
+        employeeId: String(employeeId || ''),
+        evaluationMonth: String(evaluationMonth || '')
+      });
+    },
+    createTestEvaluation: function (payload, requestId) {
+      return call('createTestEvaluation', payload || {}, requestId);
+    },
     getMySignaturePreview: function (source, evaluationNo) {
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
     }
