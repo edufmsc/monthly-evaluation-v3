@@ -1,0 +1,39 @@
+(function () {
+  'use strict';
+
+  function sessionToken() {
+    var session = window.V3AuthService.readSession();
+    if (!session || !session.sessionToken) throw new window.V3ApiClient.ApiError('SESSION_REQUIRED', '請先登入。');
+    return session.sessionToken;
+  }
+
+  function call(action, payload, requestId) {
+    return window.V3ApiClient.request(action, payload || {}, sessionToken(), requestId);
+  }
+
+  window.V3WorkflowService = Object.freeze({
+    bootstrap: function (limit) { return call('bootstrap', { limit: Number(limit || 50) }); },
+    listPending: function (limit) { return call('listPending', { limit: Number(limit || 100) }); },
+    listHistory: function (filters) { return call('listHistory', filters || {}); },
+    getEvaluation: function (evaluationNo) { return call('getEvaluation', { evaluationNo: evaluationNo }); },
+    claim: function (evaluationNo, expectedVersion) {
+      return call('claimEvaluation', { evaluationNo: evaluationNo, expectedVersion: expectedVersion });
+    },
+    release: function (evaluationNo, expectedVersion) {
+      return call('releaseEvaluation', { evaluationNo: evaluationNo, expectedVersion: expectedVersion });
+    },
+    submitAction: function (payload, requestId) { return call('submitAction', payload, requestId); },
+    saveDraft: function (evaluationNo, content) {
+      return call('saveDraft', {
+        evaluationNo: evaluationNo,
+        content: content || {},
+        clientUpdatedAt: new Date().toISOString()
+      });
+    },
+    getDraft: function (evaluationNo) { return call('getDraft', { evaluationNo: evaluationNo }); },
+    deleteDraft: function (evaluationNo) { return call('deleteDraft', { evaluationNo: evaluationNo }); },
+    getMySignaturePreview: function (source, evaluationNo) {
+      return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
+    }
+  });
+})();
