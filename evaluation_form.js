@@ -2,12 +2,54 @@
   'use strict';
 
   var MANAGER_ITEMS = [
-    { key: '責任感', label: '責任感' },
-    { key: '協調性', label: '協調性' },
-    { key: '表達能力', label: '表達能力' },
-    { key: '學習態度', label: '學習態度' },
-    { key: '解決問題能力', label: '解決問題能力' },
-    { key: '個人儀容', label: '個人儀容' }
+    {
+      key: '責任感', label: '責任感', ranges: [
+        { min: 1, max: 2, text: '處事被動，不積極，必須有人經常加以督促。' },
+        { min: 3, max: 5, text: '可以信賴，但須略加督促。' },
+        { min: 6, max: 7, text: '可獨自負責，處事穩健，須偶爾督促。' },
+        { min: 8, max: 10, text: '責任感相當強，可以充分信賴，無須任何督促。' }
+      ]
+    },
+    {
+      key: '協調性', label: '協調性', ranges: [
+        { min: 1, max: 2, text: '缺乏協調，與同事間偶爾會摩擦。' },
+        { min: 3, max: 5, text: '雖不特別致力於他人協調，但亦不與他人發生爭執與摩擦。' },
+        { min: 6, max: 7, text: '能與人和諧相處，願接納他人意見而不固執，偶爾熱心助人。' },
+        { min: 8, max: 10, text: '能主動與人協調，與上級及同仁維持和諧關係，同事極願與其合作。' }
+      ]
+    },
+    {
+      key: '表達能力', label: '表達能力', ranges: [
+        { min: 1, max: 2, text: '文筆生硬，言談欠明確，不易讓人了解。' },
+        { min: 3, max: 5, text: '表達平平，大致可了解其意，不致引人誤解。' },
+        { min: 6, max: 7, text: '表達有條理，使人易於了解。' },
+        { min: 8, max: 10, text: '文筆、言談、論理明確，能化繁為簡，密而不漏。' }
+      ]
+    },
+    {
+      key: '學習態度', label: '學習態度', ranges: [
+        { min: 1, max: 2, text: '不能主動學習，須加以督導。' },
+        { min: 3, max: 5, text: '能誠懇接受他人教導，但主動性較弱。' },
+        { min: 6, max: 7, text: '針對突發狀況，能主動積極提出疑問並虛心求教。' },
+        { min: 8, max: 10, text: '針對可能發生之問題，積極求解，並予以解決。' }
+      ]
+    },
+    {
+      key: '解決問題能力', label: '解決問題能力', ranges: [
+        { min: 1, max: 2, text: '無法迅速謀求改善對策，並有逃避之現象。' },
+        { min: 3, max: 5, text: '能謀求改善之道，但無擔當之魄力。' },
+        { min: 6, max: 7, text: '具有解決問題之能力，但須督促完成。' },
+        { min: 8, max: 10, text: '能迅速謀求改善對策，無需督促即可完成。' }
+      ]
+    },
+    {
+      key: '個人儀容', label: '個人儀容', ranges: [
+        { min: 1, max: 2, text: '我行我素，須經常糾正才會改進。' },
+        { min: 3, max: 5, text: '達到基本要求。' },
+        { min: 6, max: 7, text: '重視清潔衛生。' },
+        { min: 8, max: 10, text: '整齊清潔，端正足為模範。' }
+      ]
+    }
   ];
 
   var ACTION_LABELS = {
@@ -29,11 +71,8 @@
 
   function escapeHtml(value) {
     return String(value === null || value === undefined ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
   function value(record, key) {
@@ -41,44 +80,113 @@
     return raw === null || raw === undefined ? '' : raw;
   }
 
-  function selected(current, expected) {
-    return String(current) === String(expected) ? ' selected' : '';
+  function currentNumber(record, key, fallback) {
+    var raw = value(record, key);
+    var number = Number(raw);
+    return raw !== '' && isFinite(number) ? Math.max(0, Math.floor(number)) : fallback;
   }
 
-  function renderScoreSelect(name, current, min, max) {
-    var html = '<select name="' + escapeHtml(name) + '" required>';
-    html += '<option value="">請選擇</option>';
-    for (var i = min; i <= max; i += 1) {
-      html += '<option value="' + i + '"' + selected(current, i) + '>' + i + '</option>';
-    }
-    html += '</select>';
-    return html;
+  function selected(current, expected) {
+    return String(current) === String(expected) ? ' checked' : '';
   }
 
   function renderManagerForm(record) {
-    var html = '<div class="form-section"><h3>門市店主管評分</h3><p class="section-help">六項各 1～10 分，最高 60 分。</p>';
-    html += '<div class="score-grid">';
+    var html = '<div class="form-section manager-evaluation-section">' +
+      '<div class="section-title-row"><div><h3>門市店主管評分</h3><p class="section-help">請依各項完整標準點選 1～10 分，六項最高 60 分。</p></div>' +
+      '<div class="score-total-badge"><span>店主管小計</span><strong data-manager-total>0／60</strong></div></div>' +
+      '<div class="manager-criteria-list">';
+
     MANAGER_ITEMS.forEach(function (item, index) {
-      html += '<label class="score-field"><span>' + escapeHtml(item.label) + '</span>' +
-        renderScoreSelect('managerScore' + index, value(record, item.key), 1, 10) + '</label>';
+      html += '<article class="manager-criterion"><div class="criterion-heading"><h4>' + escapeHtml(item.label) + '</h4>' +
+        '<strong data-manager-item-score="' + index + '">尚未評分</strong></div><div class="criterion-range-grid">';
+      item.ranges.forEach(function (range) {
+        html += '<section class="criterion-range"><div class="criterion-range-label">' + range.min + '～' + range.max + '分</div>' +
+          '<p>' + escapeHtml(range.text) + '</p><div class="score-button-row">';
+        for (var score = range.min; score <= range.max; score += 1) {
+          html += '<label class="score-choice"><input type="radio" name="managerScore' + index + '" value="' + score + '"' +
+            selected(value(record, item.key), score) + ' required><span>' + score + '</span></label>';
+        }
+        html += '</div></section>';
+      });
+      html += '</div></article>';
     });
-    html += '</div>';
-    html += textareaField('comment', '門市店主管評語', value(record, '門市店主管評語'), false, '請輸入對受評人員的具體評語。');
-    html += '</div>' + signatureBlock();
+
+    html += '</div>' + textareaField('comment', '門市店主管評語', value(record, '門市店主管評語'), true, '') + '</div>' + signatureBlock();
     return html;
   }
 
   function renderEducationForm(record) {
-    var html = '<div class="form-section"><h3>教育中心評分（40分）</h3><div class="form-grid">';
-    html += numberField('accumulatedPoints', '職能積分累計', value(record, '職能積分累計'), 0, 999999, true);
-    html += selectField('score1', '職能積分得分', value(record, '職能積分得分'), [0, 15], true);
-    html += numberField('ojtCount', 'OJT完成篇數', value(record, 'OJT完成篇數'), 0, 9999, true);
-    html += selectField('score2', 'OJT得分', value(record, 'OJT得分'), [0, 10], true);
-    html += numberField('score3', '每週進度回報得分', value(record, '每週進度回報得分') === '' ? 5 : value(record, '每週進度回報得分'), 0, 5, true);
-    html += numberField('score4', '培訓課程狀況得分', value(record, '培訓課程狀況得分') === '' ? 10 : value(record, '培訓課程狀況得分'), 0, 10, true);
-    html += '</div>';
-    html += textareaField('abnormalReport', '教育中心異常回報', value(record, '教育中心異常回報') || '無', true, '沒有異常時請填「無」。');
-    html += '</div>' + signatureBlock();
+    var weeklyError = currentNumber(record, '每週回報錯誤次數', '');
+    var weeklyMissing = currentNumber(record, '每週未回報次數', '');
+    var trainingAttendance = currentNumber(record, '培訓出勤異常次數', '');
+    var assignmentLate = currentNumber(record, '作業遲繳天數', '');
+
+    if (weeklyError === '' && weeklyMissing === '') {
+      weeklyError = Math.max(0, 5 - currentNumber(record, '每週進度回報得分', 5));
+      weeklyMissing = 0;
+    }
+    if (trainingAttendance === '' && assignmentLate === '') {
+      trainingAttendance = Math.max(0, 10 - currentNumber(record, '培訓課程狀況得分', 10));
+      assignmentLate = 0;
+    }
+
+    var html = '<div class="form-section education-evaluation-section">' +
+      '<div class="section-title-row"><div><h3>教育中心填寫（學習成果階段，共40分）</h3>' +
+      '<p class="section-help">請先登錄實際累計資料，再依規則完成四項評分。</p></div>' +
+      '<div class="education-total-badge"><span>教育中心階段合計</span><strong data-education-total>0／40分</strong></div></div>' +
+      '<div class="education-source-grid">' +
+        plainNumberField('accumulatedPoints', '職能積分累計', value(record, '職能積分累計'), 0, 999999, true) +
+        plainNumberField('ojtCount', 'OJT完成篇數', value(record, 'OJT完成篇數'), 0, 9999, true) +
+      '</div>' +
+      '<div class="education-score-grid">' +
+        educationBinaryCard('1. 職能積分得分', '職能總分 ÷ 培訓月份＝每月積分目標；進度內滿分，落後0分。', 'score1', value(record, '職能積分得分'), [0, 15]) +
+        educationBinaryCard('2. OJT完成篇數得分', '第2月／2篇、第3月／4篇、第4月／6篇；進度內滿分，落後0分。', 'score2', value(record, 'OJT得分'), [0, 10]) +
+        educationCounterCard({
+          title: '3. 每週進度回報得分', maxScore: 5,
+          rule: '回報錯誤或未回報，每次扣1分；最低0分。',
+          counters: [
+            { name: 'weeklyErrorCount', label: '回報錯誤次數', value: weeklyError, unit: '次' },
+            { name: 'weeklyMissingCount', label: '未回報次數', value: weeklyMissing, unit: '次' }
+          ], scoreName: 'score3', scoreValue: value(record, '每週進度回報得分')
+        }) +
+        educationCounterCard({
+          title: '4. 培訓課程狀況得分', maxScore: 10,
+          rule: '晚到／曠課每次扣1分；作業每遲繳1天扣1分；最低0分。',
+          counters: [
+            { name: 'trainingAttendanceCount', label: '晚到／曠課次數', value: trainingAttendance, unit: '次' },
+            { name: 'assignmentLateDays', label: '作業遲繳天數', value: assignmentLate, unit: '天' }
+          ], scoreName: 'score4', scoreValue: value(record, '培訓課程狀況得分')
+        }) +
+      '</div>' +
+      textareaField('abnormalReport', '教育中心異常回報', value(record, '教育中心異常回報'), true, '') +
+      '</div>' + signatureBlock();
+    return html;
+  }
+
+  function educationBinaryCard(title, rule, name, current, options) {
+    var html = '<article class="education-score-card"><h4>' + escapeHtml(title) + '</h4><p>' + escapeHtml(rule) + '</p><div class="binary-score-buttons">';
+    options.forEach(function (option) {
+      html += '<label class="binary-score-choice"><input type="radio" name="' + escapeHtml(name) + '" value="' + option + '"' +
+        selected(current, option) + ' required><span>' + option + '分</span></label>';
+    });
+    return html + '</div></article>';
+  }
+
+  function educationCounterCard(config) {
+    var html = '<article class="education-score-card counter-score-card" data-counter-score-card data-max-score="' + config.maxScore + '" data-score-name="' + escapeHtml(config.scoreName) + '">' +
+      '<div class="counter-card-heading"><h4>' + escapeHtml(config.title) + '</h4><span class="max-score-pill">滿分' + config.maxScore + '分</span></div>' +
+      '<p>' + escapeHtml(config.rule) + '</p><div class="counter-grid">';
+    config.counters.forEach(function (counter) {
+      html += '<div class="counter-box"><span>' + escapeHtml(counter.label) + '</span><div class="counter-control">' +
+        '<button type="button" class="counter-button" data-counter-change="-1" data-counter-target="' + escapeHtml(counter.name) + '" aria-label="減少' + escapeHtml(counter.label) + '">－</button>' +
+        '<input type="number" class="counter-input" name="' + escapeHtml(counter.name) + '" value="' + escapeHtml(counter.value) + '" min="0" max="999" step="1" inputmode="numeric" required>' +
+        '<em>' + escapeHtml(counter.unit) + '</em>' +
+        '<button type="button" class="counter-button" data-counter-change="1" data-counter-target="' + escapeHtml(counter.name) + '" aria-label="增加' + escapeHtml(counter.label) + '">＋</button>' +
+        '</div></div>';
+    });
+    html += '</div><input type="hidden" name="' + escapeHtml(config.scoreName) + '" value="' + escapeHtml(config.scoreValue) + '">' +
+      '<div class="score-result-grid"><div class="deduction-result"><span>本項扣分</span><strong data-deduction>0分</strong></div>' +
+      '<div class="earned-result"><span>實得分數</span><strong data-earned>' + config.maxScore + '／' + config.maxScore + '分</strong></div></div></article>';
     return html;
   }
 
@@ -91,11 +199,12 @@
       gm_approve: ['總經理評語', '總經理評語']
     };
     var pair = labels[action] || ['評語', ''];
+    var commentRequired = action === 'area_approve';
     var html = '<div class="form-section"><h3>' + escapeHtml(ACTION_LABELS[action] || '簽核') + '</h3>';
     if (action === 'area_approve') {
-      html += numberField('adjustment', '區主管增減分（-10～10）', value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'), -10, 10, true);
+      html += plainNumberField('adjustment', '區主管增減分（-10～10）', value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'), -10, 10, true);
     }
-    html += textareaField('comment', pair[0], value(record, pair[1]), false, '可輸入補充說明。');
+    html += textareaField('comment', pair[0], value(record, pair[1]), commentRequired, '');
     html += '</div>' + signatureBlock();
     return html;
   }
@@ -116,21 +225,14 @@
 
   function signatureBlock() {
     return '<div class="form-section signature-section" data-signature-section>' +
-      '<h3>本次簽名</h3>' +
-      '<p class="section-help">其他角色只會看到「已簽核＋日期」，不會看到您的簽名圖片。</p>' +
+      '<h3>本次簽名</h3><p class="section-help">其他角色只會看到「已簽核＋日期」，不會看到您的簽名圖片。</p>' +
       '<div class="signature-mode-grid">' +
         '<label class="choice-card"><input type="radio" name="signatureMode" value="saved" data-signature-saved> 使用本人預存簽名</label>' +
         '<label class="choice-card"><input type="radio" name="signatureMode" value="drawn" data-signature-drawn> 本次手寫簽名</label>' +
       '</div>' +
-      '<div class="signature-panel" data-saved-panel>' +
-        '<p data-saved-status>正在檢查預存簽名…</p>' +
-        '<img class="signature-preview" data-saved-preview alt="本人預存簽名預覽" hidden>' +
-      '</div>' +
-      '<div class="signature-panel" data-drawn-panel hidden>' +
-        '<canvas class="signature-canvas" data-signature-canvas aria-label="手寫簽名區"></canvas>' +
-        '<button type="button" class="small-button" data-clear-signature>清除重簽</button>' +
-      '</div>' +
-    '</div>';
+      '<div class="signature-panel" data-saved-panel><p data-saved-status>正在檢查預存簽名…</p><img class="signature-preview" data-saved-preview alt="本人預存簽名預覽" hidden></div>' +
+      '<div class="signature-panel" data-drawn-panel hidden><canvas class="signature-canvas" data-signature-canvas aria-label="手寫簽名區"></canvas><button type="button" class="small-button" data-clear-signature>清除重簽</button></div>' +
+      '</div>';
   }
 
   function textareaField(name, label, current, required, hint) {
@@ -139,21 +241,13 @@
       (hint ? '<small class="field-hint">' + escapeHtml(hint) + '</small>' : '') + '</label>';
   }
 
-  function numberField(name, label, current, min, max, required) {
+  function plainNumberField(name, label, current, min, max, required) {
     return '<label class="field-group"><span class="field-label">' + escapeHtml(label) + (required ? ' <b class="required-mark">*</b>' : '') + '</span>' +
-      '<input type="number" name="' + escapeHtml(name) + '" value="' + escapeHtml(current) + '" min="' + min + '" max="' + max + '" step="1"' + (required ? ' required' : '') + '></label>';
-  }
-
-  function selectField(name, label, current, options, required) {
-    var html = '<label class="field-group"><span class="field-label">' + escapeHtml(label) + (required ? ' <b class="required-mark">*</b>' : '') + '</span><select name="' + escapeHtml(name) + '"' + (required ? ' required' : '') + '>';
-    html += '<option value="">請選擇</option>';
-    options.forEach(function (option) {
-      html += '<option value="' + escapeHtml(option) + '"' + selected(current, option) + '>' + escapeHtml(option) + '</option>';
-    });
-    return html + '</select></label>';
+      '<input type="number" name="' + escapeHtml(name) + '" value="' + escapeHtml(current) + '" min="' + min + '" max="' + max + '" step="1" inputmode="numeric"' + (required ? ' required' : '') + '></label>';
   }
 
   function collectActionPayload(form, action, signatureController) {
+    refreshInteractiveControls(form);
     var data = new FormData(form);
     var payload = { action: action };
     if (action === 'manager_submit') {
@@ -165,6 +259,10 @@
       payload.score1 = Number(data.get('score1'));
       payload.ojtCount = Number(data.get('ojtCount'));
       payload.score2 = Number(data.get('score2'));
+      payload.weeklyErrorCount = Number(data.get('weeklyErrorCount'));
+      payload.weeklyMissingCount = Number(data.get('weeklyMissingCount'));
+      payload.trainingAttendanceCount = Number(data.get('trainingAttendanceCount'));
+      payload.assignmentLateDays = Number(data.get('assignmentLateDays'));
       payload.score3 = Number(data.get('score3'));
       payload.score4 = Number(data.get('score4'));
       payload.abnormalReport = String(data.get('abnormalReport') || '').trim();
@@ -182,7 +280,94 @@
     return payload;
   }
 
+  function initializeInteractiveControls(form) {
+    if (!form || form.__v3InteractiveInitialized) {
+      refreshInteractiveControls(form);
+      return;
+    }
+    form.__v3InteractiveInitialized = true;
+    form.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-counter-change]');
+      if (!button || !form.contains(button)) return;
+      var target = form.elements.namedItem(button.getAttribute('data-counter-target'));
+      if (!target) return;
+      var current = Math.max(0, Math.floor(Number(target.value) || 0));
+      var change = Number(button.getAttribute('data-counter-change')) || 0;
+      target.value = String(Math.max(0, Math.min(999, current + change)));
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      refreshInteractiveControls(form);
+    });
+    form.addEventListener('input', function () { refreshInteractiveControls(form); });
+    form.addEventListener('change', function () { refreshInteractiveControls(form); });
+    refreshInteractiveControls(form);
+  }
+
+  function refreshInteractiveControls(form) {
+    if (!form) return;
+    refreshManagerTotal(form);
+    refreshEducationScores(form);
+  }
+
+  function refreshManagerTotal(form) {
+    var total = 0;
+    var completed = 0;
+    MANAGER_ITEMS.forEach(function (_, index) {
+      var selectedNode = form.querySelector('input[name="managerScore' + index + '"]:checked');
+      var scoreNode = form.querySelector('[data-manager-item-score="' + index + '"]');
+      if (selectedNode) {
+        total += Number(selectedNode.value) || 0;
+        completed += 1;
+        if (scoreNode) scoreNode.textContent = selectedNode.value + '分';
+      } else if (scoreNode) {
+        scoreNode.textContent = '尚未評分';
+      }
+    });
+    var totalNode = form.querySelector('[data-manager-total]');
+    if (totalNode) totalNode.textContent = total + '／60' + (completed < 6 ? '（已完成' + completed + '項）' : '');
+  }
+
+  function refreshEducationScores(form) {
+    var cards = form.querySelectorAll('[data-counter-score-card]');
+    Array.prototype.forEach.call(cards, function (card) {
+      var max = Number(card.getAttribute('data-max-score')) || 0;
+      var scoreName = card.getAttribute('data-score-name');
+      var inputs = card.querySelectorAll('.counter-input');
+      var totalIssues = 0;
+      Array.prototype.forEach.call(inputs, function (input) {
+        var number = Math.max(0, Math.min(999, Math.floor(Number(input.value) || 0)));
+        if (String(input.value) !== String(number)) input.value = String(number);
+        totalIssues += number;
+      });
+      var deducted = Math.min(max, totalIssues);
+      var earned = Math.max(0, max - totalIssues);
+      var hidden = form.elements.namedItem(scoreName);
+      if (hidden) hidden.value = String(earned);
+      var deductionNode = card.querySelector('[data-deduction]');
+      var earnedNode = card.querySelector('[data-earned]');
+      if (deductionNode) deductionNode.textContent = (deducted ? '－' + deducted : '0') + '分';
+      if (earnedNode) earnedNode.textContent = earned + '／' + max + '分';
+    });
+
+    var score1 = checkedNumber(form, 'score1');
+    var score2 = checkedNumber(form, 'score2');
+    var score3 = numberFromForm(form, 'score3');
+    var score4 = numberFromForm(form, 'score4');
+    var totalNode = form.querySelector('[data-education-total]');
+    if (totalNode) totalNode.textContent = (score1 + score2 + score3 + score4) + '／40分';
+  }
+
+  function checkedNumber(form, name) {
+    var node = form.querySelector('input[name="' + name + '"]:checked');
+    return node ? Number(node.value) || 0 : 0;
+  }
+
+  function numberFromForm(form, name) {
+    var node = form.elements.namedItem(name);
+    return node ? Number(node.value) || 0 : 0;
+  }
+
   function formToDraft(form, action) {
+    refreshInteractiveControls(form);
     var data = new FormData(form);
     var content = { action: action };
     data.forEach(function (val, key) {
@@ -198,15 +383,23 @@
       if (key === 'action') return;
       var element = form.elements.namedItem(key);
       if (!element) return;
-      if (element instanceof RadioNodeList) return;
-      element.value = draft[key];
+      if (typeof RadioNodeList !== 'undefined' && element instanceof RadioNodeList) {
+        Array.prototype.forEach.call(element, function (radio) { radio.checked = String(radio.value) === String(draft[key]); });
+      } else if (element.length && element[0] && element[0].type === 'radio') {
+        Array.prototype.forEach.call(element, function (radio) { radio.checked = String(radio.value) === String(draft[key]); });
+      } else {
+        element.value = draft[key];
+      }
     });
+    refreshInteractiveControls(form);
   }
 
   window.V3EvaluationForm = Object.freeze({
     ACTION_LABELS: ACTION_LABELS,
     renderActionForm: renderActionForm,
     collectActionPayload: collectActionPayload,
+    initializeInteractiveControls: initializeInteractiveControls,
+    refreshInteractiveControls: refreshInteractiveControls,
     formToDraft: formToDraft,
     applyDraft: applyDraft,
     escapeHtml: escapeHtml
