@@ -32,6 +32,7 @@
     },
     getDraft: function (evaluationNo) { return call('getDraft', { evaluationNo: evaluationNo }); },
     deleteDraft: function (evaluationNo) { return call('deleteDraft', { evaluationNo: evaluationNo }); },
+    systemHealth: function () { return call('systemHealth', {}); },
     getMySignaturePreview: function (source, evaluationNo) {
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
     }
