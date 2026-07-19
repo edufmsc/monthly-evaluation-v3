@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.4.2-workflow-pdf-repair';
+  var APP_BUILD = '7.0.0-production';
   var elements = {};
   var state = {
     session: null,
@@ -40,6 +40,14 @@
     bindEvents();
     elements.appVersion.textContent = APP_BUILD;
     elements.testDispatchMonth.value = currentRocMonthFirstDay();
+    if (elements.createTestDispatchButton) {
+      var createLabel = elements.createTestDispatchButton.querySelector('.button-label');
+      if (createLabel) createLabel.textContent = '手動建立月考核表';
+    }
+    if (elements.previewTestDispatchButton) {
+      var previewLabel = elements.previewTestDispatchButton.querySelector('.button-label');
+      if (previewLabel) previewLabel.textContent = '預覽建立路線';
+    }
 
     if (!window.V3ApiClient.isConfigured()) {
       elements.configErrorCard.hidden = false;
@@ -338,9 +346,8 @@
     }
 
     if (isEducationPdfManagerUi() && effectiveClosed && pdfStatus === '完成' && item.pdfHasFile &&
-        (publicStatus !== '已公開' || !item.pdfPublicViewToken)) {
-      actions += '<button type="button" class="secondary-button pdf-publish-button" data-publish-pdf="' + escapeHtml(item.evaluationNo) + '">' +
-        (publicStatus === '公開失敗' ? '重新設定PDF查看' : '設定PDF查看') + '</button>';
+        publicStatus === '公開失敗') {
+      actions += '<button type="button" class="secondary-button pdf-publish-button" data-publish-pdf="' + escapeHtml(item.evaluationNo) + '">重新設定PDF公開查看</button>';
     }
     if (item.pdfViewAvailable && item.pdfPublicViewToken) {
       actions += '<button type="button" class="secondary-button pdf-view-button" data-view-pdf="' + escapeHtml(item.pdfPublicViewToken) + '">查看月考核表PDF</button>';
@@ -961,7 +968,7 @@
         elements.testDispatchEmployee.value = previousValue;
       }
       elements.testDispatchEmployeeHint.textContent = state.testDispatchCandidates.length
-        ? '已載入 ' + state.testDispatchCandidates.length + ' 位在職受評人員。手動測試建立不受 J 欄限制。'
+        ? '已載入 ' + state.testDispatchCandidates.length + ' 位在職受評人員。教育中心手動補建不受 J 欄限制；每月自動派發仍以 J 欄設定為準。'
         : '員工主檔目前沒有可選擇的在職受評人員。';
     } catch (error) {
       elements.testDispatchEmployee.innerHTML = '<option value="">載入失敗</option>';
@@ -1085,7 +1092,7 @@
     var reason = String(elements.testDispatchReason.value || '').trim();
     if (isFutureRocMonth(evaluationMonth)) return showGlobalNotice('warning', '不可建立未來月份', '手動建立只能選擇本月或過去月份。未來月份請等待該月1日自動派發。');
     var employee = state.testDispatchPreview.employee || {};
-    var confirmText = '確定建立以下測試月考核表嗎？\n\n' +
+    var confirmText = '確定建立以下月考核表嗎？\n\n' +
       '受評人員：' + joinText(employee.employeeId, employee.employeeName) + '\n' +
       '考核月份：' + evaluationMonth + '\n' +
       '版本：R0\n\n建立後不會自動刪除；若測試不使用，請依正式流程作廢。';
@@ -1110,7 +1117,7 @@
     } catch (error) {
       showTestDispatchMessage('error', friendlyError(error));
     } finally {
-      setButtonLoading(elements.createTestDispatchButton, false, '建立測試月考核表');
+      setButtonLoading(elements.createTestDispatchButton, false, '手動建立月考核表');
       updateTestDispatchCreateState();
     }
   }
