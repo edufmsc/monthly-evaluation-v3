@@ -57,10 +57,10 @@
     context.beginPath();
     context.moveTo(this._lastPoint.x, this._lastPoint.y);
     context.lineTo(point.x, point.y);
-    context.lineWidth = window.matchMedia && window.matchMedia('(max-width: 720px)').matches ? 4.4 : 3.8;
+    context.lineWidth = window.matchMedia && window.matchMedia('(max-width: 720px)').matches ? 4.8 : 4.2;
     context.lineCap = 'round';
     context.lineJoin = 'round';
-    context.strokeStyle = '#2d241f';
+    context.strokeStyle = '#181411';
     context.stroke();
     this._lastPoint = point;
     this._hasInk = true;
