@@ -751,3 +751,72 @@ button:disabled { cursor: not-allowed; opacity: 0.58; }
 @media (max-width: 420px) {
   .progress-summary { grid-template-columns: 1fr; }
 }
+
+
+/* Phase 6.3.4: centered operation notice and score color cues */
+.global-notice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(45, 38, 33, 0.62);
+}
+.global-notice-overlay[hidden] { display: none; }
+.global-notice {
+  width: min(520px, 100%);
+  padding: 28px;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(0,0,0,.24);
+  text-align: center;
+}
+.global-notice__icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #f6ddcf;
+  color: #8f3b12;
+  font-size: 2rem;
+  font-weight: 900;
+}
+.global-notice h2 { margin: 0 0 10px; font-size: 1.45rem; }
+.global-notice p { margin: 0 0 22px; white-space: pre-line; line-height: 1.7; color: #514943; }
+.global-notice-overlay--error .global-notice__icon { background: #fde5e3; color: #b42318; }
+.global-notice-overlay--warning .global-notice__icon { background: #fff0d6; color: #9a5b00; }
+.global-notice-overlay--processing .global-notice__icon { background: #e6f0ff; color: #2458a6; }
+
+.current-score-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  border: 3px solid transparent;
+}
+.current-score-card > div {
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.72);
+}
+.current-score-card span { display: block; margin-bottom: 6px; font-size: .9rem; }
+.current-score-card strong { font-size: 1.7rem; }
+.current-score-card p { grid-column: 1 / -1; margin: 0; }
+.score-tone--green { border-color: #2f8f59; background: #e8f7ee; }
+.score-tone--blue { border-color: #3b72b8; background: #e9f1ff; }
+.score-tone--orange { border-color: #c47a18; background: #fff4df; }
+.score-tone--red { border-color: #c5483d; background: #fdecea; }
+.approval-only-note {
+  padding: 16px 18px;
+  border: 2px solid #d7e6fb;
+  border-radius: 14px;
+  background: #eef5ff;
+  color: #244c7b;
+}
+@media (max-width: 640px) {
+  .global-notice { padding: 24px 18px; border-radius: 20px; }
+  .current-score-card { grid-template-columns: 1fr; }
+  .current-score-card p { grid-column: 1; }
+}
