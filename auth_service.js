@@ -29,6 +29,14 @@
     return readSession();
   }
 
+  function updateSessionData(data) {
+    var current = readSession();
+    if (!current) return null;
+    if (data && data.user) current.user = data.user;
+    if (data && data.permissions) current.permissions = data.permissions;
+    return saveSession(current);
+  }
+
   function clearSession() {
     window.sessionStorage.removeItem(getStorageKey());
   }
@@ -68,6 +76,8 @@
 
   window.V3AuthService = Object.freeze({
     readSession: readSession,
+    saveSession: saveSession,
+    updateSessionData: updateSessionData,
     login: login,
     validateSession: validateSession,
     logout: logout,
