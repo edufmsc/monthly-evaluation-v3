@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.4.1-pdf-public-view';
+  var APP_BUILD = '6.4.2-workflow-pdf-repair';
   var elements = {};
   var state = {
     session: null,
@@ -303,38 +303,51 @@
   }
 
   function evaluationCardHtml(item, mode) {
-    var tags = '<span class="tag">' + escapeHtml(item.status || '未設定狀態') + '</span>';
+    var status = String(item.status || '未設定狀態').trim();
     var pdfStatus = String(item.pdfStatus || '').trim();
-    if (pdfStatus && pdfStatus !== '未排隊' && String(item.status || '') !== 'PDF' + pdfStatus) {
-      var pdfTagClass = pdfStatus === '完成' ? ' tag--success' : pdfStatus === '失敗' ? ' tag--danger' : ' tag--warning';
-      tags += '<span class="tag' + pdfTagClass + '">PDF' + escapeHtml(pdfStatus) + '</span>';
+    var publicStatus = String(item.pdfPublicStatus || '').trim();
+    var effectiveClosed = Boolean(item.isClosed) || status === '結案' ||
+      ['結案待PDF產生', 'PDF待處理', 'PDF處理中', 'PDF失敗', 'PDF完成', 'PDF公開失敗'].indexOf(status) !== -1;
+    var tagParts = [];
+    var tagKeys = {};
+
+    function pushTag(label, cssClass) {
+      var key = String(label || '').trim();
+      if (!key || tagKeys[key]) return;
+      tagKeys[key] = true;
+      tagParts.push('<span class="tag' + (cssClass || '') + '">' + escapeHtml(key) + '</span>');
     }
-    if (String(item.pdfPublicStatus || '') === '公開失敗' && String(item.status || '') !== 'PDF公開失敗') {
-      tags += '<span class="tag tag--danger">PDF公開失敗</span>';
+
+    pushTag(effectiveClosed ? '結案' : status, '');
+    if (pdfStatus && pdfStatus !== '未排隊') {
+      pushTag('PDF' + pdfStatus, pdfStatus === '完成' ? ' tag--success' : pdfStatus === '失敗' ? ' tag--danger' : ' tag--warning');
     }
-    if (item.claimWarning) tags += '<span class="tag tag--warning">停留超過24小時</span>';
-    if (item.isVoid) tags += '<span class="tag tag--danger">已作廢</span>';
-    if (item.isException) tags += '<span class="tag tag--warning">例外流程</span>';
+    if (publicStatus === '公開失敗') pushTag('PDF公開失敗', ' tag--danger');
+    if (item.claimWarning) pushTag('停留超過24小時', ' tag--warning');
+    if (item.isVoid) pushTag('已作廢', ' tag--danger');
+    if (item.isException) pushTag('例外流程', ' tag--warning');
 
     var actions = '<button type="button" class="secondary-button" data-open-evaluation="' + escapeHtml(item.evaluationNo) + '">' +
       (mode === 'pending' ? '開啟處理' : mode === 'progress' ? '查看動態' : '查看內容') + '</button>';
 
-    if (isEducationPdfManagerUi() && item.isClosed && (pdfStatus === '待處理' || pdfStatus === '失敗')) {
+    if (isEducationPdfManagerUi() && effectiveClosed && (pdfStatus === '待處理' || pdfStatus === '失敗')) {
       actions += '<button type="button" class="primary-button pdf-generate-button" data-generate-pdf="' + escapeHtml(item.evaluationNo) + '">' +
         (pdfStatus === '失敗' ? '重新產生PDF' : '產生PDF') + '</button>';
-    } else if (isEducationPdfManagerUi() && item.isClosed && pdfStatus === '處理中') {
+    } else if (isEducationPdfManagerUi() && effectiveClosed && pdfStatus === '處理中') {
       actions += '<button type="button" class="secondary-button" disabled>PDF處理中</button>';
     }
 
-    if (isEducationPdfManagerUi() && item.isClosed && pdfStatus === '完成' && String(item.pdfPublicStatus || '') === '公開失敗') {
-      actions += '<button type="button" class="secondary-button pdf-publish-button" data-publish-pdf="' + escapeHtml(item.evaluationNo) + '">重新設定PDF查看</button>';
+    if (isEducationPdfManagerUi() && effectiveClosed && pdfStatus === '完成' && item.pdfHasFile &&
+        (publicStatus !== '已公開' || !item.pdfPublicViewToken)) {
+      actions += '<button type="button" class="secondary-button pdf-publish-button" data-publish-pdf="' + escapeHtml(item.evaluationNo) + '">' +
+        (publicStatus === '公開失敗' ? '重新設定PDF查看' : '設定PDF查看') + '</button>';
     }
     if (item.pdfViewAvailable && item.pdfPublicViewToken) {
       actions += '<button type="button" class="secondary-button pdf-view-button" data-view-pdf="' + escapeHtml(item.pdfPublicViewToken) + '">查看月考核表PDF</button>';
     }
 
     return '<article class="evaluation-card">' +
-      '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3><p>' + escapeHtml(item.evaluationNo || '') + '</p></div><div>' + tags + '</div></div>' +
+      '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3><p>' + escapeHtml(item.evaluationNo || '') + '</p></div><div>' + tagParts.join('') + '</div></div>' +
       '<div class="evaluation-card__meta">' +
         metaItem('考核月份', item.evaluationMonth) +
         metaItem('店別', joinStore(item.storeCode, item.storeName)) +
@@ -583,7 +596,7 @@
     var allowed = Array.isArray(record.allowedActions) ? record.allowedActions : [];
     var actions = allowed.filter(function (action) {
       if (action === 'force_transition') {
-        return String(record['流程狀態'] || '').trim() === '待教育中心例外處理';
+        return isEducationPdfManagerUi() && String(record['流程狀態'] || '').trim() !== '作廢';
       }
       return NORMAL_ACTIONS.indexOf(action) !== -1 && ['reassign', 'void', 'create_revision'].indexOf(action) === -1;
     });
