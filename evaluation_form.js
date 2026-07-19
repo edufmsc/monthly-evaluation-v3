@@ -65,7 +65,7 @@
     employee_return_manager: '提出疑慮並退回店主管',
     department_executive_approve: '簽核通過並送總經理',
     department_executive_return_area: '退回區主管',
-    gm_approve: '核准並進入 PDF 處理',
+    gm_approve: '核准並結案',
     gm_return_department_executive: '退回營業處主管',
     gm_return_education: '退回教育中心例外處理',
     force_transition: '教育中心判斷後強制轉單'
@@ -214,7 +214,11 @@
     if (action === 'area_approve') {
       html += plainNumberField('adjustment', '區主管增減分（-10～10）', value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'), -10, 10, true);
     }
-    html += textareaField('comment', pair[0], approvalCommentValue(record, action, pair[1]), commentRequired, '');
+    if (action === 'employee_confirm') {
+      html += '<p class="section-help approval-only-note">確認時不需要填寫評語；只有選擇退回店主管時，系統才會要求輸入疑慮說明。</p>';
+    } else {
+      html += textareaField('comment', pair[0], approvalCommentValue(record, action, pair[1]), commentRequired, '');
+    }
     html += '</div>' + signatureBlock();
     return html;
   }
@@ -319,7 +323,10 @@
       payload.adjustment = Number(data.get('adjustment'));
       payload.comment = String(data.get('comment') || '').trim();
       payload.signature = signatureController.getSignaturePayload();
-    } else if (action === 'edu_supervisor_approve' || action === 'employee_confirm' || action === 'department_executive_approve' || action === 'gm_approve') {
+    } else if (action === 'employee_confirm') {
+      payload.comment = '';
+      payload.signature = signatureController.getSignaturePayload();
+    } else if (action === 'edu_supervisor_approve' || action === 'department_executive_approve' || action === 'gm_approve') {
       payload.comment = String(data.get('comment') || '').trim();
       payload.signature = signatureController.getSignaturePayload();
     } else if (action === 'force_transition') {
