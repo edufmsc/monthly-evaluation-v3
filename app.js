@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.3.4-stability-auto-refresh-close-fix';
+  var APP_BUILD = '6.3.5-mobile-tracking-optional-comment-fix';
   var elements = {};
   var state = {
     session: null,
@@ -18,7 +18,9 @@
     isSubmitting: false,
     testDispatchCandidates: [],
     testDispatchPreview: null,
-    lastAutoRefreshAt: 0
+    lastAutoRefreshAt: 0,
+    deferredAutoRefresh: false,
+    activeTab: 'pending'
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -326,6 +328,11 @@
     state.isSubmitting = false;
     elements.closeEvaluationButton.disabled = false;
     setButtonLoading(elements.submitEvaluationButton, false, '送出');
+
+    if (state.deferredAutoRefresh) {
+      state.deferredAutoRefresh = false;
+      window.setTimeout(function () { refreshAllAccessibleLists(); }, 0);
+    }
   }
 
   function renderEvaluationDetail() {
@@ -668,6 +675,14 @@
 
   function handleAutomaticRefresh() {
     if (!state.session || elements.dashboardView.hidden || state.isSubmitting) return;
+
+    // 手機切換應用程式、鍵盤收合或瀏覽器重新取得焦點時，
+    // 不可在使用者正在閱讀考核表時重繪背景清單，避免明細視窗跳動或消失。
+    if (!elements.evaluationOverlay.hidden || state.currentDetail) {
+      state.deferredAutoRefresh = true;
+      return;
+    }
+
     var now = Date.now();
     if (now - state.lastAutoRefreshAt < 5000) return;
     state.lastAutoRefreshAt = now;
@@ -1071,6 +1086,7 @@
   }
 
   function switchTab(tab) {
+    state.activeTab = tab || 'pending';
     var map = {
       pending: elements.pendingPanel,
       progress: elements.progressPanel,
