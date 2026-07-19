@@ -66,7 +66,9 @@
     department_executive_approve: '簽核通過並送總經理',
     department_executive_return_area: '退回區主管',
     gm_approve: '核准並進入 PDF 處理',
-    gm_return_department_executive: '退回營業處主管'
+    gm_return_department_executive: '退回營業處主管',
+    gm_return_education: '退回教育中心例外處理',
+    force_transition: '教育中心判斷後強制轉單'
   };
 
   function getActionLabel(record, action) {
@@ -235,7 +237,29 @@
       textareaField('reason', '退回原因', '', true, '請具體說明需要修改的內容。') + '</div>';
   }
 
+  function renderForceTransitionForm(record) {
+    return '<div class="form-section form-section--return"><h3>教育中心例外轉單</h3>' +
+      '<p class="section-help">請確認問題應由哪個階段修改。轉單後，從該階段起的後續簽名會改為待重新簽核。</p>' +
+      '<label class="field-group"><span class="field-label">轉單目標 <b class="required-mark">*</b></span>' +
+        '<select name="target" required>' +
+          '<option value="">請選擇</option>' +
+          '<option value="門市店主管">門市店主管</option>' +
+          '<option value="教育中心成員">教育中心成員</option>' +
+          '<option value="教育中心主管">教育中心主管</option>' +
+          '<option value="區主管">區主管</option>' +
+          '<option value="受評人員">受評人員</option>' +
+          '<option value="營業處主管">營業處主管</option>' +
+          '<option value="總經理">總經理</option>' +
+        '</select></label>' +
+      '<label class="field-group"><span class="field-label">指定承辦人工號（必要時填寫）</span>' +
+        '<input type="text" name="targetEmployeeId" autocomplete="off" placeholder="主管離職、停用或多人重複時，輸入指定工號"></label>' +
+      textareaField('reason', '轉單原因', '', true, '請說明問題與指定修改階段的原因。') +
+      '<label class="choice-card"><input type="checkbox" name="secondConfirmed" value="true" required> 我已確認本次強制轉單會留下完整操作紀錄</label>' +
+      '</div>';
+  }
+
   function renderActionForm(record, action) {
+    if (action === 'force_transition') return renderForceTransitionForm(record);
     if (action === 'manager_submit') return renderManagerForm(record);
     if (action === 'edu_submit') return renderEducationForm(record);
     if (action === 'edu_supervisor_approve' || action === 'area_approve' || action === 'employee_confirm' || action === 'department_executive_approve' || action === 'gm_approve') {
@@ -298,6 +322,12 @@
     } else if (action === 'edu_supervisor_approve' || action === 'employee_confirm' || action === 'department_executive_approve' || action === 'gm_approve') {
       payload.comment = String(data.get('comment') || '').trim();
       payload.signature = signatureController.getSignaturePayload();
+    } else if (action === 'force_transition') {
+      payload.target = String(data.get('target') || '').trim();
+      payload.targetEmployeeId = String(data.get('targetEmployeeId') || '').trim().toUpperCase();
+      payload.reason = String(data.get('reason') || '').trim();
+      payload.secondConfirmed = data.get('secondConfirmed') === 'true';
+      payload.skippedStages = [];
     } else {
       payload.reason = String(data.get('reason') || '').trim();
     }
@@ -404,7 +434,7 @@
   function applyDraft(form, draft) {
     if (!draft || typeof draft !== 'object') return;
     Object.keys(draft).forEach(function (key) {
-      if (key === 'action') return;
+      if (key === 'action' || key === 'dataVersion' || key === 'workflowStatus') return;
       var element = form.elements.namedItem(key);
       if (!element) return;
       if (typeof RadioNodeList !== 'undefined' && element instanceof RadioNodeList) {
