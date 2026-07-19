@@ -212,9 +212,22 @@
     if (action === 'area_approve') {
       html += plainNumberField('adjustment', '區主管增減分（-10～10）', value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'), -10, 10, true);
     }
-    html += textareaField('comment', pair[0], value(record, pair[1]), commentRequired, '');
+    html += textareaField('comment', pair[0], approvalCommentValue(record, action, pair[1]), commentRequired, '');
     html += '</div>' + signatureBlock();
     return html;
+  }
+
+  function approvalCommentValue(record, action, fieldName) {
+    var resultFields = {
+      edu_supervisor_approve: '教育中心主管簽核結果',
+      area_approve: '區主管簽核結果',
+      employee_confirm: '受評人員確認結果',
+      department_executive_approve: '營業處主管簽核結果',
+      gm_approve: '總經理簽核結果'
+    };
+    var result = value(record, resultFields[action] || '');
+    if (result === '退回' || result === '提出疑慮' || result === '待重新簽核') return '';
+    return value(record, fieldName);
   }
 
   function renderReturnForm(record, action) {
@@ -239,7 +252,10 @@
         '<label class="choice-card"><input type="radio" name="signatureMode" value="drawn" data-signature-drawn> 本次手寫簽名</label>' +
       '</div>' +
       '<div class="signature-panel" data-saved-panel><p data-saved-status>正在檢查預存簽名…</p><img class="signature-preview" data-saved-preview alt="本人預存簽名預覽" hidden></div>' +
-      '<div class="signature-panel" data-drawn-panel hidden><canvas class="signature-canvas" data-signature-canvas aria-label="手寫簽名區"></canvas><button type="button" class="small-button" data-clear-signature>清除重簽</button></div>' +
+      '<div class="signature-panel" data-drawn-panel hidden><canvas class="signature-canvas" data-signature-canvas aria-label="手寫簽名區"></canvas>' +
+        '<label class="signature-save-personal"><input type="checkbox" data-save-personal checked> 將本次手寫簽名設為我的預存簽名</label>' +
+        '<p class="section-help">預存簽名只供下次本人使用；本張表與PDF會保存本次獨立快照，不會因日後更新簽名而改變。</p>' +
+        '<button type="button" class="small-button" data-clear-signature>清除重簽</button></div>' +
       '</div>';
   }
 
