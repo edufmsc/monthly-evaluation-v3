@@ -64,6 +64,9 @@
     publishPdf: function (evaluationNo, requestId) {
       return call('publishPdf', { evaluationNo: String(evaluationNo || '') }, requestId);
     },
+    preparePdfView: function (evaluationNo, requestId) {
+      return call('preparePdfView', { evaluationNo: String(evaluationNo || '') }, requestId);
+    },
     verifyPdfTemplate: function () {
       return call('verifyPdfTemplate', {});
     }
