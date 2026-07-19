@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.1.0-history-admin';
+  var APP_BUILD = '6.2.0-test-dispatch';
   var elements = {};
   var state = {
     session: null,
@@ -12,7 +12,9 @@
     signatureController: null,
     draftTimer: null,
     draftServerTimer: null,
-    draftLoaded: false
+    draftLoaded: false,
+    testDispatchCandidates: [],
+    testDispatchPreview: null
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -23,6 +25,7 @@
     cacheElements();
     bindEvents();
     elements.appVersion.textContent = APP_BUILD;
+    elements.testDispatchMonth.value = currentRocMonthFirstDay();
 
     if (!window.V3ApiClient.isConfigured()) {
       elements.configErrorCard.hidden = false;
@@ -45,7 +48,10 @@
       'refreshPendingButton', 'pendingList', 'historyFilterForm', 'historyMonth', 'historyEmployeeId',
       'historyEmployeeFilter', 'historyStatus', 'historyList', 'historyScopeText',
       'adminRefreshSessionButton', 'adminHealthCheckButton', 'adminSystemHealthButton',
-      'adminSystemMessage', 'adminSystemResult', 'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
+      'adminSystemMessage', 'adminSystemResult', 'testDispatchForm', 'refreshTestCandidatesButton',
+      'testDispatchEmployee', 'testDispatchEmployeeHint', 'testDispatchMonth', 'testDispatchReason',
+      'previewTestDispatchButton', 'testDispatchMessage', 'testDispatchPreview', 'testDispatchPreviewContent',
+      'testDispatchConfirm', 'createTestDispatchButton', 'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
       'draftStatus', 'saveDraftButton', 'submitEvaluationButton', 'evaluationDialogTitle'
@@ -63,6 +69,13 @@
     elements.adminRefreshSessionButton.addEventListener('click', runAdminSessionCheck);
     elements.adminHealthCheckButton.addEventListener('click', runAdminConnectionCheck);
     elements.adminSystemHealthButton.addEventListener('click', runAdminSystemHealth);
+    elements.refreshTestCandidatesButton.addEventListener('click', loadTestDispatchCandidates);
+    elements.testDispatchForm.addEventListener('submit', previewTestDispatch);
+    elements.testDispatchEmployee.addEventListener('change', handleTestDispatchInputChange);
+    elements.testDispatchMonth.addEventListener('input', handleTestDispatchInputChange);
+    elements.testDispatchReason.addEventListener('input', updateTestDispatchCreateState);
+    elements.testDispatchConfirm.addEventListener('change', updateTestDispatchCreateState);
+    elements.createTestDispatchButton.addEventListener('click', createTestDispatch);
     elements.refreshPendingButton.addEventListener('click', loadPending);
     elements.historyFilterForm.addEventListener('submit', function (event) {
       event.preventDefault();
@@ -562,6 +575,199 @@
     '</div><p class="section-help">此健檢只讀取資料，不會修改、清空或刪除任何工作表內容。</p>';
   }
 
+  async function loadTestDispatchCandidates() {
+    clearTestDispatchMessage();
+    elements.refreshTestCandidatesButton.disabled = true;
+    elements.testDispatchEmployee.disabled = true;
+    var previousValue = String(elements.testDispatchEmployee.value || '');
+    elements.testDispatchEmployee.innerHTML = '<option value="">正在載入受評人員…</option>';
+    try {
+      var result = await window.V3WorkflowService.listTestDispatchCandidates('');
+      var data = result.data || {};
+      state.testDispatchCandidates = Array.isArray(data.items) ? data.items : [];
+      var options = ['<option value="">請選擇受評人員</option>'];
+      state.testDispatchCandidates.forEach(function (item) {
+        var label = [item.employeeId, item.employeeName, joinStore(item.storeCode, item.storeName)].filter(Boolean).join('｜');
+        if (String(item.needsEvaluation || '') !== '是') label += '｜J欄：' + valueOrDash(item.needsEvaluation);
+        options.push('<option value="' + escapeHtml(item.employeeId) + '">' + escapeHtml(label) + '</option>');
+      });
+      elements.testDispatchEmployee.innerHTML = options.join('');
+      if (previousValue && state.testDispatchCandidates.some(function (item) { return item.employeeId === previousValue; })) {
+        elements.testDispatchEmployee.value = previousValue;
+      }
+      elements.testDispatchEmployeeHint.textContent = state.testDispatchCandidates.length
+        ? '已載入 ' + state.testDispatchCandidates.length + ' 位在職受評人員。手動測試建立不受 J 欄限制。'
+        : '員工主檔目前沒有可選擇的在職受評人員。';
+    } catch (error) {
+      elements.testDispatchEmployee.innerHTML = '<option value="">載入失敗</option>';
+      showTestDispatchMessage('error', friendlyError(error));
+    } finally {
+      elements.refreshTestCandidatesButton.disabled = false;
+      elements.testDispatchEmployee.disabled = false;
+    }
+  }
+
+  function handleTestDispatchInputChange() {
+    state.testDispatchPreview = null;
+    elements.testDispatchPreview.hidden = true;
+    elements.testDispatchConfirm.checked = false;
+    elements.createTestDispatchButton.disabled = true;
+    clearTestDispatchMessage();
+  }
+
+  async function previewTestDispatch(event) {
+    event.preventDefault();
+    clearTestDispatchMessage();
+    var employeeId = String(elements.testDispatchEmployee.value || '').trim();
+    var evaluationMonth = String(elements.testDispatchMonth.value || '').trim();
+    var reason = String(elements.testDispatchReason.value || '').trim();
+
+    if (!employeeId) return showTestDispatchMessage('error', '請選擇受評人員。');
+    if (!/^\d{3}\/\d{2}\/01$/.test(evaluationMonth)) return showTestDispatchMessage('error', '考核月份請輸入完整民國日期，例如 115/08/01。');
+    if (!reason) return showTestDispatchMessage('error', '請填寫建立原因。');
+
+    setButtonLoading(elements.previewTestDispatchButton, true, '預覽中');
+    elements.testDispatchPreview.hidden = true;
+    elements.testDispatchConfirm.checked = false;
+    try {
+      var result = await window.V3WorkflowService.previewTestEvaluation(employeeId, evaluationMonth);
+      state.testDispatchPreview = result.data || null;
+      renderTestDispatchPreview(state.testDispatchPreview);
+      elements.testDispatchPreview.hidden = false;
+      if (state.testDispatchPreview && state.testDispatchPreview.canCreate) {
+        showTestDispatchMessage('success', '預覽完成，請核對完整路線後勾選確認。');
+      } else {
+        showTestDispatchMessage('error', '預覽發現阻擋問題，請依下方訊息修正。');
+      }
+    } catch (error) {
+      state.testDispatchPreview = null;
+      showTestDispatchMessage('error', friendlyError(error));
+    } finally {
+      setButtonLoading(elements.previewTestDispatchButton, false, '預覽上呈路線');
+      updateTestDispatchCreateState();
+    }
+  }
+
+  function renderTestDispatchPreview(preview) {
+    var data = preview || {};
+    var employee = data.employee || {};
+    var organization = data.organization || {};
+    var route = data.route || {};
+    var errors = Array.isArray(data.errors) ? data.errors : [];
+    var warnings = Array.isArray(data.warnings) ? data.warnings : [];
+
+    var html = '<h4>建立預覽</h4><div class="test-dispatch-preview-grid">' +
+      metaItem('預計考核單號', data.plannedEvaluationNo) +
+      metaItem('考核月份', data.evaluationMonth) +
+      metaItem('修訂版本', data.revision) +
+      metaItem('受評人員', joinText(employee.employeeId, employee.employeeName)) +
+      metaItem('轉任日', employee.transferDate) +
+      metaItem('J欄是否考核', employee.needsEvaluation) +
+      metaItem('店別', joinStore(organization.storeCode, organization.storeName)) +
+      metaItem('區域', organization.area) +
+      metaItem('營業處', organization.department) +
+    '</div>';
+
+    if (errors.length) {
+      html += '<ul class="preview-alert-list preview-alert-list--error">' + errors.map(function (item) {
+        return '<li>' + escapeHtml(item) + '</li>';
+      }).join('') + '</ul>';
+    }
+    if (warnings.length) {
+      html += '<ul class="preview-alert-list preview-alert-list--warning">' + warnings.map(function (item) {
+        return '<li>' + escapeHtml(item) + '</li>';
+      }).join('') + '</ul>';
+    }
+
+    html += '<h4>預計上呈路線</h4><div class="route-list">' +
+      routeRowHtml('門市店主管', route.manager) +
+      routeRowHtml('教育中心成員', route.educationMember) +
+      routeRowHtml('教育中心主管', route.educationSupervisor) +
+      routeRowHtml('區主管', route.areaSupervisor) +
+      routeRowHtml('受評人員確認', route.employee) +
+      routeRowHtml('營業處主管', route.departmentExecutive) +
+      routeRowHtml('總經理', route.generalManager) +
+    '</div>';
+
+    elements.testDispatchPreviewContent.innerHTML = html;
+  }
+
+  function routeRowHtml(label, person) {
+    var item = person || {};
+    return '<div class="route-row"><span>' + escapeHtml(label) + '</span><strong>' +
+      escapeHtml(joinText(item.employeeId, item.employeeName) || '尚未判定') + '</strong><small>' +
+      escapeHtml(item.source || item.role || '') + '</small></div>';
+  }
+
+  function updateTestDispatchCreateState() {
+    var canCreate = Boolean(state.testDispatchPreview && state.testDispatchPreview.canCreate);
+    var confirmed = Boolean(elements.testDispatchConfirm.checked);
+    var hasReason = Boolean(String(elements.testDispatchReason.value || '').trim());
+    elements.createTestDispatchButton.disabled = !(canCreate && confirmed && hasReason);
+  }
+
+  async function createTestDispatch() {
+    if (!state.testDispatchPreview || !state.testDispatchPreview.canCreate) {
+      return showTestDispatchMessage('error', '請先完成可建立的預覽。');
+    }
+    if (!elements.testDispatchConfirm.checked) {
+      return showTestDispatchMessage('error', '請先勾選確認。');
+    }
+
+    var employeeId = String(elements.testDispatchEmployee.value || '').trim();
+    var evaluationMonth = String(elements.testDispatchMonth.value || '').trim();
+    var reason = String(elements.testDispatchReason.value || '').trim();
+    var employee = state.testDispatchPreview.employee || {};
+    var confirmText = '確定建立以下測試月考核表嗎？\n\n' +
+      '受評人員：' + joinText(employee.employeeId, employee.employeeName) + '\n' +
+      '考核月份：' + evaluationMonth + '\n' +
+      '版本：R0\n\n建立後不會自動刪除；若測試不使用，請依正式流程作廢。';
+    if (!window.confirm(confirmText)) return;
+
+    setButtonLoading(elements.createTestDispatchButton, true, '建立中');
+    try {
+      var requestId = createClientRequestId('test-dispatch');
+      var result = await window.V3WorkflowService.createTestEvaluation({
+        employeeId: employeeId,
+        evaluationMonth: evaluationMonth,
+        reason: reason,
+        secondConfirmed: true
+      }, requestId);
+      var data = result.data || {};
+      showTestDispatchMessage('success', '建立成功：' + valueOrDash(data.evaluationNo) + '，目前已進入' + valueOrDash(data.status) + '。');
+      state.testDispatchPreview = null;
+      elements.testDispatchPreview.hidden = true;
+      elements.testDispatchConfirm.checked = false;
+      elements.testDispatchReason.value = '';
+      await loadHistory();
+    } catch (error) {
+      showTestDispatchMessage('error', friendlyError(error));
+    } finally {
+      setButtonLoading(elements.createTestDispatchButton, false, '建立測試月考核表');
+      updateTestDispatchCreateState();
+    }
+  }
+
+  function currentRocMonthFirstDay() {
+    var now = new Date();
+    var rocYear = now.getFullYear() - 1911;
+    return padNumber(rocYear, 3) + '/' + padNumber(now.getMonth() + 1, 2) + '/01';
+  }
+
+  function padNumber(value, length) {
+    var text = String(value);
+    while (text.length < length) text = '0' + text;
+    return text;
+  }
+
+  function createClientRequestId(prefix) {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return prefix + '-' + window.crypto.randomUUID();
+    return prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+
+  function showTestDispatchMessage(type, text) { showMessage(elements.testDispatchMessage, type, text); }
+  function clearTestDispatchMessage() { clearMessage(elements.testDispatchMessage); }
+
   async function handleLogout() {
     elements.logoutButton.disabled = true;
     try {
@@ -643,7 +849,11 @@
     Object.keys(map).forEach(function (name) { map[name].hidden = name !== tab; });
     elements.tabButtons.forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-tab') === tab); });
     if (tab === 'history' && !state.history.length) loadHistory();
-    if (tab === 'system' && elements.systemTabButton.hidden) switchTab('pending');
+    if (tab === 'system' && elements.systemTabButton.hidden) {
+      switchTab('pending');
+      return;
+    }
+    if (tab === 'system' && !state.testDispatchCandidates.length) loadTestDispatchCandidates();
   }
 
   function togglePasswordVisibility() {
