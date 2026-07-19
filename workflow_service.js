@@ -17,6 +17,9 @@
     listProgress: function (filters) { return call('listProgress', filters || {}); },
     listHistory: function (filters) { return call('listHistory', filters || {}); },
     getEvaluation: function (evaluationNo) { return call('getEvaluation', { evaluationNo: evaluationNo }); },
+    getMutationStatus: function (evaluationNo, requestId, expectedVersion) {
+      return call('getMutationStatus', { evaluationNo: evaluationNo, requestId: requestId, expectedVersion: expectedVersion });
+    },
     claim: function (evaluationNo, expectedVersion) {
       return call('claimEvaluation', { evaluationNo: evaluationNo, expectedVersion: expectedVersion });
     },
