@@ -14,6 +14,7 @@
   window.V3WorkflowService = Object.freeze({
     bootstrap: function (limit) { return call('bootstrap', { limit: Number(limit || 50) }); },
     listPending: function (limit) { return call('listPending', { limit: Number(limit || 100) }); },
+    listProgress: function (filters) { return call('listProgress', filters || {}); },
     listHistory: function (filters) { return call('listHistory', filters || {}); },
     getEvaluation: function (evaluationNo) { return call('getEvaluation', { evaluationNo: evaluationNo }); },
     claim: function (evaluationNo, expectedVersion) {
@@ -23,14 +24,20 @@
       return call('releaseEvaluation', { evaluationNo: evaluationNo, expectedVersion: expectedVersion });
     },
     submitAction: function (payload, requestId) { return call('submitAction', payload, requestId); },
-    saveDraft: function (evaluationNo, content) {
+    forceTransition: function (payload, requestId) { return call('forceTransition', payload, requestId); },
+    saveDraft: function (evaluationNo, content, expectedVersion, workflowStatus, action) {
       return call('saveDraft', {
         evaluationNo: evaluationNo,
         content: content || {},
+        expectedVersion: expectedVersion,
+        workflowStatus: workflowStatus || '',
+        action: action || '',
         clientUpdatedAt: new Date().toISOString()
       });
     },
-    getDraft: function (evaluationNo) { return call('getDraft', { evaluationNo: evaluationNo }); },
+    getDraft: function (evaluationNo, action, expectedVersion) {
+      return call('getDraft', { evaluationNo: evaluationNo, action: action || '', expectedVersion: expectedVersion });
+    },
     deleteDraft: function (evaluationNo) { return call('deleteDraft', { evaluationNo: evaluationNo }); },
     systemHealth: function () { return call('systemHealth', {}); },
     listTestDispatchCandidates: function (keyword) {
