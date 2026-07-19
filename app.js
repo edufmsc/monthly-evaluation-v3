@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.3.0-evaluation-ux';
+  var APP_BUILD = '6.3.1-return-resubmit-font';
   var elements = {};
   var state = {
     session: null,
@@ -350,7 +350,8 @@
     }
     elements.actionPanel.hidden = false;
     elements.actionSelector.innerHTML = actions.map(function (action) {
-      return '<option value="' + escapeHtml(action) + '">' + escapeHtml(window.V3EvaluationForm.ACTION_LABELS[action] || action) + '</option>';
+      var label = window.V3EvaluationForm.getActionLabel(record, action);
+      return '<option value="' + escapeHtml(action) + '">' + escapeHtml(label) + '</option>';
     }).join('');
     renderSelectedAction(actions[0]);
   }
@@ -362,7 +363,7 @@
     state.draftLoaded = false;
     elements.evaluationActionForm.innerHTML = window.V3EvaluationForm.renderActionForm(state.currentDetail || {}, action);
     window.V3EvaluationForm.initializeInteractiveControls(elements.evaluationActionForm);
-    elements.submitEvaluationButton.querySelector('.button-label').textContent = window.V3EvaluationForm.ACTION_LABELS[action] || '送出';
+    elements.submitEvaluationButton.querySelector('.button-label').textContent = window.V3EvaluationForm.getActionLabel(state.currentDetail || {}, action) || '送出';
     initializeSignatureIfNeeded();
     await loadDraftForCurrentAction();
     window.V3EvaluationForm.refreshInteractiveControls(elements.evaluationActionForm);
