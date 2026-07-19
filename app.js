@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.3.3-progress-permission-submit-fix';
+  var APP_BUILD = '6.3.4-stability-auto-refresh-close-fix';
   var elements = {};
   var state = {
     session: null,
@@ -17,7 +17,8 @@
     draftLoaded: false,
     isSubmitting: false,
     testDispatchCandidates: [],
-    testDispatchPreview: null
+    testDispatchPreview: null,
+    lastAutoRefreshAt: 0
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -59,7 +60,8 @@
       'testDispatchConfirm', 'createTestDispatchButton', 'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
-      'draftStatus', 'saveDraftButton', 'submitEvaluationButton', 'evaluationDialogTitle'
+      'draftStatus', 'saveDraftButton', 'submitEvaluationButton', 'evaluationDialogTitle',
+      'globalNoticeOverlay', 'globalNoticeIcon', 'globalNoticeTitle', 'globalNoticeText', 'globalNoticeClose'
     ];
     ids.forEach(function (id) { elements[id] = document.getElementById(id); });
     elements.tabButtons = Array.prototype.slice.call(document.querySelectorAll('[data-tab]'));
@@ -108,6 +110,9 @@
     elements.evaluationActionForm.addEventListener('input', scheduleDraftSave);
     elements.evaluationActionForm.addEventListener('change', scheduleDraftSave);
     window.addEventListener('beforeunload', function () { if (!state.isSubmitting) saveLocalDraft(); });
+    elements.globalNoticeClose.addEventListener('click', closeGlobalNotice);
+    window.addEventListener('focus', handleAutomaticRefresh);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) handleAutomaticRefresh(); });
   }
 
   async function restoreSession() {
@@ -159,6 +164,7 @@
     state.pending = data.pending && Array.isArray(data.pending.items) ? data.pending.items : [];
     renderPending();
     elements.pendingCountBadge.textContent = String(data.counts && data.counts.pending || state.pending.length);
+    await loadProgress({ quiet: true });
     clearDashboardMessage();
   }
 
@@ -177,7 +183,8 @@
     }
   }
 
-  async function loadProgress() {
+  async function loadProgress(options) {
+    var settings = options || {};
     elements.progressList.innerHTML = '<div class="loading-list">正在查詢流程動態…</div>';
     elements.refreshProgressButton.disabled = true;
     try {
@@ -371,7 +378,8 @@
       ]]
     ];
 
-    var html = sections.map(function (section) {
+    var scoreHtml = currentScoreCardHtml(record);
+    var html = scoreHtml + sections.map(function (section) {
       var visible = section[1].filter(function (pair) { return String(pair[1] === null || pair[1] === undefined ? '' : pair[1]).trim() !== ''; });
       if (!visible.length) return '';
       return '<article class="detail-section"><h3>' + escapeHtml(section[0]) + '</h3><div class="detail-grid">' +
@@ -383,6 +391,25 @@
     return html || '<article class="detail-section"><p>目前尚無已填寫內容。</p></article>';
   }
 
+  function currentScoreCardHtml(record) {
+    var score = Number(record['已評得分']);
+    var max = Number(record['已評滿分']);
+    if (!isFinite(score) || !isFinite(max) || max <= 0) return '';
+    var percent = Math.max(0, Math.min(100, Math.round(score / max * 100)));
+    return '<article class="detail-section current-score-card ' + scoreToneClass(percent) + '">' +
+      '<div><span>目前累計得分</span><strong>' + escapeHtml(score + '／' + max) + '</strong></div>' +
+      '<div><span>目前比例</span><strong>' + percent + '%</strong></div>' +
+      (max < 100 ? '<p>目前仍有後續評核或簽核階段尚未完成。</p>' : '') +
+      '</article>';
+  }
+
+  function scoreToneClass(percent) {
+    if (percent >= 90) return 'score-tone--green';
+    if (percent >= 80) return 'score-tone--blue';
+    if (percent >= 70) return 'score-tone--orange';
+    return 'score-tone--red';
+  }
+
   function signatureSummaryHtml(summary) {
     var roles = ['門市店主管', '教育中心成員', '教育中心主管', '區主管', '受評人員', '營業處主管', '總經理'];
     var rows = [];
@@ -390,7 +417,7 @@
       var item = summary[role];
       if (!item) return;
       rows.push('<div class="signature-status-row"><span>' + escapeHtml(role) + '</span><strong>' +
-        escapeHtml(item.signerName || '—') + '｜' + escapeHtml(item.status || '未簽核') + (item.signedAt ? '｜' + escapeHtml(item.signedAt) : '') +
+        escapeHtml(item.signerName || '—') + '｜' + escapeHtml(item.status || '未簽核') + (item.signedAt ? '｜' + escapeHtml(formatDateTimeDisplay(item.signedAt)) : '') +
       '</strong></div>');
     });
     if (!rows.length) return '';
@@ -547,7 +574,7 @@
     try {
       payload = window.V3EvaluationForm.collectActionPayload(form, state.currentAction, state.signatureController);
     } catch (error) {
-      showEvaluationMessage('error', error.message || '請確認填寫內容。');
+      showGlobalNotice('error', '資料尚未完成', error.message || '請確認填寫內容。');
       return;
     }
 
@@ -560,40 +587,91 @@
     var label = window.V3EvaluationForm.getActionLabel(state.currentDetail || {}, action) || '送出';
     if (!window.confirm('確定要「' + label + '」嗎？\n\n送出後將進入下一個流程階段。')) return;
 
+    var requestId = window.V3ApiClient.createRequestId();
     state.isSubmitting = true;
     elements.closeEvaluationButton.disabled = true;
     setButtonLoading(elements.submitEvaluationButton, true, '處理中，請勿重複點擊');
     try {
-      var requestId = window.V3ApiClient.createRequestId();
       if (action === 'force_transition') {
         await window.V3WorkflowService.forceTransition(payload, requestId);
       } else {
         await window.V3WorkflowService.submitAction(payload, requestId);
       }
-
-      removeLocalDraft(evaluationNo, action, version, workflowStatus);
-      clearDraftTimers();
-      state.isSubmitting = false;
-      setButtonLoading(elements.submitEvaluationButton, false, label);
-      elements.closeEvaluationButton.disabled = false;
-      closeEvaluation({ saveDraft: false });
-      setDashboardMessage('success', label + '完成，流程已更新。');
-      refreshVisibleListsAfterMutation();
+      await finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label);
     } catch (error) {
-      state.isSubmitting = false;
-      elements.closeEvaluationButton.disabled = false;
-      setButtonLoading(elements.submitEvaluationButton, false, label);
-      showEvaluationMessage('error', friendlyError(error));
-      return;
+      if (error && (error.code === 'REQUEST_TIMEOUT' || error.code === 'NETWORK_ERROR')) {
+        showGlobalNotice('processing', '正在確認送出結果', '連線暫時中斷，但後端可能仍在完成送出。系統正在自動確認，請不要重複點擊。', false);
+        var recovery = await recoverMutationResult(evaluationNo, requestId, version);
+        if (recovery.processed) {
+          closeGlobalNotice();
+          await finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label);
+          return;
+        }
+        if (recovery.changed) {
+          closeEvaluation({ saveDraft: false });
+          await refreshAllAccessibleLists();
+          showGlobalNotice('warning', '表單已更新', '此考核表在送出期間已發生更新。請重新開啟表單確認最新狀態，不要再次使用舊畫面送出。');
+          resetSubmissionUi(label);
+          return;
+        }
+        showGlobalNotice('error', '無法確認送出結果', '系統目前無法確認這次操作是否完成。請關閉訊息後重新整理清單，再開啟表單確認狀態。請勿直接連續重按。');
+      } else if (error && (error.code === 'VERSION_CONFLICT' || error.code === 'DUPLICATE_REQUEST')) {
+        showGlobalNotice('warning', '表單已更新', friendlyError(error));
+      } else {
+        showGlobalNotice('error', '送出失敗', friendlyError(error));
+      }
+      resetSubmissionUi(label);
     }
+  }
+
+  async function finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label) {
+    removeLocalDraft(evaluationNo, action, version, workflowStatus);
+    clearDraftTimers();
+    closeEvaluation({ saveDraft: false });
+    await refreshAllAccessibleLists();
+    setDashboardMessage('success', label + '完成，流程已更新。');
+    resetSubmissionUi(label);
+  }
+
+  function resetSubmissionUi(label) {
     state.isSubmitting = false;
     elements.closeEvaluationButton.disabled = false;
+    setButtonLoading(elements.submitEvaluationButton, false, label || '送出');
+  }
+
+  async function recoverMutationResult(evaluationNo, requestId, expectedVersion) {
+    var last = { processed: false, changed: false };
+    for (var attempt = 0; attempt < 8; attempt += 1) {
+      await waitMilliseconds(attempt === 0 ? 1000 : 2000);
+      try {
+        var result = await window.V3WorkflowService.getMutationStatus(evaluationNo, requestId, expectedVersion);
+        last = result.data || last;
+        if (last.processed || last.changed) return last;
+      } catch (ignore) {}
+    }
+    return last;
+  }
+
+  function waitMilliseconds(ms) {
+    return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
   }
 
   function refreshVisibleListsAfterMutation() {
-    loadPending();
-    if (!elements.progressPanel.hidden || state.progress.length) loadProgress();
-    if (!elements.historyPanel.hidden || state.history.length) loadHistory();
+    refreshAllAccessibleLists();
+  }
+
+  async function refreshAllAccessibleLists() {
+    var jobs = [loadPending(), loadProgress({ quiet: elements.progressPanel.hidden })];
+    if (!elements.historyPanel.hidden || state.history.length) jobs.push(loadHistory());
+    await Promise.allSettled(jobs);
+  }
+
+  function handleAutomaticRefresh() {
+    if (!state.session || elements.dashboardView.hidden || state.isSubmitting) return;
+    var now = Date.now();
+    if (now - state.lastAutoRefreshAt < 5000) return;
+    state.lastAutoRefreshAt = now;
+    refreshAllAccessibleLists();
   }
 
   async function handleClaim() {
@@ -745,6 +823,7 @@
 
     if (!employeeId) return showTestDispatchMessage('error', '請選擇受評人員。');
     if (!/^\d{3}\/\d{2}\/01$/.test(evaluationMonth)) return showTestDispatchMessage('error', '考核月份請輸入完整民國日期，例如 115/08/01。');
+    if (isFutureRocMonth(evaluationMonth)) return showGlobalNotice('warning', '不可建立未來月份', '手動建立只能選擇本月或過去月份。未來月份請等待該月1日自動派發。');
     if (!reason) return showTestDispatchMessage('error', '請填寫建立原因。');
 
     setButtonLoading(elements.previewTestDispatchButton, true, '預覽中');
@@ -838,6 +917,7 @@
     var employeeId = String(elements.testDispatchEmployee.value || '').trim();
     var evaluationMonth = String(elements.testDispatchMonth.value || '').trim();
     var reason = String(elements.testDispatchReason.value || '').trim();
+    if (isFutureRocMonth(evaluationMonth)) return showGlobalNotice('warning', '不可建立未來月份', '手動建立只能選擇本月或過去月份。未來月份請等待該月1日自動派發。');
     var employee = state.testDispatchPreview.employee || {};
     var confirmText = '確定建立以下測試月考核表嗎？\n\n' +
       '受評人員：' + joinText(employee.employeeId, employee.employeeName) + '\n' +
@@ -867,6 +947,15 @@
       setButtonLoading(elements.createTestDispatchButton, false, '建立測試月考核表');
       updateTestDispatchCreateState();
     }
+  }
+
+  function isFutureRocMonth(value) {
+    var match = /^(\d{3})\/(\d{2})\/01$/.exec(String(value || '').trim());
+    if (!match) return false;
+    var target = new Date(Number(match[1]) + 1911, Number(match[2]) - 1, 1);
+    var now = new Date();
+    var current = new Date(now.getFullYear(), now.getMonth(), 1);
+    return target.getTime() > current.getTime();
   }
 
   function currentRocMonthFirstDay() {
@@ -991,8 +1080,9 @@
     };
     Object.keys(map).forEach(function (name) { map[name].hidden = name !== tab; });
     elements.tabButtons.forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-tab') === tab); });
-    if (tab === 'progress' && !state.progress.length) loadProgress();
-    if (tab === 'history' && !state.history.length) loadHistory();
+    if (tab === 'pending') loadPending();
+    if (tab === 'progress') loadProgress();
+    if (tab === 'history') loadHistory();
     if (tab === 'system' && elements.systemTabButton.hidden) {
       switchTab('pending');
       return;
@@ -1096,7 +1186,10 @@
       MANAGER_COMMENT_REQUIRED: '門市店主管評語為必填。',
       AREA_COMMENT_REQUIRED: '區主管評語為必填。',
       PHASE63_UPGRADE_REQUIRED: '資料表尚未完成第6.3階段升級，請聯絡教育中心。',
-      STALE_DRAFT_VERSION: '此草稿屬於舊流程版本，系統不會自動覆蓋目前資料。請重新開啟表單。'
+      STALE_DRAFT_VERSION: '此草稿屬於舊流程版本，系統不會自動覆蓋目前資料。請重新開啟表單。',
+      DUPLICATE_EVALUATION: '同一位受評人員在相同月份已存在 R0。重複建立不會自動變成 R1。',
+      FUTURE_EVALUATION_MONTH: '手動建立不可選擇未來月份。',
+      DUPLICATE_REQUEST: '這次操作已經完成，請重新整理清單確認最新狀態。'
     };
     return messages[code] || String(error && error.message || '系統處理失敗。');
   }
@@ -1112,6 +1205,33 @@
       return padNumber(Number(western[1]) - 1911, 3) + '/' + padNumber(Number(western[2]), 2) + '/' + padNumber(Number(western[3]), 2);
     }
     return text;
+  }
+
+  function formatDateTimeDisplay(value) {
+    var text = String(value === null || value === undefined ? '' : value).trim();
+    if (!text) return '';
+    var match = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(text);
+    if (!match) return text;
+    var rocYear = Number(match[1]) - 1911;
+    var result = padNumber(rocYear, 3) + '/' + padNumber(Number(match[2]), 2) + '/' + padNumber(Number(match[3]), 2);
+    if (!match[4] || (Number(match[4]) === 0 && Number(match[5]) === 0 && Number(match[6] || 0) === 0)) {
+      return result + '｜原始資料未記錄時間';
+    }
+    return result + ' ' + padNumber(Number(match[4]), 2) + ':' + padNumber(Number(match[5]), 2);
+  }
+
+  function showGlobalNotice(type, title, text, canClose) {
+    elements.globalNoticeOverlay.className = 'global-notice-overlay global-notice-overlay--' + String(type || 'info');
+    elements.globalNoticeTitle.textContent = title || '系統訊息';
+    elements.globalNoticeText.textContent = text || '';
+    elements.globalNoticeIcon.textContent = type === 'processing' ? '…' : (type === 'error' ? '!' : (type === 'warning' ? '!' : '✓'));
+    elements.globalNoticeClose.hidden = canClose === false;
+    elements.globalNoticeOverlay.hidden = false;
+  }
+
+  function closeGlobalNotice() {
+    elements.globalNoticeOverlay.hidden = true;
+    elements.globalNoticeClose.hidden = false;
   }
 
   function valueOrDash(value) {
