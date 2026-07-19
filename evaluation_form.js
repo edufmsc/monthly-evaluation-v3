@@ -288,8 +288,10 @@
   }
 
   function textareaField(name, label, current, required, hint) {
+    var placeholder = required ? '' : '非必填';
     return '<label class="field-group"><span class="field-label">' + escapeHtml(label) + (required ? ' <b class="required-mark">*</b>' : '') + '</span>' +
-      '<textarea name="' + escapeHtml(name) + '" rows="4"' + (required ? ' required' : '') + '>' + escapeHtml(current || '') + '</textarea>' +
+      '<textarea name="' + escapeHtml(name) + '" rows="4"' + (required ? ' required' : '') +
+        (placeholder ? ' placeholder="' + escapeHtml(placeholder) + '"' : '') + '>' + escapeHtml(current || '') + '</textarea>' +
       (hint ? '<small class="field-hint">' + escapeHtml(hint) + '</small>' : '') + '</label>';
   }
 
