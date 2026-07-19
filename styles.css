@@ -694,3 +694,60 @@ button:disabled { cursor: not-allowed; opacity: 0.58; }
     line-height: 1.45;
   }
 }
+
+/* ================================================================
+ * V3 6.3.3｜流程追蹤、歷史分流與送出狀態優化
+ * ================================================================ */
+.filter-grid--wide {
+  grid-template-columns: repeat(5, minmax(150px, 1fr)) auto;
+}
+.progress-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.progress-summary-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 13px 14px;
+  background: var(--surface);
+  box-shadow: 0 7px 18px rgba(72, 42, 26, 0.06);
+}
+.progress-summary-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+.progress-summary-card strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+.progress-summary-card--total {
+  border-color: rgba(237, 108, 44, 0.35);
+  background: #fff5ed;
+}
+.progress-summary-card--total strong { color: #b44718; }
+.evaluation-card .tag--warning { background: #fff0c9; color: #8a5600; }
+.evaluation-card .tag--danger { background: var(--danger-soft); color: var(--danger); }
+
+@media (max-width: 1180px) {
+  .filter-grid--wide { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .filter-grid--wide .primary-button { min-height: 46px; }
+}
+
+@media (max-width: 720px) {
+  .filter-grid--wide { grid-template-columns: 1fr; }
+  .progress-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .progress-summary-card { padding: 12px; }
+  .progress-summary-card span { font-size: 0.8rem; }
+  .progress-summary-card strong { font-size: 1.25rem; }
+}
+
+@media (max-width: 420px) {
+  .progress-summary { grid-template-columns: 1fr; }
+}
