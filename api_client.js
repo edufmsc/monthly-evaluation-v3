@@ -34,10 +34,17 @@
     }
 
     var controller = new AbortController();
-    var defaultTimeout = Number(config.REQUEST_TIMEOUT_MS || 20000);
+    var defaultTimeout = Number(config.REQUEST_TIMEOUT_MS || 30000);
     var actionTimeouts = {
-      generatePdf: 120000,
-      publishPdf: 60000,
+      submitAction: 90000,
+      forceTransition: 90000,
+      claimEvaluation: 45000,
+      releaseEvaluation: 45000,
+      saveDraft: 45000,
+      getMutationStatus: 45000,
+      generatePdf: 180000,
+      publishPdf: 90000,
+      preparePdfView: 90000,
       publicPdfView: 60000,
       verifyPdfTemplate: 60000
     };
