@@ -1,11 +1,13 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.3.1-return-resubmit-font';
+  var APP_BUILD = '6.3.3-progress-permission-submit-fix';
   var elements = {};
   var state = {
     session: null,
     pending: [],
+    progress: [],
+    progressSummary: null,
     history: [],
     currentDetail: null,
     currentAction: '',
@@ -13,6 +15,7 @@
     draftTimer: null,
     draftServerTimer: null,
     draftLoaded: false,
+    isSubmitting: false,
     testDispatchCandidates: [],
     testDispatchPreview: null
   };
@@ -44,9 +47,11 @@
       'employeeId', 'password', 'togglePassword', 'loginMessage', 'loginButton',
       'userName', 'userRole', 'userEmployeeId', 'profileRole', 'userDepartment', 'profileDepartment',
       'userArea', 'userStore', 'profileStore', 'logoutButton', 'systemTabButton',
-      'dashboardMessage', 'appVersion', 'pendingCountBadge', 'pendingPanel', 'historyPanel', 'profilePanel', 'systemPanel',
-      'refreshPendingButton', 'pendingList', 'historyFilterForm', 'historyMonth', 'historyEmployeeId',
-      'historyEmployeeFilter', 'historyStatus', 'historyList', 'historyScopeText',
+      'dashboardMessage', 'appVersion', 'pendingCountBadge', 'progressCountBadge', 'pendingPanel', 'progressPanel', 'historyPanel', 'profilePanel', 'systemPanel',
+      'refreshPendingButton', 'pendingList', 'refreshProgressButton', 'progressFilterForm', 'progressMonth',
+      'progressEmployeeId', 'progressEmployeeFilter', 'progressDepartment', 'progressArea', 'progressStatus',
+      'progressList', 'progressSummary', 'progressScopeText', 'historyFilterForm', 'historyMonth', 'historyEmployeeId',
+      'historyEmployeeFilter', 'historyDepartment', 'historyArea', 'historyStatus', 'historyList', 'historyScopeText',
       'adminRefreshSessionButton', 'adminHealthCheckButton', 'adminSystemHealthButton',
       'adminSystemMessage', 'adminSystemResult', 'testDispatchForm', 'refreshTestCandidatesButton',
       'testDispatchEmployee', 'testDispatchEmployeeHint', 'testDispatchMonth', 'testDispatchReason',
@@ -77,6 +82,11 @@
     elements.testDispatchConfirm.addEventListener('change', updateTestDispatchCreateState);
     elements.createTestDispatchButton.addEventListener('click', createTestDispatch);
     elements.refreshPendingButton.addEventListener('click', loadPending);
+    elements.refreshProgressButton.addEventListener('click', loadProgress);
+    elements.progressFilterForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      loadProgress();
+    });
     elements.historyFilterForm.addEventListener('submit', function (event) {
       event.preventDefault();
       loadHistory();
@@ -84,9 +94,11 @@
     elements.tabButtons.forEach(function (button) {
       button.addEventListener('click', function () { switchTab(button.getAttribute('data-tab')); });
     });
-    elements.closeEvaluationButton.addEventListener('click', closeEvaluation);
+    elements.closeEvaluationButton.addEventListener('click', function () {
+      if (!state.isSubmitting) closeEvaluation({ saveDraft: true });
+    });
     elements.evaluationOverlay.addEventListener('click', function (event) {
-      if (event.target === elements.evaluationOverlay) closeEvaluation();
+      if (event.target === elements.evaluationOverlay && !state.isSubmitting) closeEvaluation({ saveDraft: true });
     });
     elements.claimButton.addEventListener('click', handleClaim);
     elements.releaseButton.addEventListener('click', handleRelease);
@@ -95,7 +107,7 @@
     elements.submitEvaluationButton.addEventListener('click', submitCurrentAction);
     elements.evaluationActionForm.addEventListener('input', scheduleDraftSave);
     elements.evaluationActionForm.addEventListener('change', scheduleDraftSave);
-    window.addEventListener('beforeunload', saveLocalDraft);
+    window.addEventListener('beforeunload', function () { if (!state.isSubmitting) saveLocalDraft(); });
   }
 
   async function restoreSession() {
@@ -165,6 +177,31 @@
     }
   }
 
+  async function loadProgress() {
+    elements.progressList.innerHTML = '<div class="loading-list">正在查詢流程動態…</div>';
+    elements.refreshProgressButton.disabled = true;
+    try {
+      var result = await window.V3WorkflowService.listProgress({
+        limit: 500,
+        month: String(elements.progressMonth.value || '').trim(),
+        employeeId: String(elements.progressEmployeeId.value || '').trim().toUpperCase(),
+        department: String(elements.progressDepartment.value || '').trim(),
+        area: String(elements.progressArea.value || '').trim(),
+        status: String(elements.progressStatus.value || '').trim()
+      });
+      var data = result.data || {};
+      state.progress = Array.isArray(data.items) ? data.items : [];
+      state.progressSummary = data.summary || {};
+      elements.progressCountBadge.textContent = String(data.total || state.progress.length);
+      renderProgress();
+    } catch (error) {
+      elements.progressList.innerHTML = emptyStateHtml('流程追蹤載入失敗', friendlyError(error));
+      elements.progressSummary.innerHTML = '';
+    } finally {
+      elements.refreshProgressButton.disabled = false;
+    }
+  }
+
   async function loadHistory() {
     elements.historyList.innerHTML = '<div class="loading-list">正在查詢歷史紀錄…</div>';
     try {
@@ -172,6 +209,8 @@
         limit: 200,
         month: String(elements.historyMonth.value || '').trim(),
         employeeId: String(elements.historyEmployeeId.value || '').trim().toUpperCase(),
+        department: String(elements.historyDepartment.value || '').trim(),
+        area: String(elements.historyArea.value || '').trim(),
         status: String(elements.historyStatus.value || '').trim()
       });
       state.history = result.data && Array.isArray(result.data.items) ? result.data.items : [];
@@ -186,8 +225,29 @@
       elements.pendingList.innerHTML = emptyStateHtml('目前無待處理考核表', '新的月考核表進入您的階段後，會顯示在這裡。');
       return;
     }
-    elements.pendingList.innerHTML = state.pending.map(function (item) { return evaluationCardHtml(item, true); }).join('');
+    elements.pendingList.innerHTML = state.pending.map(function (item) { return evaluationCardHtml(item, 'pending'); }).join('');
     bindEvaluationCards(elements.pendingList);
+  }
+
+  function renderProgress() {
+    renderProgressSummary();
+    if (!state.progress.length) {
+      elements.progressList.innerHTML = emptyStateHtml('目前沒有符合條件的流程', '請調整月份、營業處、區域或狀態條件後重新查詢。');
+      return;
+    }
+    elements.progressList.innerHTML = state.progress.map(function (item) { return evaluationCardHtml(item, 'progress'); }).join('');
+    bindEvaluationCards(elements.progressList);
+  }
+
+  function renderProgressSummary() {
+    var summary = state.progressSummary || {};
+    var byStatus = summary.byStatus || {};
+    var rows = Object.keys(byStatus).sort(function (a, b) { return byStatus[b] - byStatus[a]; });
+    var html = '<article class="progress-summary-card progress-summary-card--total"><span>進行中總數</span><strong>' + state.progress.length + '</strong></article>';
+    html += rows.map(function (status) {
+      return '<article class="progress-summary-card"><span>' + escapeHtml(status) + '</span><strong>' + escapeHtml(byStatus[status]) + '</strong></article>';
+    }).join('');
+    elements.progressSummary.innerHTML = html;
   }
 
   function renderHistory() {
@@ -195,14 +255,15 @@
       elements.historyList.innerHTML = emptyStateHtml('查無歷史紀錄', '請調整月份、人員或狀態條件後重新查詢。');
       return;
     }
-    elements.historyList.innerHTML = state.history.map(function (item) { return evaluationCardHtml(item, false); }).join('');
+    elements.historyList.innerHTML = state.history.map(function (item) { return evaluationCardHtml(item, 'history'); }).join('');
     bindEvaluationCards(elements.historyList);
   }
 
-  function evaluationCardHtml(item, pending) {
+  function evaluationCardHtml(item, mode) {
     var tags = '<span class="tag">' + escapeHtml(item.status || '未設定狀態') + '</span>';
     if (item.claimWarning) tags += '<span class="tag tag--warning">停留超過24小時</span>';
     if (item.isVoid) tags += '<span class="tag tag--danger">已作廢</span>';
+    if (item.isException) tags += '<span class="tag tag--warning">例外流程</span>';
     return '<article class="evaluation-card">' +
       '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3><p>' + escapeHtml(item.evaluationNo || '') + '</p></div><div>' + tags + '</div></div>' +
       '<div class="evaluation-card__meta">' +
@@ -211,7 +272,7 @@
         metaItem('區域／營業處', joinText(item.area, item.department)) +
         metaItem('目前承辦', joinText(item.assignedRole, item.assignedEmployeeName || item.assignedEmployeeId)) +
       '</div>' +
-      '<div class="evaluation-card__actions"><button type="button" class="secondary-button" data-open-evaluation="' + escapeHtml(item.evaluationNo) + '">' + (pending ? '開啟處理' : '查看內容') + '</button></div>' +
+      '<div class="evaluation-card__actions"><button type="button" class="secondary-button" data-open-evaluation="' + escapeHtml(item.evaluationNo) + '">' + (mode === 'pending' ? '開啟處理' : mode === 'progress' ? '查看動態' : '查看內容') + '</button></div>' +
     '</article>';
   }
 
@@ -244,8 +305,9 @@
     }
   }
 
-  function closeEvaluation() {
-    saveLocalDraft();
+  function closeEvaluation(options) {
+    var settings = options || {};
+    if (settings.saveDraft !== false && !state.isSubmitting) saveLocalDraft();
     clearDraftTimers();
     elements.evaluationOverlay.hidden = true;
     document.body.classList.remove('is-locked');
@@ -253,6 +315,10 @@
     state.currentDetail = null;
     state.currentAction = '';
     state.signatureController = null;
+    state.draftLoaded = false;
+    state.isSubmitting = false;
+    elements.closeEvaluationButton.disabled = false;
+    setButtonLoading(elements.submitEvaluationButton, false, '送出');
   }
 
   function renderEvaluationDetail() {
@@ -343,7 +409,12 @@
 
   function renderActionPanel(record) {
     var allowed = Array.isArray(record.allowedActions) ? record.allowedActions : [];
-    var actions = allowed.filter(function (action) { return NORMAL_ACTIONS.indexOf(action) !== -1; });
+    var actions = allowed.filter(function (action) {
+      if (action === 'force_transition') {
+        return String(record['流程狀態'] || '').trim() === '待教育中心例外處理';
+      }
+      return NORMAL_ACTIONS.indexOf(action) !== -1 && ['reassign', 'void', 'create_revision'].indexOf(action) === -1;
+    });
     if (!actions.length) {
       elements.actionPanel.hidden = true;
       return;
@@ -400,16 +471,20 @@
   async function loadDraftForCurrentAction() {
     if (!state.currentDetail) return;
     var evaluationNo = state.currentDetail['考核單號'];
-    var local = readLocalDraft(evaluationNo);
+    var version = Number(state.currentDetail.dataVersion || 0);
+    var status = String(state.currentDetail['流程狀態'] || '');
+    var local = readLocalDraft(evaluationNo, state.currentAction, version, status);
     var server = null;
     try {
-      var result = await window.V3WorkflowService.getDraft(evaluationNo);
+      var result = await window.V3WorkflowService.getDraft(evaluationNo, state.currentAction, version);
       if (result.data && result.data.found) server = result.data.content;
     } catch (ignore) {}
-    var draft = server && server.action === state.currentAction ? server : (local && local.action === state.currentAction ? local : null);
-    if (draft) {
+    var draft = server || local;
+    var validDraft = draft && String(draft.action || '') === state.currentAction &&
+      Number(draft.dataVersion) === version && String(draft.workflowStatus || '') === status;
+    if (validDraft) {
       window.V3EvaluationForm.applyDraft(elements.evaluationActionForm, draft);
-      elements.draftStatus.textContent = '已載入先前草稿';
+      elements.draftStatus.textContent = '已載入目前流程版本的草稿';
     } else {
       elements.draftStatus.textContent = '尚未儲存草稿';
     }
@@ -426,10 +501,13 @@
   }
 
   function saveLocalDraft() {
-    if (!state.currentDetail || !state.currentAction || !elements.evaluationActionForm) return;
+    if (!state.currentDetail || !state.currentAction || !elements.evaluationActionForm || state.isSubmitting) return;
     try {
+      var version = Number(state.currentDetail.dataVersion || 0);
       var content = window.V3EvaluationForm.formToDraft(elements.evaluationActionForm, state.currentAction);
-      window.localStorage.setItem(localDraftKey(state.currentDetail['考核單號']), JSON.stringify(content));
+      content.dataVersion = version;
+      content.workflowStatus = String(state.currentDetail['流程狀態'] || '');
+      window.localStorage.setItem(localDraftKey(state.currentDetail['考核單號'], state.currentAction, version, content.workflowStatus), JSON.stringify(content));
       elements.draftStatus.textContent = '已保存至本機瀏覽器';
     } catch (ignore) {}
   }
@@ -439,8 +517,17 @@
     saveLocalDraft();
     elements.saveDraftButton.disabled = true;
     try {
+      var version = Number(state.currentDetail.dataVersion || 0);
       var content = window.V3EvaluationForm.formToDraft(elements.evaluationActionForm, state.currentAction);
-      var result = await window.V3WorkflowService.saveDraft(state.currentDetail['考核單號'], content);
+      content.dataVersion = version;
+      content.workflowStatus = String(state.currentDetail['流程狀態'] || '');
+      var result = await window.V3WorkflowService.saveDraft(
+        state.currentDetail['考核單號'],
+        content,
+        version,
+        content.workflowStatus,
+        state.currentAction
+      );
       elements.draftStatus.textContent = '雲端草稿已保存：' + (result.data && result.data.savedAt || '完成');
       if (showMessage) showEvaluationMessage('success', '草稿已保存，不包含手寫簽名。');
     } catch (error) {
@@ -452,7 +539,7 @@
   }
 
   async function submitCurrentAction() {
-    if (!state.currentDetail || !state.currentAction) return;
+    if (!state.currentDetail || !state.currentAction || state.isSubmitting) return;
     clearEvaluationMessage();
     var form = elements.evaluationActionForm;
     if (!form.reportValidity()) return;
@@ -463,23 +550,50 @@
       showEvaluationMessage('error', error.message || '請確認填寫內容。');
       return;
     }
-    payload.evaluationNo = state.currentDetail['考核單號'];
-    payload.expectedVersion = state.currentDetail.dataVersion;
-    var label = window.V3EvaluationForm.ACTION_LABELS[state.currentAction] || '送出';
+
+    var evaluationNo = state.currentDetail['考核單號'];
+    var action = state.currentAction;
+    var version = Number(state.currentDetail.dataVersion || 0);
+    var workflowStatus = String(state.currentDetail['流程狀態'] || '');
+    payload.evaluationNo = evaluationNo;
+    payload.expectedVersion = version;
+    var label = window.V3EvaluationForm.getActionLabel(state.currentDetail || {}, action) || '送出';
     if (!window.confirm('確定要「' + label + '」嗎？\n\n送出後將進入下一個流程階段。')) return;
 
-    setButtonLoading(elements.submitEvaluationButton, true, '送出中');
+    state.isSubmitting = true;
+    elements.closeEvaluationButton.disabled = true;
+    setButtonLoading(elements.submitEvaluationButton, true, '處理中，請勿重複點擊');
     try {
-      await window.V3WorkflowService.submitAction(payload, window.V3ApiClient.createRequestId());
-      removeLocalDraft(state.currentDetail['考核單號']);
-      showEvaluationMessage('success', '操作完成，流程已更新。');
-      await loadPending();
-      window.setTimeout(closeEvaluation, 700);
-    } catch (error) {
-      showEvaluationMessage('error', friendlyError(error));
-    } finally {
+      var requestId = window.V3ApiClient.createRequestId();
+      if (action === 'force_transition') {
+        await window.V3WorkflowService.forceTransition(payload, requestId);
+      } else {
+        await window.V3WorkflowService.submitAction(payload, requestId);
+      }
+
+      removeLocalDraft(evaluationNo, action, version, workflowStatus);
+      clearDraftTimers();
+      state.isSubmitting = false;
       setButtonLoading(elements.submitEvaluationButton, false, label);
+      elements.closeEvaluationButton.disabled = false;
+      closeEvaluation({ saveDraft: false });
+      setDashboardMessage('success', label + '完成，流程已更新。');
+      refreshVisibleListsAfterMutation();
+    } catch (error) {
+      state.isSubmitting = false;
+      elements.closeEvaluationButton.disabled = false;
+      setButtonLoading(elements.submitEvaluationButton, false, label);
+      showEvaluationMessage('error', friendlyError(error));
+      return;
     }
+    state.isSubmitting = false;
+    elements.closeEvaluationButton.disabled = false;
+  }
+
+  function refreshVisibleListsAfterMutation() {
+    loadPending();
+    if (!elements.progressPanel.hidden || state.progress.length) loadProgress();
+    if (!elements.historyPanel.hidden || state.history.length) loadHistory();
   }
 
   async function handleClaim() {
@@ -503,9 +617,9 @@
     elements.releaseButton.disabled = true;
     try {
       await window.V3WorkflowService.release(state.currentDetail['考核單號'], state.currentDetail.dataVersion);
-      showEvaluationMessage('success', '案件已釋放。');
-      await loadPending();
-      window.setTimeout(closeEvaluation, 500);
+      closeEvaluation({ saveDraft: false });
+      setDashboardMessage('success', '案件已釋放回教育中心共同待辦。');
+      refreshVisibleListsAfterMutation();
     } catch (error) {
       showEvaluationMessage('error', friendlyError(error));
     } finally {
@@ -746,7 +860,7 @@
       elements.testDispatchPreview.hidden = true;
       elements.testDispatchConfirm.checked = false;
       elements.testDispatchReason.value = '';
-      await loadHistory();
+      await loadProgress();
     } catch (error) {
       showTestDispatchMessage('error', friendlyError(error));
     } finally {
@@ -783,7 +897,7 @@
       window.V3AuthService.clearSession();
     } finally {
       elements.logoutButton.disabled = false;
-      closeEvaluation();
+      closeEvaluation({ saveDraft: false });
       showLogin();
       showLoginMessage('success', '已登出。');
       elements.employeeId.focus();
@@ -829,21 +943,36 @@
     elements.systemTabButton.hidden = !isEducation;
     if (!isEducation && !elements.systemPanel.hidden) switchTab('pending');
 
-    var scopeMap = {
-      '受評人員': '僅顯示您自己的月考核歷史紀錄。',
-      '門市店主管': '顯示您自己的考核紀錄，以及您曾經實際評核過的人員紀錄。',
+    var progressScopeMap = {
+      '受評人員': '僅顯示您自己的進行中月考核表。',
+      '門市店主管': '顯示目前指派給您，或您已實際填寫過但尚未結案的月考核表。',
+      '區主管': '顯示目前轄區全部進行中表單，以及仍由您承辦或曾由您簽核的未結案表單。',
+      '營業處副總': '顯示目前營業處全部進行中表單，可依區域、月份與狀態篩選。',
+      '營業處協理': '顯示目前營業處全部進行中表單，可依區域、月份與狀態篩選。',
+      '教育中心成員': '可追蹤全公司全部進行中表單與異常案件。',
+      '教育中心主管': '可追蹤全公司全部進行中表單與異常案件。',
+      '總經理': '可追蹤全公司全部進行中表單，建議使用營業處、區域與狀態篩選。'
+    };
+    var historyScopeMap = {
+      '受評人員': '僅顯示您自己的結案、例外結案或作廢紀錄。',
+      '門市店主管': '顯示您自己的考核紀錄，以及您曾經實際評核過的結案紀錄。',
       '區主管': '顯示目前轄區的歷史資料、您自己的考核紀錄，以及您過去實際簽核過的紀錄。',
       '營業處副總': '顯示目前營業處的歷史資料、您自己的考核紀錄，以及您過去實際簽核過的紀錄。',
       '營業處協理': '顯示目前營業處的歷史資料、您自己的考核紀錄，以及您過去實際簽核過的紀錄。',
-      '教育中心成員': '可查詢全公司所有月考核紀錄。',
-      '教育中心主管': '可查詢全公司所有月考核紀錄。',
-      '總經理': '可查詢全公司所有月考核紀錄。'
+      '教育中心成員': '可查詢全公司所有結案、例外結案與作廢紀錄。',
+      '教育中心主管': '可查詢全公司所有結案、例外結案與作廢紀錄。',
+      '總經理': '可查詢全公司所有結案、例外結案與作廢紀錄。'
     };
-    elements.historyScopeText.textContent = scopeMap[user.role] || '查詢您有權限查看的月考核紀錄。';
+    elements.progressScopeText.textContent = progressScopeMap[user.role] || '查看您有權限追蹤的進行中月考核表。';
+    elements.historyScopeText.textContent = historyScopeMap[user.role] || '查詢您有權限查看的歷史紀錄。';
 
     var ownOnly = user.role === '受評人員';
+    elements.progressEmployeeFilter.hidden = ownOnly;
     elements.historyEmployeeFilter.hidden = ownOnly;
-    if (ownOnly) elements.historyEmployeeId.value = '';
+    if (ownOnly) {
+      elements.progressEmployeeId.value = '';
+      elements.historyEmployeeId.value = '';
+    }
   }
 
   function showLogin() {
@@ -853,9 +982,16 @@
   }
 
   function switchTab(tab) {
-    var map = { pending: elements.pendingPanel, history: elements.historyPanel, profile: elements.profilePanel, system: elements.systemPanel };
+    var map = {
+      pending: elements.pendingPanel,
+      progress: elements.progressPanel,
+      history: elements.historyPanel,
+      profile: elements.profilePanel,
+      system: elements.systemPanel
+    };
     Object.keys(map).forEach(function (name) { map[name].hidden = name !== tab; });
     elements.tabButtons.forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-tab') === tab); });
+    if (tab === 'progress' && !state.progress.length) loadProgress();
     if (tab === 'history' && !state.history.length) loadHistory();
     if (tab === 'system' && elements.systemTabButton.hidden) {
       switchTab('pending');
@@ -878,20 +1014,25 @@
     state.draftServerTimer = null;
   }
 
-  function localDraftKey(evaluationNo) {
+  function localDraftKey(evaluationNo, action, version, workflowStatus) {
     var empId = state.session && state.session.user && state.session.user.employeeId || 'unknown';
-    return 'V3Draft:' + empId + ':' + String(evaluationNo || '');
+    return [
+      'V3Draft', empId, String(evaluationNo || ''), String(action || ''),
+      String(version || 0), String(workflowStatus || '')
+    ].join(':');
   }
 
-  function readLocalDraft(evaluationNo) {
+  function readLocalDraft(evaluationNo, action, version, workflowStatus) {
     try {
-      var raw = window.localStorage.getItem(localDraftKey(evaluationNo));
+      var raw = window.localStorage.getItem(localDraftKey(evaluationNo, action, version, workflowStatus));
       return raw ? JSON.parse(raw) : null;
     } catch (error) { return null; }
   }
 
-  function removeLocalDraft(evaluationNo) {
-    try { window.localStorage.removeItem(localDraftKey(evaluationNo)); } catch (ignore) {}
+  function removeLocalDraft(evaluationNo, action, version, workflowStatus) {
+    try {
+      window.localStorage.removeItem(localDraftKey(evaluationNo, action, version, workflowStatus));
+    } catch (ignore) {}
   }
 
   function setConnectionStatus(stateName, text) {
@@ -954,7 +1095,8 @@
       ABNORMAL_REPORT_REQUIRED: '教育中心異常回報為必填，請完成確認後輸入內容。',
       MANAGER_COMMENT_REQUIRED: '門市店主管評語為必填。',
       AREA_COMMENT_REQUIRED: '區主管評語為必填。',
-      PHASE63_UPGRADE_REQUIRED: '資料表尚未完成第6.3階段升級，請聯絡教育中心。'
+      PHASE63_UPGRADE_REQUIRED: '資料表尚未完成第6.3階段升級，請聯絡教育中心。',
+      STALE_DRAFT_VERSION: '此草稿屬於舊流程版本，系統不會自動覆蓋目前資料。請重新開啟表單。'
     };
     return messages[code] || String(error && error.message || '系統處理失敗。');
   }
