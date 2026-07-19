@@ -73,6 +73,7 @@
 
         <nav class="tab-bar" aria-label="主要功能">
           <button class="tab-button is-active" data-tab="pending" type="button">待我處理 <span id="pendingCountBadge" class="count-badge">0</span></button>
+          <button class="tab-button" data-tab="progress" type="button">流程追蹤 <span id="progressCountBadge" class="count-badge">0</span></button>
           <button class="tab-button" data-tab="history" type="button">歷史紀錄</button>
           <button class="tab-button" data-tab="profile" type="button">我的資料</button>
           <button id="systemTabButton" class="tab-button" data-tab="system" type="button" hidden>系統管理</button>
@@ -91,22 +92,65 @@
           <div id="pendingList" class="evaluation-list" aria-live="polite"></div>
         </section>
 
+        <section id="progressPanel" class="tab-panel" hidden>
+          <div class="panel-heading">
+            <div>
+              <h2>流程追蹤</h2>
+              <p id="progressScopeText">查看您有權限追蹤、尚未結案的月考核表。</p>
+            </div>
+            <button id="refreshProgressButton" class="secondary-button secondary-button--small" type="button">重新整理</button>
+          </div>
+          <div id="progressSummary" class="progress-summary" aria-live="polite"></div>
+          <form id="progressFilterForm" class="filter-grid filter-grid--wide">
+            <label><span>月份／日期</span><input id="progressMonth" name="month" type="text" placeholder="例如 115/08"></label>
+            <label id="progressEmployeeFilter"><span>受評人員工號</span><input id="progressEmployeeId" name="employeeId" type="text" placeholder="可留白"></label>
+            <label><span>營業處</span><input id="progressDepartment" name="department" type="text" placeholder="例如 營一處"></label>
+            <label><span>區域</span><input id="progressArea" name="area" type="text" placeholder="例如 營一區"></label>
+            <label><span>目前狀態</span>
+              <select id="progressStatus" name="status">
+                <option value="">全部進行中狀態</option>
+                <option value="待門市店主管填寫">待門市店主管填寫</option>
+                <option value="待門市店主管修改">待門市店主管修改</option>
+                <option value="待教育中心成員領取">待教育中心成員領取</option>
+                <option value="待教育中心成員填寫">待教育中心成員填寫</option>
+                <option value="待教育中心成員修改">待教育中心成員修改</option>
+                <option value="待教育中心主管簽核">待教育中心主管簽核</option>
+                <option value="待教育中心主管重新簽核">待教育中心主管重新簽核</option>
+                <option value="待教育中心例外處理">待教育中心例外處理</option>
+                <option value="待區主管審核">待區主管審核</option>
+                <option value="待區主管修改">待區主管修改</option>
+                <option value="待受評人員確認">待受評人員確認</option>
+                <option value="待營業處主管簽核">待營業處主管簽核</option>
+                <option value="待營業處主管修改">待營業處主管修改</option>
+                <option value="待總經理簽核">待總經理簽核</option>
+                <option value="PDF待處理">PDF待處理</option>
+                <option value="PDF處理中">PDF處理中</option>
+                <option value="PDF處理失敗">PDF處理失敗</option>
+              </select>
+            </label>
+            <button class="primary-button primary-button--small" type="submit">查詢</button>
+          </form>
+          <div id="progressList" class="evaluation-list" aria-live="polite"></div>
+        </section>
+
         <section id="historyPanel" class="tab-panel" hidden>
           <div class="panel-heading">
             <div>
               <h2>歷史紀錄</h2>
-              <p id="historyScopeText">查詢您有權限查看的已送出、結案或作廢紀錄。</p>
+              <p id="historyScopeText">查詢您有權限查看的結案、例外結案或作廢紀錄。</p>
             </div>
           </div>
           <form id="historyFilterForm" class="filter-grid">
             <label><span>月份／日期</span><input id="historyMonth" name="month" type="text" placeholder="例如 115/08"></label>
             <label id="historyEmployeeFilter"><span>受評人員工號</span><input id="historyEmployeeId" name="employeeId" type="text" placeholder="可留白"></label>
+            <label><span>營業處</span><input id="historyDepartment" name="department" type="text" placeholder="例如 營一處"></label>
+            <label><span>區域</span><input id="historyArea" name="area" type="text" placeholder="例如 營一區"></label>
             <label><span>狀態</span>
               <select id="historyStatus" name="status">
                 <option value="">全部狀態</option>
                 <option value="結案">結案</option>
+                <option value="例外結案">例外結案</option>
                 <option value="作廢">作廢</option>
-                <option value="PDF處理失敗">PDF處理失敗</option>
               </select>
             </label>
             <button class="primary-button primary-button--small" type="submit">查詢</button>
