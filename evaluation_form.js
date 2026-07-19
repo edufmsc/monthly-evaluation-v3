@@ -69,6 +69,14 @@
     gm_return_department_executive: '退回營業處主管'
   };
 
+  function getActionLabel(record, action) {
+    var status = String(value(record, '流程狀態') || '').trim();
+    if (action === 'edu_submit' && status === '待教育中心成員修改') {
+      return '修改完成，送教育中心主管重新簽核';
+    }
+    return ACTION_LABELS[action] || action;
+  }
+
   function escapeHtml(value) {
     return String(value === null || value === undefined ? '' : value)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -396,6 +404,7 @@
 
   window.V3EvaluationForm = Object.freeze({
     ACTION_LABELS: ACTION_LABELS,
+    getActionLabel: getActionLabel,
     renderActionForm: renderActionForm,
     collectActionPayload: collectActionPayload,
     initializeInteractiveControls: initializeInteractiveControls,
