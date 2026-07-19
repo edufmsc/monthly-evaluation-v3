@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.4-pdf-generation';
+  var APP_BUILD = '6.4.1-pdf-public-view';
   var elements = {};
   var state = {
     session: null,
@@ -20,7 +20,10 @@
     testDispatchPreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
-    activeTab: 'pending'
+    activeTab: 'pending',
+    pendingRenderSignature: '',
+    progressRenderSignature: '',
+    historyRenderSignature: ''
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -28,6 +31,11 @@
   document.addEventListener('DOMContentLoaded', initialize);
 
   function initialize() {
+    var publicPdfToken = getPublicPdfToken();
+    if (publicPdfToken) {
+      initializePublicPdfView(publicPdfToken);
+      return;
+    }
     cacheElements();
     bindEvents();
     elements.appVersion.textContent = APP_BUILD;
@@ -164,22 +172,27 @@
     var data = result.data || {};
     state.session = window.V3AuthService.updateSessionData(data) || state.session;
     state.pending = data.pending && Array.isArray(data.pending.items) ? data.pending.items : [];
+    state.pendingRenderSignature = createListRenderSignature(state.pending, { total: data.counts && data.counts.pending || state.pending.length });
     renderPending();
     elements.pendingCountBadge.textContent = String(data.counts && data.counts.pending || state.pending.length);
     await loadProgress({ quiet: true });
     clearDashboardMessage();
   }
 
-  async function loadPending() {
-    elements.pendingList.innerHTML = '<div class="loading-list">正在重新整理待辦…</div>';
+  async function loadPending(options) {
+    var settings = options || {};
+    if (!settings.quiet) elements.pendingList.innerHTML = '<div class="loading-list">正在重新整理待辦…</div>';
     elements.refreshPendingButton.disabled = true;
     try {
       var result = await window.V3WorkflowService.listPending(100);
-      state.pending = result.data && Array.isArray(result.data.items) ? result.data.items : [];
-      renderPending();
+      var nextItems = result.data && Array.isArray(result.data.items) ? result.data.items : [];
+      var nextSignature = createListRenderSignature(nextItems, { total: result.data && result.data.total || nextItems.length });
+      state.pending = nextItems;
+      if (!settings.quiet || nextSignature !== state.pendingRenderSignature) renderPending();
+      state.pendingRenderSignature = nextSignature;
       elements.pendingCountBadge.textContent = String(result.data && result.data.total || state.pending.length);
     } catch (error) {
-      elements.pendingList.innerHTML = emptyStateHtml('待辦載入失敗', friendlyError(error));
+      if (!settings.quiet) elements.pendingList.innerHTML = emptyStateHtml('待辦載入失敗', friendlyError(error));
     } finally {
       elements.refreshPendingButton.disabled = false;
     }
@@ -187,7 +200,7 @@
 
   async function loadProgress(options) {
     var settings = options || {};
-    elements.progressList.innerHTML = '<div class="loading-list">正在查詢流程動態…</div>';
+    if (!settings.quiet) elements.progressList.innerHTML = '<div class="loading-list">正在查詢流程動態…</div>';
     elements.refreshProgressButton.disabled = true;
     try {
       var result = await window.V3WorkflowService.listProgress({
@@ -199,20 +212,27 @@
         status: String(elements.progressStatus.value || '').trim()
       });
       var data = result.data || {};
-      state.progress = Array.isArray(data.items) ? data.items : [];
-      state.progressSummary = data.summary || {};
+      var nextItems = Array.isArray(data.items) ? data.items : [];
+      var nextSummary = data.summary || {};
+      var nextSignature = createListRenderSignature(nextItems, nextSummary);
+      state.progress = nextItems;
+      state.progressSummary = nextSummary;
       elements.progressCountBadge.textContent = String(data.total || state.progress.length);
-      renderProgress();
+      if (!settings.quiet || nextSignature !== state.progressRenderSignature) renderProgress();
+      state.progressRenderSignature = nextSignature;
     } catch (error) {
-      elements.progressList.innerHTML = emptyStateHtml('流程追蹤載入失敗', friendlyError(error));
-      elements.progressSummary.innerHTML = '';
+      if (!settings.quiet) {
+        elements.progressList.innerHTML = emptyStateHtml('流程追蹤載入失敗', friendlyError(error));
+        elements.progressSummary.innerHTML = '';
+      }
     } finally {
       elements.refreshProgressButton.disabled = false;
     }
   }
 
-  async function loadHistory() {
-    elements.historyList.innerHTML = '<div class="loading-list">正在查詢歷史紀錄…</div>';
+  async function loadHistory(options) {
+    var settings = options || {};
+    if (!settings.quiet) elements.historyList.innerHTML = '<div class="loading-list">正在查詢歷史紀錄…</div>';
     try {
       var result = await window.V3WorkflowService.listHistory({
         limit: 200,
@@ -222,11 +242,24 @@
         area: String(elements.historyArea.value || '').trim(),
         status: String(elements.historyStatus.value || '').trim()
       });
-      state.history = result.data && Array.isArray(result.data.items) ? result.data.items : [];
-      renderHistory();
+      var nextItems = result.data && Array.isArray(result.data.items) ? result.data.items : [];
+      var nextSignature = createListRenderSignature(nextItems, { total: result.data && result.data.total || nextItems.length });
+      state.history = nextItems;
+      if (!settings.quiet || nextSignature !== state.historyRenderSignature) renderHistory();
+      state.historyRenderSignature = nextSignature;
     } catch (error) {
-      elements.historyList.innerHTML = emptyStateHtml('歷史查詢失敗', friendlyError(error));
+      if (!settings.quiet) elements.historyList.innerHTML = emptyStateHtml('歷史查詢失敗', friendlyError(error));
     }
+  }
+
+  function createListRenderSignature(items, summary) {
+    return JSON.stringify({
+      items: (items || []).map(function(item) {
+        return [item.evaluationNo, item.status, item.assignedRole, item.assignedEmployeeId, item.dataVersion,
+          item.updatedAt, item.pdfStatus, item.pdfPublicStatus, item.pdfPublicViewToken, item.isVoid, item.isException];
+      }),
+      summary: summary || {}
+    });
   }
 
   function renderPending() {
@@ -272,9 +305,12 @@
   function evaluationCardHtml(item, mode) {
     var tags = '<span class="tag">' + escapeHtml(item.status || '未設定狀態') + '</span>';
     var pdfStatus = String(item.pdfStatus || '').trim();
-    if (pdfStatus && pdfStatus !== '未排隊') {
+    if (pdfStatus && pdfStatus !== '未排隊' && String(item.status || '') !== 'PDF' + pdfStatus) {
       var pdfTagClass = pdfStatus === '完成' ? ' tag--success' : pdfStatus === '失敗' ? ' tag--danger' : ' tag--warning';
       tags += '<span class="tag' + pdfTagClass + '">PDF' + escapeHtml(pdfStatus) + '</span>';
+    }
+    if (String(item.pdfPublicStatus || '') === '公開失敗' && String(item.status || '') !== 'PDF公開失敗') {
+      tags += '<span class="tag tag--danger">PDF公開失敗</span>';
     }
     if (item.claimWarning) tags += '<span class="tag tag--warning">停留超過24小時</span>';
     if (item.isVoid) tags += '<span class="tag tag--danger">已作廢</span>';
@@ -290,8 +326,11 @@
       actions += '<button type="button" class="secondary-button" disabled>PDF處理中</button>';
     }
 
-    if (item.isClosed && pdfStatus === '完成') {
-      actions += '<button type="button" class="secondary-button pdf-download-button" data-download-pdf="' + escapeHtml(item.evaluationNo) + '">下載PDF</button>';
+    if (isEducationPdfManagerUi() && item.isClosed && pdfStatus === '完成' && String(item.pdfPublicStatus || '') === '公開失敗') {
+      actions += '<button type="button" class="secondary-button pdf-publish-button" data-publish-pdf="' + escapeHtml(item.evaluationNo) + '">重新設定PDF查看</button>';
+    }
+    if (item.pdfViewAvailable && item.pdfPublicViewToken) {
+      actions += '<button type="button" class="secondary-button pdf-view-button" data-view-pdf="' + escapeHtml(item.pdfPublicViewToken) + '">查看月考核表PDF</button>';
     }
 
     return '<article class="evaluation-card">' +
@@ -320,8 +359,11 @@
     Array.prototype.slice.call(container.querySelectorAll('[data-generate-pdf]')).forEach(function (button) {
       button.addEventListener('click', function () { generatePdfFromCard(button.getAttribute('data-generate-pdf'), button); });
     });
-    Array.prototype.slice.call(container.querySelectorAll('[data-download-pdf]')).forEach(function (button) {
-      button.addEventListener('click', function () { downloadPdfFromCard(button.getAttribute('data-download-pdf'), button); });
+    Array.prototype.slice.call(container.querySelectorAll('[data-publish-pdf]')).forEach(function (button) {
+      button.addEventListener('click', function () { publishPdfFromCard(button.getAttribute('data-publish-pdf'), button); });
+    });
+    Array.prototype.slice.call(container.querySelectorAll('[data-view-pdf]')).forEach(function (button) {
+      button.addEventListener('click', function () { viewPdfFromCard(button.getAttribute('data-view-pdf')); });
     });
   }
 
@@ -353,38 +395,32 @@
     }
   }
 
-  async function downloadPdfFromCard(evaluationNo, button) {
+  async function publishPdfFromCard(evaluationNo, button) {
     if (!evaluationNo || !button || button.disabled) return;
     var originalLabel = button.textContent;
     button.disabled = true;
-    button.textContent = '準備下載…';
+    button.textContent = '設定中…';
     try {
-      var result = await window.V3WorkflowService.downloadPdf(evaluationNo);
-      var data = result.data || {};
-      saveBase64PdfFile(data.base64, data.fileName || evaluationNo + '.pdf', data.mimeType || 'application/pdf');
+      await window.V3WorkflowService.publishPdf(evaluationNo, window.V3ApiClient.createRequestId());
+      showGlobalNotice('success', 'PDF查看設定完成', '現在可使用「查看月考核表PDF」，無痕視窗也能開啟。');
+      await refreshAllAccessibleLists();
     } catch (error) {
-      showGlobalNotice('error', 'PDF下載失敗', friendlyError(error));
+      showGlobalNotice('error', 'PDF查看設定失敗', friendlyError(error));
+      await refreshAllAccessibleLists();
     } finally {
       button.disabled = false;
       button.textContent = originalLabel;
     }
   }
 
-  function saveBase64PdfFile(base64, fileName, mimeType) {
-    if (!base64) throw new Error('PDF下載內容為空。');
-    var binary = window.atob(base64);
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    var blob = new Blob([bytes], { type: mimeType || 'application/pdf' });
-    var url = window.URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = fileName || 'evaluation.pdf';
-    document.body.appendChild(link);
-    if ('download' in link) link.click();
-    else window.open(url, '_blank', 'noopener');
-    document.body.removeChild(link);
-    window.setTimeout(function () { window.URL.revokeObjectURL(url); }, 3000);
+  function viewPdfFromCard(token) {
+    var safeToken = String(token || '').trim();
+    if (!safeToken) return showGlobalNotice('error', '無法查看PDF', '找不到這張月考核表的查看碼。');
+    window.open(buildPublicPdfViewUrl(safeToken), '_blank', 'noopener');
+  }
+
+  function buildPublicPdfViewUrl(token) {
+    return window.location.origin + window.location.pathname + '?pdf=' + encodeURIComponent(String(token || ''));
   }
 
   async function openEvaluation(evaluationNo) {
@@ -770,8 +806,8 @@
   }
 
   async function refreshAllAccessibleLists() {
-    var jobs = [loadPending(), loadProgress({ quiet: elements.progressPanel.hidden })];
-    if (!elements.historyPanel.hidden || state.history.length) jobs.push(loadHistory());
+    var jobs = [loadPending({ quiet: true }), loadProgress({ quiet: true })];
+    if (!elements.historyPanel.hidden || state.history.length) jobs.push(loadHistory({ quiet: true }));
     await Promise.allSettled(jobs);
   }
 
@@ -1125,6 +1161,35 @@
     }
   }
 
+  function getPublicPdfToken() {
+    try { return String(new URLSearchParams(window.location.search).get('pdf') || '').trim(); }
+    catch (error) { return ''; }
+  }
+
+  async function initializePublicPdfView(token) {
+    document.documentElement.classList.add('public-pdf-page');
+    document.body.innerHTML = '<main class="public-pdf-shell">' +
+      '<header class="public-pdf-header"><div><strong>月考核表PDF</strong><span id="publicPdfFileName">正在載入…</span></div></header>' +
+      '<section id="publicPdfStatus" class="public-pdf-status">正在取得PDF檢視資料…</section>' +
+      '<iframe id="publicPdfFrame" class="public-pdf-frame" title="月考核表PDF" hidden></iframe>' +
+      '</main>';
+    var status = document.getElementById('publicPdfStatus');
+    var frame = document.getElementById('publicPdfFrame');
+    var fileName = document.getElementById('publicPdfFileName');
+    try {
+      if (!window.V3ApiClient.isConfigured()) throw new Error('尚未設定Apps Script API網址。');
+      var result = await window.V3ApiClient.request('publicPdfView', { token: token }, '', window.V3ApiClient.createRequestId());
+      var data = result.data || {};
+      fileName.textContent = data.fileName || '月考核表.pdf';
+      frame.src = data.previewUrl;
+      frame.hidden = false;
+      status.hidden = true;
+    } catch (error) {
+      status.className = 'public-pdf-status public-pdf-status--error';
+      status.textContent = String(error && error.message || 'PDF無法開啟，請向教育中心確認連結。');
+    }
+  }
+
   function showDashboardShell(session) {
     var user = session && session.user ? session.user : {};
     elements.userName.textContent = valueOrDash(user.name);
@@ -1139,7 +1204,7 @@
     configureRoleBasedInterface(session);
     elements.loginView.hidden = true;
     elements.dashboardView.hidden = false;
-    switchTab('pending');
+    switchTab('pending', { skipLoad: true });
   }
 
   function configureRoleBasedInterface(session) {
@@ -1187,7 +1252,8 @@
     clearDashboardMessage();
   }
 
-  function switchTab(tab) {
+  function switchTab(tab, options) {
+    var settings = options || {};
     state.activeTab = tab || 'pending';
     var map = {
       pending: elements.pendingPanel,
@@ -1198,9 +1264,9 @@
     };
     Object.keys(map).forEach(function (name) { map[name].hidden = name !== tab; });
     elements.tabButtons.forEach(function (button) { button.classList.toggle('is-active', button.getAttribute('data-tab') === tab); });
-    if (tab === 'pending') loadPending();
-    if (tab === 'progress') loadProgress();
-    if (tab === 'history') loadHistory();
+    if (!settings.skipLoad && tab === 'pending') loadPending();
+    if (!settings.skipLoad && tab === 'progress') loadProgress();
+    if (!settings.skipLoad && tab === 'history') loadHistory();
     if (tab === 'system' && elements.systemTabButton.hidden) {
       switchTab('pending');
       return;
@@ -1307,7 +1373,10 @@
       STALE_DRAFT_VERSION: '此草稿屬於舊流程版本，系統不會自動覆蓋目前資料。請重新開啟表單。',
       DUPLICATE_EVALUATION: '同一位受評人員在相同月份已存在 R0。重複建立不會自動變成 R1。',
       FUTURE_EVALUATION_MONTH: '手動建立不可選擇未來月份。',
-      DUPLICATE_REQUEST: '這次操作已經完成，請重新整理清單確認最新狀態。'
+      DUPLICATE_REQUEST: '這次操作已經完成，請重新整理清單確認最新狀態。',
+      PDF_PUBLIC_SHARE_FAILED: 'PDF已產生，但Google Drive公開檢視設定失敗，請由教育中心重試。',
+      PDF_DOWNLOAD_DISABLED: '本系統不提供PDF下載，請使用查看月考核表PDF。',
+      PDF_VIEW_NOT_FOUND: '此PDF查看連結不存在或尚未公開。'
     };
     return messages[code] || String(error && error.message || '系統處理失敗。');
   }
