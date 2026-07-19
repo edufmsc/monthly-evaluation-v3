@@ -14,6 +14,7 @@
     this._drawing = false;
     this._hasInk = false;
     this._lastPoint = null;
+    this._inkBounds = null;
     this._boundResize = this.resize.bind(this);
     this._bind();
     this.resize();
@@ -45,6 +46,7 @@
     try { this.canvas.setPointerCapture(event.pointerId); } catch (ignore) {}
     this._drawing = true;
     this._lastPoint = this._point(event);
+    this._expandInkBounds(this._lastPoint.x, this._lastPoint.y, 8);
   };
 
   SignaturePadController.prototype._move = function (event) {
@@ -55,13 +57,14 @@
     context.beginPath();
     context.moveTo(this._lastPoint.x, this._lastPoint.y);
     context.lineTo(point.x, point.y);
-    context.lineWidth = 2.4;
+    context.lineWidth = window.matchMedia && window.matchMedia('(max-width: 720px)').matches ? 4.4 : 3.8;
     context.lineCap = 'round';
     context.lineJoin = 'round';
     context.strokeStyle = '#2d241f';
     context.stroke();
     this._lastPoint = point;
     this._hasInk = true;
+    this._expandInkBounds(point.x, point.y, context.lineWidth + 3);
   };
 
   SignaturePadController.prototype._end = function (event) {
@@ -100,6 +103,40 @@
     context.fillStyle = '#fff';
     context.fillRect(0, 0, rect.width, rect.height);
     this._hasInk = false;
+    this._inkBounds = null;
+  };
+
+  SignaturePadController.prototype._expandInkBounds = function (x, y, padding) {
+    var p = Number(padding || 0);
+    if (!this._inkBounds) {
+      this._inkBounds = { left: x - p, top: y - p, right: x + p, bottom: y + p };
+      return;
+    }
+    this._inkBounds.left = Math.min(this._inkBounds.left, x - p);
+    this._inkBounds.top = Math.min(this._inkBounds.top, y - p);
+    this._inkBounds.right = Math.max(this._inkBounds.right, x + p);
+    this._inkBounds.bottom = Math.max(this._inkBounds.bottom, y + p);
+  };
+
+  SignaturePadController.prototype._exportCroppedDataUrl = function () {
+    var rect = this.canvas.getBoundingClientRect();
+    var ratio = Math.max(1, window.devicePixelRatio || 1);
+    var bounds = this._inkBounds || { left: 0, top: 0, right: rect.width, bottom: rect.height };
+    var left = Math.max(0, Math.floor(bounds.left * ratio));
+    var top = Math.max(0, Math.floor(bounds.top * ratio));
+    var right = Math.min(this.canvas.width, Math.ceil(bounds.right * ratio));
+    var bottom = Math.min(this.canvas.height, Math.ceil(bounds.bottom * ratio));
+    var width = Math.max(1, right - left);
+    var height = Math.max(1, bottom - top);
+    var output = document.createElement('canvas');
+    var margin = Math.round(12 * ratio);
+    output.width = width + margin * 2;
+    output.height = height + margin * 2;
+    var context = output.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, output.width, output.height);
+    context.drawImage(this.canvas, left, top, width, height, margin, margin, width, height);
+    return output.toDataURL('image/png');
   };
 
   SignaturePadController.prototype.setSavedAvailable = function (available, dataUrl) {
@@ -133,7 +170,7 @@
       if (!this._hasInk) throw new Error('請先完成手寫簽名。');
       return {
         mode: 'drawn',
-        dataUrl: this.canvas.toDataURL('image/png'),
+        dataUrl: this._exportCroppedDataUrl(),
         saveAsPersonal: this.savePersonalCheckbox ? Boolean(this.savePersonalCheckbox.checked) : true
       };
     }
