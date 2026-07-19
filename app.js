@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '6.3.5-mobile-tracking-optional-comment-fix';
+  var APP_BUILD = '6.4-pdf-generation';
   var elements = {};
   var state = {
     session: null,
@@ -252,7 +252,8 @@
     var summary = state.progressSummary || {};
     var byStatus = summary.byStatus || {};
     var rows = Object.keys(byStatus).sort(function (a, b) { return byStatus[b] - byStatus[a]; });
-    var html = '<article class="progress-summary-card progress-summary-card--total"><span>進行中總數</span><strong>' + state.progress.length + '</strong></article>';
+    var totalLabel = isEducationPdfManagerUi() ? '待追蹤／處理總數' : '進行中總數';
+    var html = '<article class="progress-summary-card progress-summary-card--total"><span>' + totalLabel + '</span><strong>' + state.progress.length + '</strong></article>';
     html += rows.map(function (status) {
       return '<article class="progress-summary-card"><span>' + escapeHtml(status) + '</span><strong>' + escapeHtml(byStatus[status]) + '</strong></article>';
     }).join('');
@@ -270,9 +271,29 @@
 
   function evaluationCardHtml(item, mode) {
     var tags = '<span class="tag">' + escapeHtml(item.status || '未設定狀態') + '</span>';
+    var pdfStatus = String(item.pdfStatus || '').trim();
+    if (pdfStatus && pdfStatus !== '未排隊') {
+      var pdfTagClass = pdfStatus === '完成' ? ' tag--success' : pdfStatus === '失敗' ? ' tag--danger' : ' tag--warning';
+      tags += '<span class="tag' + pdfTagClass + '">PDF' + escapeHtml(pdfStatus) + '</span>';
+    }
     if (item.claimWarning) tags += '<span class="tag tag--warning">停留超過24小時</span>';
     if (item.isVoid) tags += '<span class="tag tag--danger">已作廢</span>';
     if (item.isException) tags += '<span class="tag tag--warning">例外流程</span>';
+
+    var actions = '<button type="button" class="secondary-button" data-open-evaluation="' + escapeHtml(item.evaluationNo) + '">' +
+      (mode === 'pending' ? '開啟處理' : mode === 'progress' ? '查看動態' : '查看內容') + '</button>';
+
+    if (isEducationPdfManagerUi() && item.isClosed && (pdfStatus === '待處理' || pdfStatus === '失敗')) {
+      actions += '<button type="button" class="primary-button pdf-generate-button" data-generate-pdf="' + escapeHtml(item.evaluationNo) + '">' +
+        (pdfStatus === '失敗' ? '重新產生PDF' : '產生PDF') + '</button>';
+    } else if (isEducationPdfManagerUi() && item.isClosed && pdfStatus === '處理中') {
+      actions += '<button type="button" class="secondary-button" disabled>PDF處理中</button>';
+    }
+
+    if (item.isClosed && pdfStatus === '完成') {
+      actions += '<button type="button" class="secondary-button pdf-download-button" data-download-pdf="' + escapeHtml(item.evaluationNo) + '">下載PDF</button>';
+    }
+
     return '<article class="evaluation-card">' +
       '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3><p>' + escapeHtml(item.evaluationNo || '') + '</p></div><div>' + tags + '</div></div>' +
       '<div class="evaluation-card__meta">' +
@@ -281,14 +302,89 @@
         metaItem('區域／營業處', joinText(item.area, item.department)) +
         metaItem('目前承辦', joinText(item.assignedRole, item.assignedEmployeeName || item.assignedEmployeeId)) +
       '</div>' +
-      '<div class="evaluation-card__actions"><button type="button" class="secondary-button" data-open-evaluation="' + escapeHtml(item.evaluationNo) + '">' + (mode === 'pending' ? '開啟處理' : mode === 'progress' ? '查看動態' : '查看內容') + '</button></div>' +
+      '<div class="evaluation-card__actions">' + actions + '</div>' +
     '</article>';
+  }
+
+  function isEducationPdfManagerUi() {
+    var session = state.session || {};
+    var user = session.user || {};
+    var permissions = session.permissions || {};
+    return Boolean(permissions.canManage) || user.role === '教育中心成員' || user.role === '教育中心主管';
   }
 
   function bindEvaluationCards(container) {
     Array.prototype.slice.call(container.querySelectorAll('[data-open-evaluation]')).forEach(function (button) {
       button.addEventListener('click', function () { openEvaluation(button.getAttribute('data-open-evaluation')); });
     });
+    Array.prototype.slice.call(container.querySelectorAll('[data-generate-pdf]')).forEach(function (button) {
+      button.addEventListener('click', function () { generatePdfFromCard(button.getAttribute('data-generate-pdf'), button); });
+    });
+    Array.prototype.slice.call(container.querySelectorAll('[data-download-pdf]')).forEach(function (button) {
+      button.addEventListener('click', function () { downloadPdfFromCard(button.getAttribute('data-download-pdf'), button); });
+    });
+  }
+
+  async function generatePdfFromCard(evaluationNo, button) {
+    if (!evaluationNo || !button || button.disabled) return;
+    if (!window.confirm('確定要為「' + evaluationNo + '」產生單頁 A4 正式 PDF 嗎？\n\n系統會使用本張表目前有效的簽名快照；重新產生不會刪除舊PDF。')) return;
+    var originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = 'PDF產生中…';
+    showGlobalNotice('processing', '正在產生PDF', '請保持此頁開啟。系統正在套用鬍鬚張單頁A4範本、簽名快照與欄位資料。', false);
+    try {
+      var result = await window.V3WorkflowService.generatePdf(evaluationNo, window.V3ApiClient.createRequestId());
+      var data = result.data || {};
+      closeGlobalNotice();
+      showGlobalNotice('success', 'PDF產生完成', (data.fileName || evaluationNo + '.pdf') + (data.warning ? '\n' + data.warning : ''));
+      await refreshAllAccessibleLists();
+    } catch (error) {
+      closeGlobalNotice();
+      if (error && (error.code === 'REQUEST_TIMEOUT' || error.code === 'NETWORK_ERROR')) {
+        showGlobalNotice('warning', '正在確認PDF結果', '連線中斷，但後端可能仍在產生PDF。請勿重複點擊；系統會重新整理PDF狀態。');
+        await waitMilliseconds(3000);
+      } else {
+        showGlobalNotice('error', 'PDF產生失敗', friendlyError(error));
+      }
+      await refreshAllAccessibleLists();
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
+  async function downloadPdfFromCard(evaluationNo, button) {
+    if (!evaluationNo || !button || button.disabled) return;
+    var originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = '準備下載…';
+    try {
+      var result = await window.V3WorkflowService.downloadPdf(evaluationNo);
+      var data = result.data || {};
+      saveBase64PdfFile(data.base64, data.fileName || evaluationNo + '.pdf', data.mimeType || 'application/pdf');
+    } catch (error) {
+      showGlobalNotice('error', 'PDF下載失敗', friendlyError(error));
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
+  function saveBase64PdfFile(base64, fileName, mimeType) {
+    if (!base64) throw new Error('PDF下載內容為空。');
+    var binary = window.atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    var blob = new Blob([bytes], { type: mimeType || 'application/pdf' });
+    var url = window.URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = fileName || 'evaluation.pdf';
+    document.body.appendChild(link);
+    if ('download' in link) link.click();
+    else window.open(url, '_blank', 'noopener');
+    document.body.removeChild(link);
+    window.setTimeout(function () { window.URL.revokeObjectURL(url); }, 3000);
   }
 
   async function openEvaluation(evaluationNo) {
@@ -382,6 +478,12 @@
         ['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']],
         ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']],
         ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段']]
+      ]],
+      ['PDF處理', [
+        ['PDF狀態', record['PDF狀態']], ['PDF檔名', record['PDF檔名']],
+        ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])],
+        ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''],
+        ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']
       ]]
     ];
 
@@ -1053,8 +1155,8 @@
       '區主管': '顯示目前轄區全部進行中表單，以及仍由您承辦或曾由您簽核的未結案表單。',
       '營業處副總': '顯示目前營業處全部進行中表單，可依區域、月份與狀態篩選。',
       '營業處協理': '顯示目前營業處全部進行中表單，可依區域、月份與狀態篩選。',
-      '教育中心成員': '可追蹤全公司全部進行中表單與異常案件。',
-      '教育中心主管': '可追蹤全公司全部進行中表單與異常案件。',
+      '教育中心成員': '可追蹤全公司進行中表單、異常案件，以及已結案但仍待處理或失敗的PDF。',
+      '教育中心主管': '可追蹤全公司進行中表單、異常案件，以及已結案但仍待處理或失敗的PDF。',
       '總經理': '可追蹤全公司全部進行中表單，建議使用營業處、區域與狀態篩選。'
     };
     var historyScopeMap = {
