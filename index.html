@@ -260,6 +260,15 @@
     </footer>
   </div>
 
+  <div id="globalNoticeOverlay" class="global-notice-overlay" hidden>
+    <section class="global-notice" role="alertdialog" aria-modal="true" aria-labelledby="globalNoticeTitle">
+      <div id="globalNoticeIcon" class="global-notice__icon" aria-hidden="true">!</div>
+      <h2 id="globalNoticeTitle">系統訊息</h2>
+      <p id="globalNoticeText"></p>
+      <button id="globalNoticeClose" class="primary-button" type="button">我知道了</button>
+    </section>
+  </div>
+
   <div id="evaluationOverlay" class="overlay" hidden>
     <section class="sheet-dialog" role="dialog" aria-modal="true" aria-labelledby="evaluationDialogTitle">
       <header class="sheet-header">
