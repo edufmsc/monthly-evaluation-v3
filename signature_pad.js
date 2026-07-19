@@ -10,6 +10,7 @@
     this.modePanelSaved = options.modePanelSaved;
     this.modePanelDrawn = options.modePanelDrawn;
     this.savedStatus = options.savedStatus;
+    this.savePersonalCheckbox = options.savePersonalCheckbox || null;
     this._drawing = false;
     this._hasInk = false;
     this._lastPoint = null;
@@ -122,6 +123,7 @@
   SignaturePadController.prototype._renderMode = function () {
     this.modePanelSaved.hidden = !this.savedRadio.checked;
     this.modePanelDrawn.hidden = !this.drawnRadio.checked;
+    if (this.savePersonalCheckbox) this.savePersonalCheckbox.disabled = !this.drawnRadio.checked;
     if (this.drawnRadio.checked) window.setTimeout(this.resize.bind(this), 0);
   };
 
@@ -129,7 +131,11 @@
     if (this.savedRadio.checked && !this.savedRadio.disabled) return { mode: 'saved' };
     if (this.drawnRadio.checked) {
       if (!this._hasInk) throw new Error('請先完成手寫簽名。');
-      return { mode: 'drawn', dataUrl: this.canvas.toDataURL('image/png') };
+      return {
+        mode: 'drawn',
+        dataUrl: this.canvas.toDataURL('image/png'),
+        saveAsPersonal: this.savePersonalCheckbox ? Boolean(this.savePersonalCheckbox.checked) : true
+      };
     }
     throw new Error('請選擇簽名方式。');
   };
