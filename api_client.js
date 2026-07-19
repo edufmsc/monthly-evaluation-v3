@@ -27,7 +27,7 @@
     return 'web-' + Date.now() + '-' + Math.random().toString(16).slice(2);
   }
 
-  async function request(action, payload, sessionToken) {
+  async function request(action, payload, sessionToken, requestId) {
     var config = getConfig();
     if (!isConfigured()) {
       throw new ApiError('API_URL_NOT_CONFIGURED', '尚未設定 Apps Script /exec 網址。');
@@ -40,7 +40,7 @@
 
     var body = {
       action: String(action || ''),
-      requestId: createRequestId(),
+      requestId: String(requestId || createRequestId()),
       payload: payload && typeof payload === 'object' ? payload : {}
     };
     if (sessionToken) body.sessionToken = String(sessionToken);
@@ -48,9 +48,7 @@
     try {
       var response = await fetch(config.API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=UTF-8'
-        },
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify(body),
         mode: 'cors',
         credentials: 'omit',
@@ -87,6 +85,7 @@
   window.V3ApiClient = Object.freeze({
     ApiError: ApiError,
     isConfigured: isConfigured,
+    createRequestId: createRequestId,
     request: request,
     health: function () { return request('health', {}, ''); }
   });
