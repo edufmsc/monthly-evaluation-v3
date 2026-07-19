@@ -22,49 +22,29 @@
     <main class="app-main">
       <section id="configErrorCard" class="notice-card notice-card--danger" hidden>
         <h2>尚未設定後端網址</h2>
-        <p>請先打開 <code>api_config.js</code>，把 Apps Script 正式部署的 <code>/exec</code> 網址貼入，再重新上傳到 GitHub。</p>
+        <p>請保留目前已可登入的 <code>api_config.js</code>，不要覆蓋成空白範本。</p>
       </section>
 
       <section id="loginView" class="card login-card" aria-labelledby="loginTitle">
         <div class="card-heading">
-          <p class="step-label">登入測試</p>
+          <p class="step-label">登入</p>
           <h2 id="loginTitle">使用工號與 4 碼密碼登入</h2>
-          <p>不需要 Google 帳號。帳號資料由教育中心在員工主檔管理。</p>
+          <p>不需要 Google 帳號。帳號與密碼由教育中心在員工主檔管理。</p>
         </div>
 
         <form id="loginForm" novalidate>
           <div class="field-group">
             <label for="employeeId">員工工號</label>
-            <input
-              id="employeeId"
-              name="employeeId"
-              type="text"
-              inputmode="text"
-              autocomplete="username"
-              maxlength="40"
-              placeholder="例如 0000 或 FMSC0000123"
-              required
-            >
+            <input id="employeeId" name="employeeId" type="text" inputmode="text" autocomplete="username" maxlength="40" placeholder="例如 0000 或 FMSC0000123" required>
             <p class="field-hint">工號會保留英文字母與前導 0。</p>
           </div>
 
           <div class="field-group">
             <label for="password">登入密碼</label>
             <div class="password-wrap">
-              <input
-                id="password"
-                name="password"
-                type="password"
-                inputmode="numeric"
-                autocomplete="current-password"
-                maxlength="4"
-                pattern="[0-9]{4}"
-                placeholder="4 碼數字"
-                required
-              >
+              <input id="password" name="password" type="password" inputmode="numeric" autocomplete="current-password" maxlength="4" pattern="[0-9]{4}" placeholder="4 碼數字" required>
               <button id="togglePassword" class="icon-button" type="button" aria-label="顯示密碼" aria-pressed="false">顯示</button>
             </div>
-            <p class="field-hint">例如 0578，系統會保留前導 0。</p>
           </div>
 
           <div id="loginMessage" class="form-message" role="alert" aria-live="polite" hidden></div>
@@ -74,65 +54,141 @@
             <span class="button-spinner" aria-hidden="true"></span>
           </button>
         </form>
-
-        <div class="privacy-note">
-          <strong>隱私提醒</strong>
-          <p>此頁不會下載其他人員密碼，也不會要求 Google 登入。登入成功後僅保存本次瀏覽器分頁的 Session。</p>
-        </div>
       </section>
 
       <section id="dashboardView" class="dashboard" hidden aria-labelledby="dashboardTitle">
-        <article class="card profile-card">
+        <article class="card profile-card profile-card--compact">
           <div class="profile-topline">
             <div>
-              <p class="step-label">登入成功</p>
+              <p class="step-label">登入中</p>
               <h2 id="dashboardTitle"><span id="userName">—</span>，您好</h2>
+              <p class="profile-subline"><span id="userDepartment">—</span><span aria-hidden="true">｜</span><span id="userStore">—</span></p>
             </div>
-            <span id="userRole" class="role-badge">—</span>
+            <div class="profile-actions">
+              <span id="userRole" class="role-badge">—</span>
+              <button id="logoutButton" class="text-button text-button--danger" type="button">登出</button>
+            </div>
           </div>
-
-          <dl class="profile-grid">
-            <div>
-              <dt>員工工號</dt>
-              <dd id="userEmployeeId">—</dd>
-            </div>
-            <div>
-              <dt>部門／營業處</dt>
-              <dd id="userDepartment">—</dd>
-            </div>
-            <div>
-              <dt>區域</dt>
-              <dd id="userArea">—</dd>
-            </div>
-            <div>
-              <dt>店別</dt>
-              <dd id="userStore">—</dd>
-            </div>
-          </dl>
         </article>
 
-        <article class="card phase-card">
-          <h3>第 5 階段登入測試</h3>
-          <p>目前只驗證：未登入 Google、工號密碼登入、Session、角色顯示與登出。</p>
-          <div class="action-grid">
-            <button id="refreshSessionButton" class="secondary-button" type="button">重新驗證登入狀態</button>
-            <button id="healthCheckButton" class="secondary-button" type="button">測試後端連線</button>
-            <button id="logoutButton" class="danger-button" type="button">登出</button>
+        <nav class="tab-bar" aria-label="主要功能">
+          <button class="tab-button is-active" data-tab="pending" type="button">待我處理 <span id="pendingCountBadge" class="count-badge">0</span></button>
+          <button class="tab-button" data-tab="history" type="button">歷史紀錄</button>
+          <button class="tab-button" data-tab="profile" type="button">我的資料</button>
+        </nav>
+
+        <div id="dashboardMessage" class="form-message" role="status" aria-live="polite" hidden></div>
+
+        <section id="pendingPanel" class="tab-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>待我處理</h2>
+              <p>只顯示目前輪到您處理的月考核表。</p>
+            </div>
+            <button id="refreshPendingButton" class="secondary-button secondary-button--small" type="button">重新整理</button>
           </div>
-          <div id="dashboardMessage" class="form-message" role="status" aria-live="polite" hidden></div>
-        </article>
+          <div id="pendingList" class="evaluation-list" aria-live="polite"></div>
+        </section>
+
+        <section id="historyPanel" class="tab-panel" hidden>
+          <div class="panel-heading">
+            <div>
+              <h2>歷史紀錄</h2>
+              <p>查詢您有權限查看的已送出、結案或作廢紀錄。</p>
+            </div>
+          </div>
+          <form id="historyFilterForm" class="filter-grid">
+            <label><span>月份／日期</span><input id="historyMonth" name="month" type="text" placeholder="例如 115/08"></label>
+            <label><span>受評人員工號</span><input id="historyEmployeeId" name="employeeId" type="text" placeholder="可留白"></label>
+            <label><span>狀態</span>
+              <select id="historyStatus" name="status">
+                <option value="">全部狀態</option>
+                <option value="結案">結案</option>
+                <option value="作廢">作廢</option>
+                <option value="PDF處理失敗">PDF處理失敗</option>
+              </select>
+            </label>
+            <button class="primary-button primary-button--small" type="submit">查詢</button>
+          </form>
+          <div id="historyList" class="evaluation-list" aria-live="polite"></div>
+        </section>
+
+        <section id="profilePanel" class="tab-panel" hidden>
+          <article class="card profile-detail-card">
+            <h2>我的資料</h2>
+            <dl class="profile-grid">
+              <div><dt>員工工號</dt><dd id="userEmployeeId">—</dd></div>
+              <div><dt>系統角色</dt><dd id="profileRole">—</dd></div>
+              <div><dt>部門／營業處</dt><dd id="profileDepartment">—</dd></div>
+              <div><dt>區域</dt><dd id="userArea">—</dd></div>
+              <div><dt>店別</dt><dd id="profileStore">—</dd></div>
+              <div><dt>登入狀態</dt><dd>有效</dd></div>
+            </dl>
+            <div class="action-grid">
+              <button id="refreshSessionButton" class="secondary-button" type="button">重新驗證登入</button>
+              <button id="healthCheckButton" class="secondary-button" type="button">測試後端連線</button>
+            </div>
+          </article>
+        </section>
       </section>
     </main>
 
     <footer class="app-footer">
       <span id="appVersion">V3</span>
-      <span>手機優先測試版</span>
+      <span>手機版流程測試</span>
     </footer>
+  </div>
+
+  <div id="evaluationOverlay" class="overlay" hidden>
+    <section class="sheet-dialog" role="dialog" aria-modal="true" aria-labelledby="evaluationDialogTitle">
+      <header class="sheet-header">
+        <div>
+          <p class="step-label">月考核表</p>
+          <h2 id="evaluationDialogTitle">考核表內容</h2>
+        </div>
+        <button id="closeEvaluationButton" class="close-button" type="button" aria-label="關閉">×</button>
+      </header>
+
+      <div id="evaluationLoading" class="loading-card" hidden>正在載入月考核表…</div>
+      <div id="evaluationMessage" class="form-message" role="status" aria-live="polite" hidden></div>
+
+      <div id="evaluationContent" class="sheet-content" hidden>
+        <section id="evaluationSummary" class="summary-card"></section>
+        <section id="evaluationReadOnly" class="detail-sections"></section>
+
+        <section id="claimPanel" class="claim-panel" hidden>
+          <p id="claimMessage">此案件尚未被教育中心成員領取。</p>
+          <div class="action-grid">
+            <button id="claimButton" class="primary-button" type="button">領取案件</button>
+            <button id="releaseButton" class="secondary-button" type="button" hidden>釋放案件</button>
+          </div>
+        </section>
+
+        <section id="actionPanel" class="action-panel" hidden>
+          <div class="action-selector-wrap">
+            <label for="actionSelector">本次操作</label>
+            <select id="actionSelector"></select>
+          </div>
+          <form id="evaluationActionForm" novalidate></form>
+          <div class="draft-status-row">
+            <span id="draftStatus">尚未儲存草稿</span>
+            <button id="saveDraftButton" class="text-button" type="button">立即儲存草稿</button>
+          </div>
+          <button id="submitEvaluationButton" class="primary-button" type="button">
+            <span class="button-label">送出</span>
+            <span class="button-spinner" aria-hidden="true"></span>
+          </button>
+        </section>
+      </div>
+    </section>
   </div>
 
   <script src="api_config.js" defer></script>
   <script src="api_client.js" defer></script>
   <script src="auth_service.js" defer></script>
+  <script src="workflow_service.js" defer></script>
+  <script src="signature_pad.js" defer></script>
+  <script src="evaluation_form.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
