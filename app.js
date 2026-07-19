@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.0.0-production';
+  var APP_BUILD = '7.0.1-production-hotfix';
   var elements = {};
   var state = {
     session: null,
@@ -23,7 +23,8 @@
     activeTab: 'pending',
     pendingRenderSignature: '',
     progressRenderSignature: '',
-    historyRenderSignature: ''
+    historyRenderSignature: '',
+    pendingMutationLocks: {}
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -193,12 +194,13 @@
     elements.refreshPendingButton.disabled = true;
     try {
       var result = await window.V3WorkflowService.listPending(100);
-      var nextItems = result.data && Array.isArray(result.data.items) ? result.data.items : [];
-      var nextSignature = createListRenderSignature(nextItems, { total: result.data && result.data.total || nextItems.length });
+      var rawItems = result.data && Array.isArray(result.data.items) ? result.data.items : [];
+      var nextItems = rawItems.filter(function (item) { return !isPendingMutationLocked(item.evaluationNo); });
+      var nextSignature = createListRenderSignature(nextItems, { total: nextItems.length });
       state.pending = nextItems;
       if (!settings.quiet || nextSignature !== state.pendingRenderSignature) renderPending();
       state.pendingRenderSignature = nextSignature;
-      elements.pendingCountBadge.textContent = String(result.data && result.data.total || state.pending.length);
+      elements.pendingCountBadge.textContent = String(state.pending.length);
     } catch (error) {
       if (!settings.quiet) elements.pendingList.innerHTML = emptyStateHtml('待辦載入失敗', friendlyError(error));
     } finally {
@@ -264,7 +266,7 @@
     return JSON.stringify({
       items: (items || []).map(function(item) {
         return [item.evaluationNo, item.status, item.assignedRole, item.assignedEmployeeId, item.dataVersion,
-          item.updatedAt, item.pdfStatus, item.pdfPublicStatus, item.pdfPublicViewToken, item.isVoid, item.isException];
+          item.updatedAt, item.pdfStatus, item.pdfPublicStatus, item.pdfPublicViewToken, item.pdfHasFile, item.isVoid, item.isException];
       }),
       summary: summary || {}
     });
@@ -345,12 +347,10 @@
       actions += '<button type="button" class="secondary-button" disabled>PDF處理中</button>';
     }
 
-    if (isEducationPdfManagerUi() && effectiveClosed && pdfStatus === '完成' && item.pdfHasFile &&
-        publicStatus === '公開失敗') {
-      actions += '<button type="button" class="secondary-button pdf-publish-button" data-publish-pdf="' + escapeHtml(item.evaluationNo) + '">重新設定PDF公開查看</button>';
-    }
-    if (item.pdfViewAvailable && item.pdfPublicViewToken) {
-      actions += '<button type="button" class="secondary-button pdf-view-button" data-view-pdf="' + escapeHtml(item.pdfPublicViewToken) + '">查看月考核表PDF</button>';
+    // 正式版：PDF完成且檔案存在時，所有有權查看該考核表的人都顯示同一顆查看按鈕。
+    // 點擊後由後端安全確認／補建公開查看碼，不再依清單同步欄位決定是否隱藏按鈕。
+    if (effectiveClosed && pdfStatus === '完成' && item.pdfHasFile) {
+      actions += '<button type="button" class="secondary-button pdf-view-button" data-prepare-pdf-view="' + escapeHtml(item.evaluationNo) + '">查看月考核表PDF</button>';
     }
 
     return '<article class="evaluation-card">' +
@@ -382,8 +382,8 @@
     Array.prototype.slice.call(container.querySelectorAll('[data-publish-pdf]')).forEach(function (button) {
       button.addEventListener('click', function () { publishPdfFromCard(button.getAttribute('data-publish-pdf'), button); });
     });
-    Array.prototype.slice.call(container.querySelectorAll('[data-view-pdf]')).forEach(function (button) {
-      button.addEventListener('click', function () { viewPdfFromCard(button.getAttribute('data-view-pdf')); });
+    Array.prototype.slice.call(container.querySelectorAll('[data-prepare-pdf-view]')).forEach(function (button) {
+      button.addEventListener('click', function () { prepareAndViewPdfFromCard(button.getAttribute('data-prepare-pdf-view'), button); });
     });
   }
 
@@ -433,10 +433,28 @@
     }
   }
 
-  function viewPdfFromCard(token) {
-    var safeToken = String(token || '').trim();
-    if (!safeToken) return showGlobalNotice('error', '無法查看PDF', '找不到這張月考核表的查看碼。');
-    window.open(buildPublicPdfViewUrl(safeToken), '_blank', 'noopener');
+  async function prepareAndViewPdfFromCard(evaluationNo, button) {
+    var safeNo = String(evaluationNo || '').trim();
+    if (!safeNo || !button || button.disabled) return;
+    var popup = window.open('', '_blank');
+    var originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = '開啟中…';
+    try {
+      var result = await window.V3WorkflowService.preparePdfView(safeNo, window.V3ApiClient.createRequestId());
+      var token = String(result.data && result.data.publicToken || '').trim();
+      if (!token) throw new Error('後端未回傳PDF查看碼。');
+      var targetUrl = buildPublicPdfViewUrl(token);
+      if (popup) popup.location.replace(targetUrl);
+      else window.location.href = targetUrl;
+      await refreshAllAccessibleLists();
+    } catch (error) {
+      if (popup) popup.close();
+      showGlobalNotice('error', '無法查看月考核表PDF', friendlyError(error));
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
   }
 
   function buildPublicPdfViewUrl(token) {
@@ -444,6 +462,10 @@
   }
 
   async function openEvaluation(evaluationNo) {
+    if (isPendingMutationLocked(evaluationNo)) {
+      showGlobalNotice('processing', '正在確認送出結果', '這張考核表剛完成送出，系統正在同步最新流程，暫時不可用舊卡片重新開啟。', false);
+      return;
+    }
     clearDraftTimers();
     state.currentDetail = null;
     state.currentAction = '';
@@ -753,6 +775,7 @@
     if (!window.confirm('確定要「' + label + '」嗎？\n\n送出後將進入下一個流程階段。')) return;
 
     var requestId = window.V3ApiClient.createRequestId();
+    lockPendingMutation(evaluationNo, 120000);
     state.isSubmitting = true;
     elements.closeEvaluationButton.disabled = true;
     setButtonLoading(elements.submitEvaluationButton, true, '處理中，請勿重複點擊');
@@ -779,10 +802,17 @@
           resetSubmissionUi(label);
           return;
         }
-        showGlobalNotice('error', '無法確認送出結果', '系統目前無法確認這次操作是否完成。請關閉訊息後重新整理清單，再開啟表單確認狀態。請勿直接連續重按。');
+        closeEvaluation({ saveDraft: false });
+        await refreshAllAccessibleLists();
+        showGlobalNotice('warning', '送出結果仍在同步', '系統已暫時鎖定這張考核表，避免使用舊卡片重複送出。請等待約10秒後重新整理；若流程已送出，案件會出現在下一位承辦人的待辦。');
+        window.setTimeout(function () { refreshAllAccessibleLists(); }, 10000);
       } else if (error && (error.code === 'VERSION_CONFLICT' || error.code === 'DUPLICATE_REQUEST')) {
+        releasePendingMutation(evaluationNo);
+        await refreshAllAccessibleLists();
         showGlobalNotice('warning', '表單已更新', friendlyError(error));
       } else {
+        releasePendingMutation(evaluationNo);
+        await refreshAllAccessibleLists();
         showGlobalNotice('error', '送出失敗', friendlyError(error));
       }
       resetSubmissionUi(label);
@@ -794,6 +824,10 @@
     clearDraftTimers();
     closeEvaluation({ saveDraft: false });
     await refreshAllAccessibleLists();
+    window.setTimeout(function () {
+      releasePendingMutation(evaluationNo);
+      refreshAllAccessibleLists();
+    }, 10000);
     setDashboardMessage('success', label + '完成，流程已更新。');
     resetSubmissionUi(label);
   }
@@ -806,7 +840,7 @@
 
   async function recoverMutationResult(evaluationNo, requestId, expectedVersion) {
     var last = { processed: false, changed: false };
-    for (var attempt = 0; attempt < 8; attempt += 1) {
+    for (var attempt = 0; attempt < 25; attempt += 1) {
       await waitMilliseconds(attempt === 0 ? 1000 : 2000);
       try {
         var result = await window.V3WorkflowService.getMutationStatus(evaluationNo, requestId, expectedVersion);
@@ -819,6 +853,29 @@
 
   function waitMilliseconds(ms) {
     return new Promise(function (resolve) { window.setTimeout(resolve, ms); });
+  }
+
+  function lockPendingMutation(evaluationNo, durationMs) {
+    var key = String(evaluationNo || '').trim();
+    if (!key) return;
+    state.pendingMutationLocks[key] = Date.now() + Number(durationMs || 120000);
+    state.pending = state.pending.filter(function (item) { return item.evaluationNo !== key; });
+    renderPending();
+  }
+
+  function releasePendingMutation(evaluationNo) {
+    delete state.pendingMutationLocks[String(evaluationNo || '').trim()];
+  }
+
+  function isPendingMutationLocked(evaluationNo) {
+    var key = String(evaluationNo || '').trim();
+    var expiresAt = Number(state.pendingMutationLocks[key] || 0);
+    if (!expiresAt) return false;
+    if (Date.now() >= expiresAt) {
+      delete state.pendingMutationLocks[key];
+      return false;
+    }
+    return true;
   }
 
   function refreshVisibleListsAfterMutation() {
