@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.1.0C-2.1-unified-dispatch */
+/* 月考核系統 V3｜版本：7.3.0AB-account-management */
 (function () {
   'use strict';
 
@@ -44,6 +44,11 @@
     },
     deleteDraft: function (evaluationNo) { return call('deleteDraft', { evaluationNo: evaluationNo }); },
     systemHealth: function () { return call('systemHealth', {}); },
+    accountManagementCenter: function (filters) { return call('accountManagementCenter', filters || {}); },
+    accountUnlock: function (payload, requestId) { return call('accountUnlock', payload || {}, requestId); },
+    accountSetStatus: function (payload, requestId) { return call('accountSetStatus', payload || {}, requestId); },
+    accountForceLogout: function (payload, requestId) { return call('accountForceLogout', payload || {}, requestId); },
+    accountResetPassword: function (payload, requestId) { return call('accountResetPassword', payload || {}, requestId); },
     dispatchManagementCenter: function (filters) {
       return call('dispatchManagementCenter', filters || {});
     },
