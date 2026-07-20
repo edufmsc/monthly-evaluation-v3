@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.0.2-production-pdf-modal';
+  var APP_BUILD = '7.0.4-performance-baseline';
   var elements = {};
   var state = {
     session: null,
@@ -441,28 +441,97 @@
     var safeNo = String(evaluationNo || '').trim();
     if (!safeNo || !button || button.disabled) return;
     var originalLabel = button.textContent;
+    var correlationId = 'pdf-view-' + window.V3ApiClient.createRequestId();
+    var startedAt = performanceNowV3();
+    var prepareRequestMs = 0;
+    var pdfRequestMs = 0;
+    var responseBytes = 0;
+    var renderMetrics = null;
+    var viewerVisibleTotalMs = 0;
+    var postViewRefreshMs = 0;
+    var operationResult = '成功';
+    var operationErrorCode = '';
+
     button.disabled = true;
     button.textContent = '開啟中…';
     openPdfViewerModal('正在取得月考核表PDF…', safeNo);
     try {
-      var prepared = await window.V3WorkflowService.preparePdfView(safeNo, window.V3ApiClient.createRequestId());
+      var prepared = await window.V3WorkflowService.preparePdfView(safeNo, correlationId + '-prepare');
+      prepareRequestMs = Number(prepared.clientPerformance && prepared.clientPerformance.requestMs || 0);
+      responseBytes += Number(prepared.clientPerformance && prepared.clientPerformance.responseBytes || 0);
       var token = String(prepared.data && prepared.data.publicToken || '').trim();
       if (!token) throw new Error('後端未回傳PDF查看碼。');
-      var result = await window.V3ApiClient.request('publicPdfView', { token: token }, '', window.V3ApiClient.createRequestId());
+
+      var result = await window.V3ApiClient.request('publicPdfView', { token: token }, '', correlationId + '-pdf');
+      pdfRequestMs = Number(result.clientPerformance && result.clientPerformance.requestMs || 0);
+      responseBytes += Number(result.clientPerformance && result.clientPerformance.responseBytes || 0);
       var data = result.data || {};
       if (!data.pdfBase64) throw new Error('後端未回傳可顯示的PDF內容。');
-      await renderPdfBase64InViewer(data.pdfBase64, data.fileName || safeNo + '.pdf');
+      renderMetrics = await renderPdfBase64InViewer(data.pdfBase64, data.fileName || safeNo + '.pdf');
+      viewerVisibleTotalMs = Math.max(0, Math.round(performanceNowV3() - startedAt));
+      var refreshStartedAt = performanceNowV3();
       await refreshAllAccessibleLists();
+      postViewRefreshMs = Math.max(0, Math.round(performanceNowV3() - refreshStartedAt));
     } catch (error) {
+      operationResult = '失敗';
+      operationErrorCode = String(error && error.code || error && error.name || 'PDF_VIEW_FAILED');
+      if (error && error.clientPerformance) {
+        if (!prepareRequestMs) prepareRequestMs = Number(error.clientPerformance.requestMs || 0);
+        else if (!pdfRequestMs) pdfRequestMs = Number(error.clientPerformance.requestMs || 0);
+        responseBytes += Number(error.clientPerformance.responseBytes || 0);
+      }
       showPdfViewerError(friendlyError(error));
     } finally {
       button.disabled = false;
       button.textContent = originalLabel;
+      queuePdfViewPerformanceMetricV3({
+        correlationId: correlationId,
+        result: operationResult,
+        errorCode: operationErrorCode,
+        deviceType: detectDeviceTypeV3(),
+        cacheHit: false,
+        prepareRequestMs: prepareRequestMs,
+        pdfRequestMs: pdfRequestMs,
+        networkMs: prepareRequestMs + pdfRequestMs,
+        pdfJsLoadMs: renderMetrics && renderMetrics.pdfJsLoadMs || 0,
+        base64DecodeMs: renderMetrics && renderMetrics.base64DecodeMs || 0,
+        pdfParseMs: renderMetrics && renderMetrics.pdfParseMs || 0,
+        canvasRenderMs: renderMetrics && renderMetrics.canvasRenderMs || 0,
+        frontendTotalMs: viewerVisibleTotalMs || Math.max(0, Math.round(performanceNowV3() - startedAt)),
+        postViewRefreshMs: postViewRefreshMs,
+        responseBytes: responseBytes,
+        pdfSizeBytes: renderMetrics && renderMetrics.pdfSizeBytes || 0
+      });
     }
   }
 
   function buildPublicPdfViewUrl(token) {
     return window.location.origin + window.location.pathname + '?pdf=' + encodeURIComponent(String(token || ''));
+  }
+
+  function performanceNowV3() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  function detectDeviceTypeV3() {
+    var width = Math.max(window.innerWidth || 0, document.documentElement && document.documentElement.clientWidth || 0);
+    var touch = ('ontouchstart' in window) || Number(navigator.maxTouchPoints || 0) > 0;
+    if (touch && width <= 767) return 'mobile';
+    if (touch && width <= 1180) return 'tablet';
+    return 'desktop';
+  }
+
+  function queuePdfViewPerformanceMetricV3(metric) {
+    if (!state.session || !window.V3WorkflowService || typeof window.V3WorkflowService.recordClientPerformance !== 'function') return;
+    var payload = Object.assign({ operation: 'PDF_VIEW_LOGGED_IN' }, metric || {});
+    window.setTimeout(function () {
+      window.V3WorkflowService.recordClientPerformance(payload, String(payload.correlationId || '') + '-metric')
+        .catch(function (error) {
+          console.warn('PDF前端效能紀錄送出失敗：', error && error.code || error && error.message || error);
+        });
+    }, 0);
   }
 
   function ensurePdfViewerModal() {
@@ -563,11 +632,31 @@
     status.hidden = false;
     pages.innerHTML = '';
 
+    var pdfJsStartedAt = performanceNowV3();
     var pdfjsLib = await loadPdfJsModule();
-    var loadingTask = pdfjsLib.getDocument({ data: decodeBase64Pdf(base64Text) });
+    var pdfJsLoadMs = Math.max(0, Math.round(performanceNowV3() - pdfJsStartedAt));
+
+    var decodeStartedAt = performanceNowV3();
+    var pdfBytes = decodeBase64Pdf(base64Text);
+    var base64DecodeMs = Math.max(0, Math.round(performanceNowV3() - decodeStartedAt));
+
+    var parseStartedAt = performanceNowV3();
+    var loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
     var pdf = await loadingTask.promise;
+    var pdfParseMs = Math.max(0, Math.round(performanceNowV3() - parseStartedAt));
+
+    var canvasStartedAt = performanceNowV3();
     for (var pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      if (renderId !== state.pdfViewerRenderId || !state.pdfViewerOpen) return;
+      if (renderId !== state.pdfViewerRenderId || !state.pdfViewerOpen) {
+        return {
+          pdfJsLoadMs: pdfJsLoadMs,
+          base64DecodeMs: base64DecodeMs,
+          pdfParseMs: pdfParseMs,
+          canvasRenderMs: Math.max(0, Math.round(performanceNowV3() - canvasStartedAt)),
+          pdfSizeBytes: pdfBytes.length,
+          cancelled: true
+        };
+      }
       var page = await pdf.getPage(pageNumber);
       var baseViewport = page.getViewport({ scale: 1 });
       var availableWidth = Math.max(280, Math.min(pages.clientWidth - 24, 1180));
@@ -590,7 +679,17 @@
         transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0]
       }).promise;
     }
+    var canvasRenderMs = Math.max(0, Math.round(performanceNowV3() - canvasStartedAt));
     status.hidden = true;
+    return {
+      pdfJsLoadMs: pdfJsLoadMs,
+      base64DecodeMs: base64DecodeMs,
+      pdfParseMs: pdfParseMs,
+      canvasRenderMs: canvasRenderMs,
+      pdfSizeBytes: pdfBytes.length,
+      pageCount: pdf.numPages,
+      cancelled: false
+    };
   }
 
   async function openEvaluation(evaluationNo) {
