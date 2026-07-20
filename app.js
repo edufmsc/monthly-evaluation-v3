@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.1.0A.2-complete-route-preview';
+  var APP_BUILD = '7.1.0C-1-dispatch-management';
   var elements = {};
   var state = {
     session: null,
@@ -21,6 +21,10 @@
     monthlyDispatchPreview: null,
     monthlyDispatchStatus: null,
     monthlyDispatchLoading: false,
+    dispatchManagement: null,
+    dispatchManagementLoading: false,
+    singleDispatchRepairPreview: null,
+    forceClosePreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
     activeTab: 'pending',
@@ -52,6 +56,7 @@
       return;
     }
     ensureMonthlyDispatchPanel();
+    ensureDispatchManagementPanel();
     cacheElements();
     ensurePdfViewerModal();
     bindEvents();
@@ -88,12 +93,12 @@
     article.id = 'monthlyDispatchCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading">' +
-      '<div><p class="step-label">正式營運工具｜7.1.0A</p><h3>當月正式派發</h3>' +
+      '<div><p class="step-label">正式營運工具｜7.1.0B</p><h3>當月正式派發</h3>' +
       '<p>先預覽所有符合「在職＋受評人員＋是否需要考核＝是」的人員，再由教育中心完成二次確認。此階段尚未啟用自動排程。</p></div>' +
       '<button id="monthlyDispatchStatusButton" class="secondary-button secondary-button--small" type="button">查看派發狀態</button></div>' +
       '<div class="test-dispatch-form">' +
         '<label class="field-group"><span>正式派發月份</span><input id="monthlyDispatchMonth" type="text" readonly>' +
-        '<small class="field-hint">7.1.0A只允許處理當月；過去月份仍使用單人手動補建。</small></label>' +
+        '<small class="field-hint">正式派發與單筆安全補派只允許處理當月；過去月份仍使用既有單人手動補建。</small></label>' +
         '<div class="test-dispatch-actions"><button id="monthlyDispatchPreviewButton" class="secondary-button" type="button"><span class="button-label">預覽當月正式派發</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
       '</div>' +
       '<div id="monthlyDispatchMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
@@ -108,6 +113,49 @@
         '<span class="button-label">執行當月正式派發</span><span class="button-spinner" aria-hidden="true"></span></button>' +
       '</section>' +
       '<article id="monthlyDispatchRunResult" class="card admin-result-card" hidden></article>';
+    systemPanel.appendChild(article);
+  }
+
+  function ensureDispatchManagementPanel() {
+    if (document.getElementById('dispatchManagementCard')) return;
+    var systemPanel = document.getElementById('systemPanel');
+    if (!systemPanel) return;
+
+    var article = document.createElement('article');
+    article.id = 'dispatchManagementCard';
+    article.className = 'card test-dispatch-card';
+    article.innerHTML = '<div class="test-dispatch-heading">' +
+      '<div><p class="step-label">正式營運工具｜7.1.0C-1</p><h3>月考核派發管理中心</h3>' +
+      '<p>教育中心成員與教育中心主管皆可查詢、重新檢查路線及執行單筆安全補派。已存在的R0不會重複建立。</p></div>' +
+      '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
+      '<form id="dispatchManagementFilterForm" class="filter-grid">' +
+        '<label class="field-group"><span>考核月份</span><input id="dispatchManagementMonth" type="text" placeholder="115/07/01"></label>' +
+        '<label class="field-group"><span>人員／工號／考核單號</span><input id="dispatchManagementKeyword" type="text" maxlength="80"></label>' +
+        '<label class="field-group"><span>處理狀態</span><select id="dispatchManagementCategory">' +
+          '<option value="ALL">全部狀態</option><option value="CREATED">已建立R0</option>' +
+          '<option value="DUPLICATE">重複跳過</option><option value="ROUTE_ERROR">路線異常</option>' +
+          '<option value="SYSTEM_FAILED">系統失敗</option><option value="UNPROCESSED">尚未派發</option>' +
+        '</select></label>' +
+        '<label class="field-group"><span>店號</span><select id="dispatchManagementStore"><option value="">全部店號</option></select></label>' +
+        '<label class="field-group"><span>區域</span><select id="dispatchManagementArea"><option value="">全部區域</option></select></label>' +
+        '<label class="field-group"><span>派發來源</span><select id="dispatchManagementSource"><option value="">全部來源</option></select></label>' +
+        '<div class="test-dispatch-actions"><button id="dispatchManagementSearchButton" class="secondary-button" type="submit">' +
+          '<span class="button-label">查詢派發狀態</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+      '</form>' +
+      '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
+      '<div id="dispatchManagementSummary"></div>' +
+      '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
+      '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary>' +
+        '<div id="dispatchManagementAttempts"></div></details>' +
+      '<section id="singleDispatchRepairPanel" class="test-dispatch-preview" hidden>' +
+        '<div id="singleDispatchRepairContent"></div>' +
+        '<label class="field-group"><span>單筆補派原因</span><textarea id="singleDispatchRepairReason" rows="3" maxlength="300" placeholder="請說明本次單筆補派原因"></textarea></label>' +
+        '<label class="confirm-row"><input id="singleDispatchRepairConfirm" type="checkbox">' +
+          '<span>我已確認此人員仍符合派發資格、七階段路線完整，且同月份尚無R0。</span></label>' +
+        '<div class="test-dispatch-actions"><button id="singleDispatchRepairCancelButton" class="secondary-button" type="button">取消</button>' +
+          '<button id="singleDispatchRepairRunButton" class="primary-button" type="button" disabled>' +
+          '<span class="button-label">執行單筆安全補派</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+      '</section>';
     systemPanel.appendChild(article);
   }
 
@@ -131,6 +179,13 @@
       'monthlyDispatchPreviewButton', 'monthlyDispatchMessage', 'monthlyDispatchStatusResult',
       'monthlyDispatchPreview', 'monthlyDispatchPreviewContent', 'monthlyDispatchReason',
       'monthlyDispatchConfirm', 'monthlyDispatchRunButton', 'monthlyDispatchRunResult',
+      'dispatchManagementCard', 'dispatchManagementRefreshButton', 'dispatchManagementFilterForm',
+      'dispatchManagementMonth', 'dispatchManagementKeyword', 'dispatchManagementCategory',
+      'dispatchManagementStore', 'dispatchManagementArea', 'dispatchManagementSource',
+      'dispatchManagementSearchButton', 'dispatchManagementMessage', 'dispatchManagementSummary',
+      'dispatchManagementPersons', 'dispatchManagementAttemptsPanel', 'dispatchManagementAttempts',
+      'singleDispatchRepairPanel', 'singleDispatchRepairContent', 'singleDispatchRepairReason',
+      'singleDispatchRepairConfirm', 'singleDispatchRepairCancelButton', 'singleDispatchRepairRunButton',
       'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
@@ -162,6 +217,12 @@
     if (elements.monthlyDispatchReason) elements.monthlyDispatchReason.addEventListener('input', updateMonthlyDispatchRunState);
     if (elements.monthlyDispatchConfirm) elements.monthlyDispatchConfirm.addEventListener('change', updateMonthlyDispatchRunState);
     if (elements.monthlyDispatchRunButton) elements.monthlyDispatchRunButton.addEventListener('click', runMonthlyDispatch);
+    if (elements.dispatchManagementFilterForm) elements.dispatchManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); loadDispatchManagementCenter(); });
+    if (elements.dispatchManagementRefreshButton) elements.dispatchManagementRefreshButton.addEventListener('click', function () { loadDispatchManagementCenter(); });
+    if (elements.singleDispatchRepairReason) elements.singleDispatchRepairReason.addEventListener('input', updateSingleDispatchRepairRunState);
+    if (elements.singleDispatchRepairConfirm) elements.singleDispatchRepairConfirm.addEventListener('change', updateSingleDispatchRepairRunState);
+    if (elements.singleDispatchRepairCancelButton) elements.singleDispatchRepairCancelButton.addEventListener('click', closeSingleDispatchRepairPanel);
+    if (elements.singleDispatchRepairRunButton) elements.singleDispatchRepairRunButton.addEventListener('click', runSingleDispatchRepair);
     elements.refreshPendingButton.addEventListener('click', loadPending);
     elements.refreshProgressButton.addEventListener('click', loadProgress);
     elements.progressFilterForm.addEventListener('submit', function (event) {
@@ -1264,16 +1325,28 @@
       }
       return NORMAL_ACTIONS.indexOf(action) !== -1 && ['reassign', 'void', 'create_revision'].indexOf(action) === -1;
     });
+    if (canShowForceClose(record) && actions.indexOf('force_close') === -1) actions.push('force_close');
     if (!actions.length) {
       elements.actionPanel.hidden = true;
       return;
     }
     elements.actionPanel.hidden = false;
     elements.actionSelector.innerHTML = actions.map(function (action) {
-      var label = window.V3EvaluationForm.getActionLabel(record, action);
-      return '<option value="' + escapeHtml(action) + '">' + escapeHtml(label) + '</option>';
+      return '<option value="' + escapeHtml(action) + '">' + escapeHtml(getActionLabelUi(record, action)) + '</option>';
     }).join('');
     renderSelectedAction(actions[0]);
+  }
+
+  function canShowForceClose(record) {
+    if (!isEducationPdfManagerUi()) return false;
+    var status = String(record && record['流程狀態'] || '').trim();
+    return ['例外結案待PDF', 'PDF待處理', 'PDF處理中', 'PDF處理失敗', '結案', '作廢'].indexOf(status) === -1;
+  }
+
+  function getActionLabelUi(record, action) {
+    if (action === 'force_close') return '特殊權限：強制結案';
+    if (action === 'force_transition') return '特殊權限：強制轉單／流轉';
+    return window.V3EvaluationForm.getActionLabel(record || {}, action) || action || '送出';
   }
 
   async function renderSelectedAction(action) {
@@ -1281,12 +1354,64 @@
     state.currentAction = action;
     state.signatureController = null;
     state.draftLoaded = false;
+    state.forceClosePreview = null;
+    elements.saveDraftButton.hidden = action === 'force_close';
+    elements.draftStatus.textContent = action === 'force_close' ? '強制結案不建立草稿' : '尚未儲存草稿';
+    elements.submitEvaluationButton.querySelector('.button-label').textContent = getActionLabelUi(state.currentDetail || {}, action);
+
+    if (action === 'force_close') {
+      await renderForceCloseAction();
+      return;
+    }
+
+    elements.submitEvaluationButton.disabled = false;
     elements.evaluationActionForm.innerHTML = window.V3EvaluationForm.renderActionForm(state.currentDetail || {}, action);
     window.V3EvaluationForm.initializeInteractiveControls(elements.evaluationActionForm);
-    elements.submitEvaluationButton.querySelector('.button-label').textContent = window.V3EvaluationForm.getActionLabel(state.currentDetail || {}, action) || '送出';
     initializeSignatureIfNeeded();
     await loadDraftForCurrentAction();
     window.V3EvaluationForm.refreshInteractiveControls(elements.evaluationActionForm);
+  }
+
+  async function renderForceCloseAction() {
+    var record = state.currentDetail || {};
+    elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>特殊權限：強制結案</h3>' +
+      '<p class="section-help">正在檢查目前流程與尚未完成的簽核階段…</p></section>';
+    elements.submitEvaluationButton.disabled = true;
+    try {
+      var result = await window.V3WorkflowService.forceClosePreview(record['考核單號']);
+      if (state.currentAction !== 'force_close' || !state.currentDetail ||
+          String(state.currentDetail['考核單號'] || '') !== String(record['考核單號'] || '')) return;
+      state.forceClosePreview = result.data || {};
+      var preview = state.forceClosePreview;
+      var skipped = Array.isArray(preview.skippedStages) ? preview.skippedStages : [];
+      elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>特殊權限：強制結案</h3>' +
+        '<div class="admin-result-grid">' +
+          metaItem('考核單號', preview.evaluationNo) +
+          metaItem('受評人員', joinText(preview.employeeId, preview.employeeName)) +
+          metaItem('目前階段', preview.currentStatus) +
+          metaItem('強制結案後', preview.targetStatus || '例外結案待PDF') +
+        '</div>' +
+        '<div class="preview-alert-list preview-alert-list--error"><strong>此為特殊權限，請確認後果</strong><ul>' +
+          '<li>尚未完成的階段將維持未簽核，不補假簽名、評語或分數。</li>' +
+          '<li>系統會保留已完成內容，並建立例外結案PDF與完整稽核紀錄。</li>' +
+          '<li>將被略過的階段：' + escapeHtml(skipped.length ? skipped.join('、') : '無') + '</li>' +
+        '</ul></div>' +
+        '<label class="field-group"><span>強制結案原因 <strong aria-hidden="true">*</strong></span>' +
+          '<textarea name="forceCloseReason" rows="4" maxlength="1000" required placeholder="請具體說明為何需要在目前階段強制結案"></textarea></label>' +
+        '<label class="confirm-row"><input name="forceCloseConfirmed" type="checkbox" required>' +
+          '<span>我已確認未完成階段將不再簽核，且本次操作會留下完整管理紀錄。</span></label>' +
+        '<label class="field-group"><span>最終確認文字 <strong aria-hidden="true">*</strong></span>' +
+          '<input name="forceCloseText" type="text" maxlength="20" autocomplete="off" required placeholder="請輸入：' + escapeHtml(preview.confirmationText || '強制結案') + '">' +
+          '<small>請完整輸入「' + escapeHtml(preview.confirmationText || '強制結案') + '」。</small></label>' +
+      '</section>';
+      elements.submitEvaluationButton.disabled = false;
+    } catch (error) {
+      if (state.currentAction !== 'force_close') return;
+      state.forceClosePreview = null;
+      elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>特殊權限：強制結案</h3>' +
+        '<div class="form-message form-message--error">' + escapeHtml(friendlyError(error)) + '</div></section>';
+      elements.submitEvaluationButton.disabled = true;
+    }
   }
 
   async function initializeSignatureIfNeeded() {
@@ -1318,7 +1443,7 @@
   }
 
   async function loadDraftForCurrentAction() {
-    if (!state.currentDetail) return;
+    if (!state.currentDetail || state.currentAction === 'force_close') return;
     var evaluationNo = state.currentDetail['考核單號'];
     var version = Number(state.currentDetail.dataVersion || 0);
     var status = String(state.currentDetail['流程狀態'] || '');
@@ -1341,7 +1466,7 @@
   }
 
   function scheduleDraftSave() {
-    if (!state.draftLoaded || !state.currentDetail || !state.currentAction) return;
+    if (state.currentAction === 'force_close' || !state.draftLoaded || !state.currentDetail || !state.currentAction) return;
     window.clearTimeout(state.draftTimer);
     window.clearTimeout(state.draftServerTimer);
     state.draftTimer = window.setTimeout(saveLocalDraft, 400);
@@ -1350,7 +1475,7 @@
   }
 
   function saveLocalDraft() {
-    if (!state.currentDetail || !state.currentAction || !elements.evaluationActionForm || state.isSubmitting) return;
+    if (state.currentAction === 'force_close' || !state.currentDetail || !state.currentAction || !elements.evaluationActionForm || state.isSubmitting) return;
     try {
       var version = Number(state.currentDetail.dataVersion || 0);
       var content = window.V3EvaluationForm.formToDraft(elements.evaluationActionForm, state.currentAction);
@@ -1362,7 +1487,7 @@
   }
 
   async function saveCurrentDraft(showMessage) {
-    if (!state.currentDetail || !state.currentAction) return;
+    if (state.currentAction === 'force_close' || !state.currentDetail || !state.currentAction) return;
     saveLocalDraft();
     elements.saveDraftButton.disabled = true;
     try {
@@ -1392,22 +1517,61 @@
     clearEvaluationMessage();
     var form = elements.evaluationActionForm;
     if (!form.reportValidity()) return;
-    var payload;
-    try {
-      payload = window.V3EvaluationForm.collectActionPayload(form, state.currentAction, state.signatureController);
-    } catch (error) {
-      showGlobalNotice('error', '資料尚未完成', error.message || '請確認填寫內容。');
-      return;
-    }
 
     var evaluationNo = state.currentDetail['考核單號'];
     var action = state.currentAction;
     var version = Number(state.currentDetail.dataVersion || 0);
     var workflowStatus = String(state.currentDetail['流程狀態'] || '');
-    payload.evaluationNo = evaluationNo;
-    payload.expectedVersion = version;
-    var label = window.V3EvaluationForm.getActionLabel(state.currentDetail || {}, action) || '送出';
-    if (!window.confirm('確定要「' + label + '」嗎？\n\n送出後將進入下一個流程階段。')) return;
+    var payload;
+    var label = getActionLabelUi(state.currentDetail || {}, action);
+
+    if (action === 'force_close') {
+      var preview = state.forceClosePreview || {};
+      if (!preview.evaluationNo || String(preview.evaluationNo) !== String(evaluationNo)) {
+        showGlobalNotice('error', '強制結案預覽已失效', '請重新選擇「特殊權限：強制結案」，確認最新流程狀態。');
+        return;
+      }
+      var reasonField = form.querySelector('[name="forceCloseReason"]');
+      var confirmedField = form.querySelector('[name="forceCloseConfirmed"]');
+      var textField = form.querySelector('[name="forceCloseText"]');
+      var reason = String(reasonField && reasonField.value || '').trim();
+      var confirmationText = String(textField && textField.value || '').trim();
+      var expectedText = String(preview.confirmationText || '強制結案');
+      if (!reason) {
+        showGlobalNotice('error', '資料尚未完成', '請填寫強制結案原因。');
+        return;
+      }
+      if (!confirmedField || !confirmedField.checked) {
+        showGlobalNotice('error', '尚未完成二次確認', '請勾選強制結案確認聲明。');
+        return;
+      }
+      if (confirmationText !== expectedText) {
+        showGlobalNotice('error', '確認文字不正確', '請完整輸入「' + expectedText + '」。');
+        return;
+      }
+      payload = {
+        evaluationNo: evaluationNo,
+        expectedVersion: version,
+        reason: reason,
+        secondConfirmed: true,
+        confirmationText: confirmationText
+      };
+      var skippedText = Array.isArray(preview.skippedStages) && preview.skippedStages.length
+        ? preview.skippedStages.join('、')
+        : '無';
+      if (!window.confirm('確定執行「特殊權限：強制結案」嗎？\n\n將略過：' + skippedText +
+        '\n未完成階段不會補簽名、評語或分數，並會建立例外結案PDF紀錄。')) return;
+    } else {
+      try {
+        payload = window.V3EvaluationForm.collectActionPayload(form, action, state.signatureController);
+      } catch (error) {
+        showGlobalNotice('error', '資料尚未完成', error.message || '請確認填寫內容。');
+        return;
+      }
+      payload.evaluationNo = evaluationNo;
+      payload.expectedVersion = version;
+      if (!window.confirm('確定要「' + label + '」嗎？\n\n送出後將進入下一個流程階段。')) return;
+    }
 
     var requestId = window.V3ApiClient.createRequestId();
     lockPendingMutation(evaluationNo, 120000);
@@ -1415,7 +1579,9 @@
     elements.closeEvaluationButton.disabled = true;
     setButtonLoading(elements.submitEvaluationButton, true, '處理中，請勿重複點擊');
     try {
-      if (action === 'force_transition') {
+      if (action === 'force_close') {
+        await window.V3WorkflowService.forceCloseEvaluation(payload, requestId);
+      } else if (action === 'force_transition') {
         await window.V3WorkflowService.forceTransition(payload, requestId);
       } else {
         await window.V3WorkflowService.submitAction(payload, requestId);
@@ -1839,7 +2005,7 @@
     if (!elements.monthlyDispatchStatusResult) return;
     var latest = data && data.latestBatch ? data.latestBatch : null;
     var html = '<h3>正式派發模組狀態</h3><div class="admin-result-grid">' +
-      metaItem('目前階段', data.stage || '7.1.0A') +
+      metaItem('目前階段', data.stage || '7.1.0B') +
       metaItem('模組版本', data.version) +
       metaItem('自動觸發器', Number(data.automaticTriggerCount || 0) + ' 個') +
       metaItem('自動排程', data.automaticTriggerEnabled ? '已啟用' : '尚未啟用') +
@@ -2044,13 +2210,237 @@
         return '<li>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '｜' + escapeHtml(item.reason || '建立失敗') + '</li>';
       }).join('') + '</ul>';
     }
-    html += '<p class="section-help">7.1.0A尚未安裝自動排程；請先以人工預覽與執行結果驗證正式資料。</p>';
+    html += '<p class="section-help">正式派發結果已保存；已安裝的主排程與安全補跑仍會持續套用同月份R0防重複檢查。</p>';
     elements.monthlyDispatchRunResult.innerHTML = html;
     elements.monthlyDispatchRunResult.hidden = false;
   }
 
   function showMonthlyDispatchMessage(type, text) { showMessage(elements.monthlyDispatchMessage, type, text); }
   function clearMonthlyDispatchMessage() { clearMessage(elements.monthlyDispatchMessage); }
+
+  async function loadDispatchManagementCenter(options) {
+    if (!elements.dispatchManagementCard || state.dispatchManagementLoading) return;
+    var settings = options || {};
+    state.dispatchManagementLoading = true;
+    if (!settings.quiet) showDispatchManagementMessage('info', '正在整理派發狀態與異常分類…');
+    setButtonLoading(elements.dispatchManagementSearchButton, true, '查詢中');
+    elements.dispatchManagementRefreshButton.disabled = true;
+    try {
+      var result = await window.V3WorkflowService.dispatchManagementCenter({
+        evaluationMonth: String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim(),
+        keyword: String(elements.dispatchManagementKeyword.value || '').trim(),
+        resultCategory: String(elements.dispatchManagementCategory.value || 'ALL'),
+        storeCode: String(elements.dispatchManagementStore.value || ''),
+        area: String(elements.dispatchManagementArea.value || ''),
+        source: String(elements.dispatchManagementSource.value || '')
+      });
+      state.dispatchManagement = result.data || {};
+      elements.dispatchManagementMonth.value = state.dispatchManagement.evaluationMonth || currentRocMonthFirstDay();
+      renderDispatchManagementCenter(state.dispatchManagement);
+      if (!settings.quiet) showDispatchManagementMessage('success', '派發管理資料已更新。');
+    } catch (error) {
+      showDispatchManagementMessage('error', friendlyError(error));
+      if (!settings.quiet) elements.dispatchManagementPersons.innerHTML = emptyStateHtml('派發管理資料讀取失敗', friendlyError(error));
+    } finally {
+      state.dispatchManagementLoading = false;
+      setButtonLoading(elements.dispatchManagementSearchButton, false, '查詢派發狀態');
+      elements.dispatchManagementRefreshButton.disabled = false;
+    }
+  }
+
+  function renderDispatchManagementCenter(data) {
+    var summary = data.summary || {};
+    var filtered = data.filteredSummary || summary;
+    var schedule = data.schedule || {};
+    elements.dispatchManagementSummary.innerHTML = '<div class="admin-result-grid">' +
+      metaItem('應派發／有紀錄人數', summary.candidateCount) +
+      metaItem('已建立R0', summary.createdCount) +
+      metaItem('重複跳過', summary.duplicateCount) +
+      metaItem('路線異常', summary.routeErrorCount) +
+      metaItem('系統失敗', summary.failedCount) +
+      metaItem('尚未派發', summary.unprocessedCount) +
+      metaItem('主排程', Number(schedule.mainTriggerCount || 0) + '／1') +
+      metaItem('安全補跑', Number(schedule.retryTriggerCount || 0) + '／2') +
+      '</div><p class="section-help">' + escapeHtml(data.scopeNote || '') +
+      (filtered.candidateCount !== summary.candidateCount ? '｜目前篩選顯示 ' + escapeHtml(filtered.candidateCount) + ' 人。' : '') + '</p>';
+    updateDispatchManagementFilterOptions(data.filterOptions || {});
+    renderDispatchManagementPersons(data.persons || [], Boolean(data.isCurrentMonth));
+    renderDispatchManagementAttempts(data.attempts || []);
+  }
+
+  function updateDispatchManagementFilterOptions(options) {
+    setSelectOptionsPreserveValue(elements.dispatchManagementStore, [{ value: '', label: '全部店號' }].concat((options.stores || []).map(function (item) {
+      return { value: item.code, label: joinStore(item.code, item.name) };
+    })));
+    setSelectOptionsPreserveValue(elements.dispatchManagementArea, [{ value: '', label: '全部區域' }].concat((options.areas || []).map(function (item) {
+      return { value: item, label: item };
+    })));
+    setSelectOptionsPreserveValue(elements.dispatchManagementSource, [{ value: '', label: '全部來源' }].concat((options.sources || []).map(function (item) {
+      return { value: item, label: item };
+    })));
+  }
+
+  function setSelectOptionsPreserveValue(select, options) {
+    if (!select) return;
+    var current = String(select.value || '');
+    select.innerHTML = options.map(function (item) {
+      return '<option value="' + escapeHtml(item.value) + '">' + escapeHtml(item.label) + '</option>';
+    }).join('');
+    if (options.some(function (item) { return String(item.value) === current; })) select.value = current;
+  }
+
+  function renderDispatchManagementPersons(rows, isCurrentMonth) {
+    if (!rows.length) {
+      elements.dispatchManagementPersons.innerHTML = emptyStateHtml('查無符合條件的人員', '請調整月份或篩選條件後重新查詢。');
+      return;
+    }
+    elements.dispatchManagementPersons.innerHTML = '<h4>人員派發狀態</h4><div class="route-list">' + rows.map(function (row) {
+      var tone = dispatchCategoryTone(row.category);
+      var actions = '';
+      if (row.evaluationNo) {
+        actions += '<button type="button" class="secondary-button secondary-button--small" data-open-evaluation="' + escapeHtml(row.evaluationNo) + '">查看月考核表</button>';
+      }
+      if (isCurrentMonth && row.canRecheck) {
+        actions += '<button type="button" class="secondary-button secondary-button--small" data-recheck-dispatch="' + escapeHtml(row.employeeId) + '">重新檢查路線</button>';
+      }
+      return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' +
+        escapeHtml(joinStore(row.storeCode, row.storeName)) + '</span><strong>' +
+        escapeHtml(joinText(row.employeeId, row.employeeName)) + (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') +
+        '</strong><small>' + escapeHtml(row.reason || row.workflowStatus || '目前無異常') +
+        (row.executionSource ? '<br>最近來源：' + escapeHtml(row.executionSource) + '｜' + escapeHtml(row.completedAt || '') : '') +
+        '</small>' + (actions ? '<div class="evaluation-card__actions">' + actions + '</div>' : '') + '</div>';
+    }).join('') + '</div>';
+    bindEvaluationCards(elements.dispatchManagementPersons);
+    Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-recheck-dispatch]')).forEach(function (button) {
+      button.addEventListener('click', function () { previewSingleDispatchRepair(button.getAttribute('data-recheck-dispatch')); });
+    });
+  }
+
+  function renderDispatchManagementAttempts(rows) {
+    if (!rows.length) {
+      elements.dispatchManagementAttempts.innerHTML = '<p class="section-help">本月份尚無派發嘗試紀錄。</p>';
+      return;
+    }
+    elements.dispatchManagementAttempts.innerHTML = '<div class="route-list">' + rows.map(function (row) {
+      return '<div class="route-row"><span><span class="tag ' + dispatchCategoryTone(row.category) + '">' +
+        escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' + escapeHtml(row.executionSource || '未標示來源') +
+        '</span><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) +
+        (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') + '</strong><small>' +
+        escapeHtml(row.completedAt || '') + (row.batchId ? '｜批次 ' + escapeHtml(row.batchId) : '') +
+        (row.reason ? '<br>' + escapeHtml(row.reason) : '') + '</small></div>';
+    }).join('') + '</div>';
+  }
+
+  function dispatchCategoryLabel(category) {
+    var labels = {
+      CREATED: '已建立R0', DUPLICATE: '重複跳過', ROUTE_ERROR: '路線異常',
+      SYSTEM_FAILED: '系統失敗', UNPROCESSED: '尚未派發'
+    };
+    return labels[String(category || '')] || '未分類';
+  }
+
+  function dispatchCategoryTone(category) {
+    if (category === 'CREATED') return 'tag--success';
+    if (category === 'DUPLICATE' || category === 'UNPROCESSED') return 'tag--warning';
+    return 'tag--danger';
+  }
+
+  async function previewSingleDispatchRepair(employeeId) {
+    if (state.dispatchManagementLoading) return;
+    state.dispatchManagementLoading = true;
+    showDispatchManagementMessage('info', '正在重新檢查此人員的七階段路線…');
+    try {
+      var result = await window.V3WorkflowService.previewSingleDispatchRepair(
+        employeeId,
+        String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim()
+      );
+      state.singleDispatchRepairPreview = result.data || {};
+      renderSingleDispatchRepairPreview(state.singleDispatchRepairPreview);
+      showDispatchManagementMessage(state.singleDispatchRepairPreview.canRun ? 'success' : 'info',
+        state.singleDispatchRepairPreview.canRun ? '路線檢查通過，可進行單筆安全補派。' : '目前仍不可補派，請先依原因修正。');
+    } catch (error) {
+      showDispatchManagementMessage('error', friendlyError(error));
+    } finally {
+      state.dispatchManagementLoading = false;
+    }
+  }
+
+  function renderSingleDispatchRepairPreview(data) {
+    var item = data.item || {};
+    var employee = item.employee || {};
+    var organization = item.organization || {};
+    var notes = [];
+    if (item.reason) notes.push(item.reason);
+    if (Array.isArray(item.warnings) && item.warnings.length) notes.push('提醒：' + item.warnings.join('；'));
+    elements.singleDispatchRepairContent.innerHTML = '<h4>單筆安全補派預覽</h4><div class="admin-result-grid">' +
+      metaItem('考核月份', data.evaluationMonth) +
+      metaItem('受評人員', joinText(employee.employeeId, employee.employeeName)) +
+      metaItem('店別', joinStore(organization.storeCode, organization.storeName)) +
+      metaItem('預計考核單號', item.plannedEvaluationNo || item.existingEvaluationNo) +
+      metaItem('路線結果', data.canRun ? '通過' : '不可補派') +
+      '</div><div class="detail-section"><h3>完整上呈路線（7階段）</h3><p>' + monthlyDispatchRouteHtml(item) + '</p></div>' +
+      (notes.length ? '<ul class="preview-alert-list ' + (data.canRun ? '' : 'preview-alert-list--error') + '"><li>' + escapeHtml(notes.join('；')) + '</li></ul>' : '');
+    elements.singleDispatchRepairPanel.hidden = false;
+    elements.singleDispatchRepairReason.value = '';
+    elements.singleDispatchRepairConfirm.checked = false;
+    updateSingleDispatchRepairRunState();
+    elements.singleDispatchRepairPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeSingleDispatchRepairPanel() {
+    state.singleDispatchRepairPreview = null;
+    if (elements.singleDispatchRepairPanel) elements.singleDispatchRepairPanel.hidden = true;
+    if (elements.singleDispatchRepairReason) elements.singleDispatchRepairReason.value = '';
+    if (elements.singleDispatchRepairConfirm) elements.singleDispatchRepairConfirm.checked = false;
+  }
+
+  function updateSingleDispatchRepairRunState() {
+    if (!elements.singleDispatchRepairRunButton) return;
+    var preview = state.singleDispatchRepairPreview || {};
+    elements.singleDispatchRepairRunButton.disabled = state.dispatchManagementLoading || !(
+      preview.canRun && preview.previewToken &&
+      String(elements.singleDispatchRepairReason.value || '').trim() &&
+      elements.singleDispatchRepairConfirm.checked
+    );
+  }
+
+  async function runSingleDispatchRepair() {
+    var preview = state.singleDispatchRepairPreview || {};
+    var item = preview.item || {};
+    var employee = item.employee || {};
+    if (!preview.canRun || !preview.previewToken || state.dispatchManagementLoading) return;
+    var reason = String(elements.singleDispatchRepairReason.value || '').trim();
+    if (!reason) return showDispatchManagementMessage('error', '請填寫單筆補派原因。');
+    if (!elements.singleDispatchRepairConfirm.checked) return showDispatchManagementMessage('error', '請完成二次確認。');
+    if (!window.confirm('確定補派 ' + joinText(employee.employeeId, employee.employeeName) + ' 的當月R0月考核表嗎？\n\n系統仍會再次檢查重複R0與路線資料。')) return;
+
+    state.dispatchManagementLoading = true;
+    setButtonLoading(elements.singleDispatchRepairRunButton, true, '補派處理中');
+    showGlobalNotice('processing', '正在執行單筆安全補派', '系統正在再次確認資格、七階段路線及同月份R0。', false);
+    try {
+      var result = await window.V3WorkflowService.runSingleDispatchRepair({
+        evaluationMonth: preview.evaluationMonth,
+        employeeId: employee.employeeId,
+        previewToken: preview.previewToken,
+        reason: reason,
+        secondConfirmed: true
+      }, window.V3ApiClient.createRequestId());
+      closeGlobalNotice();
+      closeSingleDispatchRepairPanel();
+      showDispatchManagementMessage('success', '單筆補派完成：' + String(result.data && result.data.evaluationNo || ''));
+      await Promise.allSettled([loadDispatchManagementCenter({ quiet: true }), refreshAllAccessibleLists()]);
+    } catch (error) {
+      closeGlobalNotice();
+      showGlobalNotice('error', '單筆補派失敗', friendlyError(error));
+      showDispatchManagementMessage('error', friendlyError(error));
+    } finally {
+      state.dispatchManagementLoading = false;
+      setButtonLoading(elements.singleDispatchRepairRunButton, false, '執行單筆安全補派');
+      updateSingleDispatchRepairRunState();
+    }
+  }
+
+  function showDispatchManagementMessage(type, text) { showMessage(elements.dispatchManagementMessage, type, text); }
 
   function isFutureRocMonth(value) {
     var match = /^(\d{3})\/(\d{2})\/01$/.exec(String(value || '').trim());
@@ -2250,6 +2640,7 @@
     }
     if (tab === 'system' && !state.testDispatchCandidates.length) loadTestDispatchCandidates();
     if (tab === 'system') loadMonthlyDispatchStatus({ quiet: true });
+    if (tab === 'system' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
   }
 
   function togglePasswordVisibility() {
@@ -2366,7 +2757,16 @@
       DISPATCH_PREVIEW_MONTH_MISMATCH: '預覽月份與執行月份不一致，請重新預覽。',
       DISPATCH_NO_ELIGIBLE: '目前沒有可建立的正式月考核表。',
       DISPATCH_MONTH_NOT_CURRENT: '正式批次目前只允許處理當月。',
-      DISPATCH_ALREADY_RUNNING: '目前已有正式派發作業執行中，請稍後再試。'
+      DISPATCH_ALREADY_RUNNING: '目前已有正式派發作業執行中，請稍後再試。',
+      DISPATCH_REPAIR_PREVIEW_REQUIRED: '請先重新檢查此人員的派發路線。',
+      DISPATCH_REPAIR_PREVIEW_EXPIRED: '單筆補派預覽已逾時，請重新檢查。',
+      DISPATCH_REPAIR_PREVIEW_STALE: '預覽後主檔、路線或既有月考核表已變動，請重新檢查。',
+      DISPATCH_REPAIR_OWNER_MISMATCH: '此補派預覽不是由目前登入者建立。',
+      DISPATCH_REPAIR_PREVIEW_MISMATCH: '補派預覽與目前月份或人員不一致。',
+      DISPATCH_EMPLOYEE_NOT_ELIGIBLE: '此人員目前不符合正式派發資格。',
+      DISPATCH_ROUTE_INVALID: '此人員的七階段路線尚未通過，請先修正主檔。',
+      FORCE_CLOSE_CONFIRMATION_REQUIRED: '請完成強制結案最終確認。',
+      FORCE_CLOSE_NOT_AVAILABLE: '此月考核表目前不能執行強制結案。'
     };
     return messages[code] || String(error && error.message || '系統處理失敗。');
   }
