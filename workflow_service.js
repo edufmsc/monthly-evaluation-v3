@@ -69,6 +69,9 @@
     },
     verifyPdfTemplate: function () {
       return call('verifyPdfTemplate', {});
+    },
+    recordClientPerformance: function (payload, requestId) {
+      return call('recordClientPerformance', payload || {}, requestId);
     }
   });
 })();
