@@ -1,3 +1,4 @@
+/* 月考核系統 V3｜版本：7.0.5-drive-pdf-optimization */
 (function () {
   'use strict';
 
@@ -56,6 +57,8 @@
       getMutationStatus: 45000,
       generatePdf: 180000,
       publishPdf: 90000,
+      prepareDrivePdfView: 60000,
+      authenticatedPdfView: 60000,
       preparePdfView: 90000,
       publicPdfView: 60000,
       verifyPdfTemplate: 60000
