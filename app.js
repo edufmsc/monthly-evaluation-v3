@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.1.0C-2-batch-repair-analysis';
+  var APP_BUILD = '7.1.0C-2.1-unified-dispatch';
   var elements = {};
   var state = {
     session: null,
@@ -16,14 +16,8 @@
     draftServerTimer: null,
     draftLoaded: false,
     isSubmitting: false,
-    testDispatchCandidates: [],
-    testDispatchPreview: null,
-    monthlyDispatchPreview: null,
-    monthlyDispatchStatus: null,
-    monthlyDispatchLoading: false,
     dispatchManagement: null,
     dispatchManagementLoading: false,
-    singleDispatchRepairPreview: null,
     batchDispatchRepairPreview: null,
     batchDispatchSelectedEmployees: {},
     dispatchManagementSelectionMonth: '',
@@ -59,22 +53,13 @@
       initializePublicPdfView(publicPdfToken);
       return;
     }
-    ensureMonthlyDispatchPanel();
+    retireLegacyDispatchUi();
     ensureDispatchManagementPanel();
     cacheElements();
     ensurePdfViewerModal();
     bindEvents();
     elements.appVersion.textContent = APP_BUILD;
-    elements.testDispatchMonth.value = currentRocMonthFirstDay();
-    if (elements.monthlyDispatchMonth) elements.monthlyDispatchMonth.value = currentRocMonthFirstDay();
-    if (elements.createTestDispatchButton) {
-      var createLabel = elements.createTestDispatchButton.querySelector('.button-label');
-      if (createLabel) createLabel.textContent = '手動建立月考核表';
-    }
-    if (elements.previewTestDispatchButton) {
-      var previewLabel = elements.previewTestDispatchButton.querySelector('.button-label');
-      if (previewLabel) previewLabel.textContent = '預覽建立路線';
-    }
+    if (elements.dispatchManagementMonth && !elements.dispatchManagementMonth.value) elements.dispatchManagementMonth.value = currentRocMonthFirstDay();
 
     if (!window.V3ApiClient.isConfigured()) {
       elements.configErrorCard.hidden = false;
@@ -88,36 +73,15 @@
   }
 
 
-  function ensureMonthlyDispatchPanel() {
-    if (document.getElementById('monthlyDispatchCard')) return;
-    var systemPanel = document.getElementById('systemPanel');
-    if (!systemPanel) return;
-
-    var article = document.createElement('article');
-    article.id = 'monthlyDispatchCard';
-    article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading">' +
-      '<div><p class="step-label">正式營運工具｜7.1.0B</p><h3>當月正式派發</h3>' +
-      '<p>先預覽所有符合「在職＋受評人員＋是否需要考核＝是」的人員，再由教育中心完成二次確認。此階段尚未啟用自動排程。</p></div>' +
-      '<button id="monthlyDispatchStatusButton" class="secondary-button secondary-button--small" type="button">查看派發狀態</button></div>' +
-      '<div class="test-dispatch-form">' +
-        '<label class="field-group"><span>正式派發月份</span><input id="monthlyDispatchMonth" type="text" readonly>' +
-        '<small class="field-hint">正式派發與單筆安全補派只允許處理當月；過去月份仍使用既有單人手動補建。</small></label>' +
-        '<div class="test-dispatch-actions"><button id="monthlyDispatchPreviewButton" class="secondary-button" type="button"><span class="button-label">預覽當月正式派發</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-      '</div>' +
-      '<div id="monthlyDispatchMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
-      '<article id="monthlyDispatchStatusResult" class="card admin-result-card" hidden></article>' +
-      '<section id="monthlyDispatchPreview" class="test-dispatch-preview" hidden>' +
-        '<div id="monthlyDispatchPreviewContent"></div>' +
-        '<label class="field-group test-dispatch-reason"><span>本次正式派發原因</span>' +
-        '<textarea id="monthlyDispatchReason" rows="3" maxlength="300" placeholder="例如：115年8月月考核正式派發" required></textarea></label>' +
-        '<label class="confirm-row"><input id="monthlyDispatchConfirm" type="checkbox">' +
-        '<span>我已確認預覽中的建立、重複跳過與路線異常名單，確定執行本月正式派發。</span></label>' +
-        '<button id="monthlyDispatchRunButton" class="primary-button" type="button" disabled>' +
-        '<span class="button-label">執行當月正式派發</span><span class="button-spinner" aria-hidden="true"></span></button>' +
-      '</section>' +
-      '<article id="monthlyDispatchRunResult" class="card admin-result-card" hidden></article>';
-    systemPanel.appendChild(article);
+  
+  function retireLegacyDispatchUi() {
+    var legacyTestForm = document.getElementById('testDispatchForm');
+    if (legacyTestForm) {
+      var legacyCard = legacyTestForm.closest ? legacyTestForm.closest('.test-dispatch-card') : null;
+      if (legacyCard && legacyCard.parentNode) legacyCard.parentNode.removeChild(legacyCard);
+    }
+    var legacyMonthlyCard = document.getElementById('monthlyDispatchCard');
+    if (legacyMonthlyCard && legacyMonthlyCard.parentNode) legacyMonthlyCard.parentNode.removeChild(legacyMonthlyCard);
   }
 
   function ensureDispatchManagementPanel() {
@@ -129,8 +93,8 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading">' +
-      '<div><p class="step-label">正式營運工具｜7.1.0C-2</p><h3>月考核派發管理中心</h3>' +
-      '<p>教育中心成員與教育中心主管皆可查詢、單筆或批次安全補派，並按需產生所選月份的總整分析。已存在的R0不會重複建立。</p></div>' +
+      '<div><p class="step-label">正式營運工具｜7.1.0C-2.1</p><h3>月考核派發管理中心</h3>' +
+      '<p>教育中心成員與教育中心主管共用同一個人工派發入口。勾選1人即單筆派發，勾選多人即多人派發；已存在的R0不會重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
       '<form id="dispatchManagementFilterForm" class="filter-grid">' +
         '<label class="field-group"><span>考核月份</span><input id="dispatchManagementMonth" type="text" placeholder="115/07/01"></label>' +
@@ -152,33 +116,24 @@
         '<p class="section-help">不會在登入時自動載入；按下按鈕後只分析上方所選月份，不匯出CSV。</p></div>' +
         '<button id="dispatchMonthAnalysisButton" class="secondary-button secondary-button--small" type="button"><span class="button-label">產生月份分析</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
         '<article id="dispatchMonthAnalysisResult" class="card admin-result-card" hidden></article></section>' +
-      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>批次安全補派</h4>' +
-        '<p class="section-help">可勾選尚未派發、路線異常或系統失敗人員；正式執行前會逐筆重新驗證。</p></div>' +
+      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4>' +
+        '<p class="section-help">勾選1人或多人後使用同一套預覽與建立流程；正式執行前會逐筆重新驗證。</p></div>' +
         '<strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
-        '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可選人員</button>' +
+        '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button>' +
         '<button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button>' +
-        '<button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽批次補派</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
+        '<button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
       '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary>' +
         '<div id="dispatchManagementAttempts"></div></details>' +
-      '<section id="singleDispatchRepairPanel" class="test-dispatch-preview" hidden>' +
-        '<div id="singleDispatchRepairContent"></div>' +
-        '<label class="field-group"><span>單筆補派原因</span><textarea id="singleDispatchRepairReason" rows="3" maxlength="300" placeholder="請說明本次單筆補派原因"></textarea></label>' +
-        '<label class="confirm-row"><input id="singleDispatchRepairConfirm" type="checkbox">' +
-          '<span>我已確認此人員仍符合派發資格、七階段路線完整，且同月份尚無R0。</span></label>' +
-        '<div class="test-dispatch-actions"><button id="singleDispatchRepairCancelButton" class="secondary-button" type="button">取消</button>' +
-          '<button id="singleDispatchRepairRunButton" class="primary-button" type="button" disabled>' +
-          '<span class="button-label">執行單筆安全補派</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-      '</section>' +
       '<section id="batchDispatchRepairPanel" class="test-dispatch-preview" hidden>' +
         '<div id="batchDispatchRepairContent"></div>' +
-        '<label class="field-group"><span>批次補派原因</span><textarea id="batchDispatchRepairReason" rows="3" maxlength="300" placeholder="請具體說明本次批次補派原因"></textarea></label>' +
+        '<label class="field-group"><span>人工派發／補派原因</span><textarea id="batchDispatchRepairReason" rows="3" maxlength="300" placeholder="請具體說明本次人工派發／補派原因"></textarea></label>' +
         '<label class="confirm-row"><input id="batchDispatchRepairConfirm" type="checkbox">' +
           '<span>我已確認每位人員仍會獨立檢查派發資格、七階段路線與同月份R0。</span></label>' +
-        '<label class="field-group"><span>最終確認文字</span><input id="batchDispatchRepairConfirmText" type="text" maxlength="20" autocomplete="off" placeholder="請輸入：批次補派"></label>' +
+        '<label class="field-group"><span>最終確認文字</span><input id="batchDispatchRepairConfirmText" type="text" maxlength="20" autocomplete="off" placeholder="請輸入：確認派發"></label>' +
         '<div class="test-dispatch-actions"><button id="batchDispatchRepairCancelButton" class="secondary-button" type="button">取消</button>' +
           '<button id="batchDispatchRepairRunButton" class="primary-button" type="button" disabled>' +
-          '<span class="button-label">執行批次安全補派</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+          '<span class="button-label">執行人工派發／補派</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
         '<article id="batchDispatchRepairResult" class="card admin-result-card" hidden></article>' +
       '</section>';
     systemPanel.appendChild(article);
@@ -196,14 +151,7 @@
       'progressList', 'progressSummary', 'progressScopeText', 'historyFilterForm', 'historyMonth', 'historyEmployeeId',
       'historyEmployeeFilter', 'historyDepartment', 'historyArea', 'historyStatus', 'historyList', 'historyScopeText',
       'adminRefreshSessionButton', 'adminHealthCheckButton', 'adminSystemHealthButton',
-      'adminSystemMessage', 'adminSystemResult', 'testDispatchForm', 'refreshTestCandidatesButton',
-      'testDispatchEmployee', 'testDispatchEmployeeHint', 'testDispatchMonth', 'testDispatchReason',
-      'previewTestDispatchButton', 'testDispatchMessage', 'testDispatchPreview', 'testDispatchPreviewContent',
-      'testDispatchConfirm', 'createTestDispatchButton',
-      'monthlyDispatchCard', 'monthlyDispatchMonth', 'monthlyDispatchStatusButton',
-      'monthlyDispatchPreviewButton', 'monthlyDispatchMessage', 'monthlyDispatchStatusResult',
-      'monthlyDispatchPreview', 'monthlyDispatchPreviewContent', 'monthlyDispatchReason',
-      'monthlyDispatchConfirm', 'monthlyDispatchRunButton', 'monthlyDispatchRunResult',
+      'adminSystemMessage', 'adminSystemResult',
       'dispatchManagementCard', 'dispatchManagementRefreshButton', 'dispatchManagementFilterForm',
       'dispatchManagementMonth', 'dispatchManagementKeyword', 'dispatchManagementCategory',
       'dispatchManagementStore', 'dispatchManagementArea', 'dispatchManagementSource',
@@ -214,8 +162,6 @@
       'batchDispatchPreviewButton', 'batchDispatchRepairPanel', 'batchDispatchRepairContent',
       'batchDispatchRepairReason', 'batchDispatchRepairConfirm', 'batchDispatchRepairConfirmText',
       'batchDispatchRepairCancelButton', 'batchDispatchRepairRunButton', 'batchDispatchRepairResult',
-      'singleDispatchRepairPanel', 'singleDispatchRepairContent', 'singleDispatchRepairReason',
-      'singleDispatchRepairConfirm', 'singleDispatchRepairCancelButton', 'singleDispatchRepairRunButton',
       'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
@@ -235,24 +181,8 @@
     elements.adminRefreshSessionButton.addEventListener('click', runAdminSessionCheck);
     elements.adminHealthCheckButton.addEventListener('click', runAdminConnectionCheck);
     elements.adminSystemHealthButton.addEventListener('click', runAdminSystemHealth);
-    elements.refreshTestCandidatesButton.addEventListener('click', loadTestDispatchCandidates);
-    elements.testDispatchForm.addEventListener('submit', previewTestDispatch);
-    elements.testDispatchEmployee.addEventListener('change', handleTestDispatchInputChange);
-    elements.testDispatchMonth.addEventListener('input', handleTestDispatchInputChange);
-    elements.testDispatchReason.addEventListener('input', updateTestDispatchCreateState);
-    elements.testDispatchConfirm.addEventListener('change', updateTestDispatchCreateState);
-    elements.createTestDispatchButton.addEventListener('click', createTestDispatch);
-    if (elements.monthlyDispatchStatusButton) elements.monthlyDispatchStatusButton.addEventListener('click', function () { loadMonthlyDispatchStatus(); });
-    if (elements.monthlyDispatchPreviewButton) elements.monthlyDispatchPreviewButton.addEventListener('click', previewMonthlyDispatch);
-    if (elements.monthlyDispatchReason) elements.monthlyDispatchReason.addEventListener('input', updateMonthlyDispatchRunState);
-    if (elements.monthlyDispatchConfirm) elements.monthlyDispatchConfirm.addEventListener('change', updateMonthlyDispatchRunState);
-    if (elements.monthlyDispatchRunButton) elements.monthlyDispatchRunButton.addEventListener('click', runMonthlyDispatch);
     if (elements.dispatchManagementFilterForm) elements.dispatchManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); loadDispatchManagementCenter(); });
     if (elements.dispatchManagementRefreshButton) elements.dispatchManagementRefreshButton.addEventListener('click', function () { loadDispatchManagementCenter(); });
-    if (elements.singleDispatchRepairReason) elements.singleDispatchRepairReason.addEventListener('input', updateSingleDispatchRepairRunState);
-    if (elements.singleDispatchRepairConfirm) elements.singleDispatchRepairConfirm.addEventListener('change', updateSingleDispatchRepairRunState);
-    if (elements.singleDispatchRepairCancelButton) elements.singleDispatchRepairCancelButton.addEventListener('click', closeSingleDispatchRepairPanel);
-    if (elements.singleDispatchRepairRunButton) elements.singleDispatchRepairRunButton.addEventListener('click', runSingleDispatchRepair);
     if (elements.dispatchMonthAnalysisButton) elements.dispatchMonthAnalysisButton.addEventListener('click', loadDispatchMonthAnalysis);
     if (elements.batchDispatchSelectVisibleButton) elements.batchDispatchSelectVisibleButton.addEventListener('click', selectVisibleBatchDispatchEmployees);
     if (elements.batchDispatchClearButton) elements.batchDispatchClearButton.addEventListener('click', clearBatchDispatchSelection);
@@ -1844,124 +1774,10 @@
     '</div><p class="section-help">此健檢只讀取資料，不會修改、清空或刪除任何工作表內容。</p>';
   }
 
-  async function loadTestDispatchCandidates() {
-    clearTestDispatchMessage();
-    elements.refreshTestCandidatesButton.disabled = true;
-    elements.testDispatchEmployee.disabled = true;
-    var previousValue = String(elements.testDispatchEmployee.value || '');
-    elements.testDispatchEmployee.innerHTML = '<option value="">正在載入受評人員…</option>';
-    try {
-      var result = await window.V3WorkflowService.listTestDispatchCandidates('');
-      var data = result.data || {};
-      state.testDispatchCandidates = Array.isArray(data.items) ? data.items : [];
-      var options = ['<option value="">請選擇受評人員</option>'];
-      state.testDispatchCandidates.forEach(function (item) {
-        var label = [item.employeeId, item.employeeName, joinStore(item.storeCode, item.storeName)].filter(Boolean).join('｜');
-        if (String(item.needsEvaluation || '') !== '是') label += '｜J欄：' + valueOrDash(item.needsEvaluation);
-        options.push('<option value="' + escapeHtml(item.employeeId) + '">' + escapeHtml(label) + '</option>');
-      });
-      elements.testDispatchEmployee.innerHTML = options.join('');
-      if (previousValue && state.testDispatchCandidates.some(function (item) { return item.employeeId === previousValue; })) {
-        elements.testDispatchEmployee.value = previousValue;
-      }
-      elements.testDispatchEmployeeHint.textContent = state.testDispatchCandidates.length
-        ? '已載入 ' + state.testDispatchCandidates.length + ' 位在職受評人員。教育中心手動補建不受 J 欄限制；每月自動派發仍以 J 欄設定為準。'
-        : '員工主檔目前沒有可選擇的在職受評人員。';
-    } catch (error) {
-      elements.testDispatchEmployee.innerHTML = '<option value="">載入失敗</option>';
-      showTestDispatchMessage('error', friendlyError(error));
-    } finally {
-      elements.refreshTestCandidatesButton.disabled = false;
-      elements.testDispatchEmployee.disabled = false;
-    }
-  }
-
-  function handleTestDispatchInputChange() {
-    state.testDispatchPreview = null;
-    elements.testDispatchPreview.hidden = true;
-    elements.testDispatchConfirm.checked = false;
-    elements.createTestDispatchButton.disabled = true;
-    clearTestDispatchMessage();
-  }
-
-  async function previewTestDispatch(event) {
-    event.preventDefault();
-    clearTestDispatchMessage();
-    var employeeId = String(elements.testDispatchEmployee.value || '').trim();
-    var evaluationMonth = String(elements.testDispatchMonth.value || '').trim();
-    var reason = String(elements.testDispatchReason.value || '').trim();
-
-    if (!employeeId) return showTestDispatchMessage('error', '請選擇受評人員。');
-    if (!/^\d{3}\/\d{2}\/01$/.test(evaluationMonth)) return showTestDispatchMessage('error', '考核月份請輸入完整民國日期，例如 115/08/01。');
-    if (isFutureRocMonth(evaluationMonth)) return showGlobalNotice('warning', '不可建立未來月份', '手動建立只能選擇本月或過去月份。未來月份請等待該月1日自動派發。');
-    if (!reason) return showTestDispatchMessage('error', '請填寫建立原因。');
-
-    setButtonLoading(elements.previewTestDispatchButton, true, '預覽中');
-    elements.testDispatchPreview.hidden = true;
-    elements.testDispatchConfirm.checked = false;
-    try {
-      var result = await window.V3WorkflowService.previewTestEvaluation(employeeId, evaluationMonth);
-      state.testDispatchPreview = result.data || null;
-      renderTestDispatchPreview(state.testDispatchPreview);
-      elements.testDispatchPreview.hidden = false;
-      if (state.testDispatchPreview && state.testDispatchPreview.canCreate) {
-        showTestDispatchMessage('success', '預覽完成，請核對完整路線後勾選確認。');
-      } else {
-        showTestDispatchMessage('error', '預覽發現阻擋問題，請依下方訊息修正。');
-      }
-    } catch (error) {
-      state.testDispatchPreview = null;
-      showTestDispatchMessage('error', friendlyError(error));
-    } finally {
-      setButtonLoading(elements.previewTestDispatchButton, false, '預覽上呈路線');
-      updateTestDispatchCreateState();
-    }
-  }
-
-  function renderTestDispatchPreview(preview) {
-    var data = preview || {};
-    var employee = data.employee || {};
-    var organization = data.organization || {};
-    var route = data.route || {};
-    var errors = Array.isArray(data.errors) ? data.errors : [];
-    var warnings = Array.isArray(data.warnings) ? data.warnings : [];
-
-    var html = '<h4>建立預覽</h4><div class="test-dispatch-preview-grid">' +
-      metaItem('預計考核單號', data.plannedEvaluationNo) +
-      metaItem('考核月份', data.evaluationMonth) +
-      metaItem('修訂版本', data.revision) +
-      metaItem('受評人員', joinText(employee.employeeId, employee.employeeName)) +
-      metaItem('轉任日', employee.transferDate) +
-      metaItem('J欄是否考核', employee.needsEvaluation) +
-      metaItem('店別', joinStore(organization.storeCode, organization.storeName)) +
-      metaItem('區域', organization.area) +
-      metaItem('營業處', organization.department) +
-    '</div>';
-
-    if (errors.length) {
-      html += '<ul class="preview-alert-list preview-alert-list--error">' + errors.map(function (item) {
-        return '<li>' + escapeHtml(item) + '</li>';
-      }).join('') + '</ul>';
-    }
-    if (warnings.length) {
-      html += '<ul class="preview-alert-list preview-alert-list--warning">' + warnings.map(function (item) {
-        return '<li>' + escapeHtml(item) + '</li>';
-      }).join('') + '</ul>';
-    }
-
-    html += '<h4>預計上呈路線</h4><div class="route-list">' +
-      routeRowHtml('門市店主管', route.manager) +
-      routeRowHtml('教育中心成員', route.educationMember) +
-      routeRowHtml('教育中心主管', route.educationSupervisor) +
-      routeRowHtml('區主管', route.areaSupervisor) +
-      routeRowHtml('受評人員確認', route.employee) +
-      routeRowHtml('營業處主管', route.departmentExecutive) +
-      routeRowHtml('總經理', route.generalManager) +
-    '</div>';
-
-    elements.testDispatchPreviewContent.innerHTML = html;
-  }
-
+  async 
+  
+  async 
+  
   function routeRowHtml(label, person) {
     var item = person || {};
     return '<div class="route-row"><span>' + escapeHtml(label) + '</span><strong>' +
@@ -1969,195 +1785,15 @@
       escapeHtml(item.source || item.role || '') + '</small></div>';
   }
 
-  function updateTestDispatchCreateState() {
-    var canCreate = Boolean(state.testDispatchPreview && state.testDispatchPreview.canCreate);
-    var confirmed = Boolean(elements.testDispatchConfirm.checked);
-    var hasReason = Boolean(String(elements.testDispatchReason.value || '').trim());
-    elements.createTestDispatchButton.disabled = !(canCreate && confirmed && hasReason);
-  }
+  
+  async 
 
-  async function createTestDispatch() {
-    if (!state.testDispatchPreview || !state.testDispatchPreview.canCreate) {
-      return showTestDispatchMessage('error', '請先完成可建立的預覽。');
-    }
-    if (!elements.testDispatchConfirm.checked) {
-      return showTestDispatchMessage('error', '請先勾選確認。');
-    }
-
-    var employeeId = String(elements.testDispatchEmployee.value || '').trim();
-    var evaluationMonth = String(elements.testDispatchMonth.value || '').trim();
-    var reason = String(elements.testDispatchReason.value || '').trim();
-    if (isFutureRocMonth(evaluationMonth)) return showGlobalNotice('warning', '不可建立未來月份', '手動建立只能選擇本月或過去月份。未來月份請等待該月1日自動派發。');
-    var employee = state.testDispatchPreview.employee || {};
-    var confirmText = '確定建立以下月考核表嗎？\n\n' +
-      '受評人員：' + joinText(employee.employeeId, employee.employeeName) + '\n' +
-      '考核月份：' + evaluationMonth + '\n' +
-      '版本：R0\n\n建立後不會自動刪除；若測試不使用，請依正式流程作廢。';
-    if (!window.confirm(confirmText)) return;
-
-    setButtonLoading(elements.createTestDispatchButton, true, '建立中');
-    try {
-      var requestId = createClientRequestId('test-dispatch');
-      var result = await window.V3WorkflowService.createTestEvaluation({
-        employeeId: employeeId,
-        evaluationMonth: evaluationMonth,
-        reason: reason,
-        secondConfirmed: true
-      }, requestId);
-      var data = result.data || {};
-      showTestDispatchMessage('success', '建立成功：' + valueOrDash(data.evaluationNo) + '，目前已進入' + valueOrDash(data.status) + '。');
-      state.testDispatchPreview = null;
-      elements.testDispatchPreview.hidden = true;
-      elements.testDispatchConfirm.checked = false;
-      elements.testDispatchReason.value = '';
-      await loadProgress();
-    } catch (error) {
-      showTestDispatchMessage('error', friendlyError(error));
-    } finally {
-      setButtonLoading(elements.createTestDispatchButton, false, '手動建立月考核表');
-      updateTestDispatchCreateState();
-    }
-  }
-
-
-  async function loadMonthlyDispatchStatus(options) {
-    var settings = options || {};
-    if (!elements.monthlyDispatchStatusResult || state.monthlyDispatchLoading) return;
-    if (!settings.quiet) showMonthlyDispatchMessage('info', '正在讀取正式派發狀態…');
-    state.monthlyDispatchLoading = true;
-    if (elements.monthlyDispatchStatusButton) elements.monthlyDispatchStatusButton.disabled = true;
-    try {
-      var result = await window.V3WorkflowService.monthlyDispatchStatus();
-      var data = result.data || {};
-      state.monthlyDispatchStatus = data;
-      renderMonthlyDispatchStatus(data);
-      if (!settings.quiet) showMonthlyDispatchMessage('success', '正式派發狀態已更新。');
-    } catch (error) {
-      if (!settings.quiet) showMonthlyDispatchMessage('error', friendlyError(error));
-    } finally {
-      state.monthlyDispatchLoading = false;
-      if (elements.monthlyDispatchStatusButton) elements.monthlyDispatchStatusButton.disabled = false;
-    }
-  }
-
-  function renderMonthlyDispatchStatus(data) {
-    if (!elements.monthlyDispatchStatusResult) return;
-    var latest = data && data.latestBatch ? data.latestBatch : null;
-    var html = '<h3>正式派發模組狀態</h3><div class="admin-result-grid">' +
-      metaItem('目前階段', data.stage || '7.1.0B') +
-      metaItem('模組版本', data.version) +
-      metaItem('自動觸發器', Number(data.automaticTriggerCount || 0) + ' 個') +
-      metaItem('自動排程', data.automaticTriggerEnabled ? '已啟用' : '尚未啟用') +
-      '</div>';
-    if (latest) {
-      html += '<h3>最近一次正式派發</h3><div class="admin-result-grid">' +
-        metaItem('批次ID', latest.batchId) +
-        metaItem('考核月份', latest.evaluationMonth) +
-        metaItem('完成時間', latest.completedAt) +
-        metaItem('成功', latest.createdCount) +
-        metaItem('跳過', latest.skippedCount) +
-        metaItem('失敗', latest.failedCount) +
-        '</div>';
-    } else {
-      html += '<p class="section-help">目前尚無正式派發批次紀錄。</p>';
-    }
-    elements.monthlyDispatchStatusResult.innerHTML = html;
-    elements.monthlyDispatchStatusResult.hidden = false;
-  }
-
-  async function previewMonthlyDispatch() {
-    if (!elements.monthlyDispatchPreviewButton || state.monthlyDispatchLoading) return;
-    clearMonthlyDispatchMessage();
-    state.monthlyDispatchPreview = null;
-    elements.monthlyDispatchPreview.hidden = true;
-    elements.monthlyDispatchRunResult.hidden = true;
-    elements.monthlyDispatchConfirm.checked = false;
-    elements.monthlyDispatchReason.value = '';
-    updateMonthlyDispatchRunState();
-    state.monthlyDispatchLoading = true;
-    setButtonLoading(elements.monthlyDispatchPreviewButton, true, '預覽中');
-    try {
-      var result = await window.V3WorkflowService.previewMonthlyDispatch(elements.monthlyDispatchMonth.value);
-      var data = result.data || {};
-      state.monthlyDispatchPreview = data;
-      renderMonthlyDispatchPreview(data);
-      elements.monthlyDispatchPreview.hidden = false;
-      if (data.canRun) {
-        showMonthlyDispatchMessage('success', '預覽完成。請檢查建立、重複跳過與路線異常名單後再執行。');
-      } else {
-        showMonthlyDispatchMessage('info', '預覽完成，目前沒有可建立的正式月考核表。');
-      }
-    } catch (error) {
-      showMonthlyDispatchMessage('error', friendlyError(error));
-    } finally {
-      state.monthlyDispatchLoading = false;
-      setButtonLoading(elements.monthlyDispatchPreviewButton, false, '預覽當月正式派發');
-      updateMonthlyDispatchRunState();
-    }
-  }
-
-  function renderMonthlyDispatchPreview(data) {
-    var summary = data.summary || {};
-    var items = Array.isArray(data.items) ? data.items : [];
-    var html = '<h4>當月正式派發預覽</h4><div class="admin-result-grid">' +
-      metaItem('考核月份', data.evaluationMonth) +
-      metaItem('正式候選', summary.candidateCount) +
-      metaItem('預計建立', summary.createCount) +
-      metaItem('重複跳過', summary.duplicateCount) +
-      metaItem('路線異常', summary.routeErrorCount) +
-      metaItem('提醒數', summary.warningCount) +
-      '</div><div class="route-list">';
-
-    html += items.map(function (item) {
-      var employee = item.employee || {};
-      var organization = item.organization || {};
-      var route = item.route || {};
-      var label = monthlyDispatchActionLabel(item.action);
-      var cssClass = item.action === 'CREATE' ? ' tag--success' : (item.action === 'DUPLICATE' ? ' tag--warning' : ' tag--danger');
-      var routeHtml = monthlyDispatchRouteHtml(item);
-      var notes = [];
-      if (item.reason) notes.push(item.reason);
-      if (Array.isArray(item.warnings) && item.warnings.length) notes.push('提醒：' + item.warnings.join('；'));
-      return '<div class="route-row"><span><span class="tag' + cssClass + '">' + escapeHtml(label) + '</span> ' +
-        escapeHtml(joinStore(organization.storeCode, organization.storeName)) + '</span><strong>' +
-        escapeHtml(joinText(employee.employeeId, employee.employeeName)) + '｜' + escapeHtml(item.plannedEvaluationNo || item.existingEvaluationNo || '') +
-        '</strong><small><strong>完整上呈路線（7階段）</strong><br>' + routeHtml +
-        (notes.length ? '<br><br>' + escapeHtml(notes.join('；')) : '') + '</small></div>';
-    }).join('');
-
-    html += '</div>';
-    if (data.truncated) html += '<p class="section-help">預覽項目較多，畫面只顯示前段資料；執行時仍會依完整名單處理。</p>';
-    html += '<p class="section-help">預覽有效時間約 ' + Math.round(Number(data.expiresInSeconds || 0) / 60) + ' 分鐘。任何主檔或既有考核資料變動，都會要求重新預覽。</p>';
-    elements.monthlyDispatchPreviewContent.innerHTML = html;
-  }
-
-  function monthlyDispatchRouteHtml(item) {
-    var stages = monthlyDispatchRouteStages(item);
-    if (!stages.length) return escapeHtml('尚未取得完整上呈路線');
-    return stages.map(function (stage, index) {
-      var person = stage.person || stage || {};
-      var order = Number(stage.order || index + 1);
-      var label = String(stage.label || '未命名階段');
-      var personText = personLabelForMonthlyDispatch(person) || '尚未判定';
-      return escapeHtml(order + '. ' + label + '：' + personText);
-    }).join('<br>');
-  }
-
-  function monthlyDispatchRouteStages(item) {
-    var data = item || {};
-    if (Array.isArray(data.routeOrder) && data.routeOrder.length) return data.routeOrder;
-    var route = data.route || {};
-    return [
-      { order: 1, label: '門市店主管', person: route.manager },
-      { order: 2, label: '教育中心成員', person: route.educationMember },
-      { order: 3, label: '教育中心主管', person: route.educationSupervisor },
-      { order: 4, label: '區主管', person: route.areaSupervisor },
-      { order: 5, label: '受評人員確認', person: route.employee },
-      { order: 6, label: '營業處主管', person: route.departmentExecutive },
-      { order: 7, label: '總經理', person: route.generalManager }
-    ];
-  }
-
+  async 
+  
+  async 
+  
+  
+  
   function personLabelForMonthlyDispatch(person) {
     var item = person || {};
     var label = joinText(item.employeeId, item.employeeName);
@@ -2168,95 +1804,11 @@
     return '';
   }
 
-  function monthlyDispatchActionLabel(action) {
-    if (action === 'CREATE') return '預計建立';
-    if (action === 'DUPLICATE') return '重複跳過';
-    return '路線異常';
-  }
-
-  function updateMonthlyDispatchRunState() {
-    if (!elements.monthlyDispatchRunButton) return;
-    var preview = state.monthlyDispatchPreview || {};
-    var hasToken = Boolean(String(preview.previewToken || '').trim());
-    var canRun = Boolean(preview.canRun);
-    var hasReason = Boolean(String(elements.monthlyDispatchReason && elements.monthlyDispatchReason.value || '').trim());
-    var confirmed = Boolean(elements.monthlyDispatchConfirm && elements.monthlyDispatchConfirm.checked);
-    elements.monthlyDispatchRunButton.disabled = state.monthlyDispatchLoading || !(hasToken && canRun && hasReason && confirmed);
-  }
-
-  async function runMonthlyDispatch() {
-    var preview = state.monthlyDispatchPreview || {};
-    if (!preview.previewToken || !preview.canRun || state.monthlyDispatchLoading) return;
-    var reason = String(elements.monthlyDispatchReason.value || '').trim();
-    if (!reason) return showMonthlyDispatchMessage('error', '請填寫本次正式派發原因。');
-    if (!elements.monthlyDispatchConfirm.checked) return showMonthlyDispatchMessage('error', '請勾選二次確認。');
-
-    var summary = preview.summary || {};
-    var confirmText = '確定執行當月正式派發嗎？\n\n' +
-      '考核月份：' + preview.evaluationMonth + '\n' +
-      '預計建立：' + Number(summary.createCount || 0) + ' 張\n' +
-      '重複跳過：' + Number(summary.duplicateCount || 0) + ' 張\n' +
-      '路線異常跳過：' + Number(summary.routeErrorCount || 0) + ' 張\n\n' +
-      '系統不會覆蓋或刪除既有考核表。';
-    if (!window.confirm(confirmText)) return;
-
-    state.monthlyDispatchLoading = true;
-    setButtonLoading(elements.monthlyDispatchRunButton, true, '正式派發中，請勿重複點擊');
-    showGlobalNotice('processing', '正在執行當月正式派發', '系統正在逐筆建立可通過路線驗證的R0考核表；單筆失敗不會中止其他人員。', false);
-    try {
-      var result = await window.V3WorkflowService.runMonthlyDispatch({
-        evaluationMonth: preview.evaluationMonth,
-        previewToken: preview.previewToken,
-        reason: reason,
-        secondConfirmed: true
-      }, window.V3ApiClient.createRequestId());
-      var data = result.data || {};
-      closeGlobalNotice();
-      renderMonthlyDispatchRunResult(data);
-      showMonthlyDispatchMessage(data.failedCount ? 'info' : 'success',
-        '正式派發完成：成功 ' + Number(data.createdCount || 0) + '、跳過 ' + Number(data.skippedCount || 0) + '、失敗 ' + Number(data.failedCount || 0) + '。');
-      state.monthlyDispatchPreview = null;
-      elements.monthlyDispatchPreview.hidden = true;
-      elements.monthlyDispatchConfirm.checked = false;
-      elements.monthlyDispatchReason.value = '';
-      state.monthlyDispatchLoading = false;
-      await Promise.allSettled([loadMonthlyDispatchStatus({ quiet: true }), refreshAllAccessibleLists()]);
-    } catch (error) {
-      closeGlobalNotice();
-      showGlobalNotice('error', '正式派發未完成', friendlyError(error));
-      showMonthlyDispatchMessage('error', friendlyError(error));
-    } finally {
-      state.monthlyDispatchLoading = false;
-      setButtonLoading(elements.monthlyDispatchRunButton, false, '執行當月正式派發');
-      updateMonthlyDispatchRunState();
-    }
-  }
-
-  function renderMonthlyDispatchRunResult(data) {
-    if (!elements.monthlyDispatchRunResult) return;
-    var html = '<h3>正式派發執行結果</h3><div class="admin-result-grid">' +
-      metaItem('批次ID', data.batchId) +
-      metaItem('考核月份', data.evaluationMonth) +
-      metaItem('完成時間', data.completedAt) +
-      metaItem('正式候選', data.candidateCount) +
-      metaItem('成功建立', data.createdCount) +
-      metaItem('跳過', data.skippedCount) +
-      metaItem('失敗', data.failedCount) +
-      '</div>';
-    var failures = Array.isArray(data.failedItems) ? data.failedItems : [];
-    if (failures.length) {
-      html += '<h3>需要處理的失敗項目</h3><ul class="preview-alert-list preview-alert-list--error">' + failures.map(function(item) {
-        return '<li>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '｜' + escapeHtml(item.reason || '建立失敗') + '</li>';
-      }).join('') + '</ul>';
-    }
-    html += '<p class="section-help">正式派發結果已保存；已安裝的主排程與安全補跑仍會持續套用同月份R0防重複檢查。</p>';
-    elements.monthlyDispatchRunResult.innerHTML = html;
-    elements.monthlyDispatchRunResult.hidden = false;
-  }
-
-  function showMonthlyDispatchMessage(type, text) { showMessage(elements.monthlyDispatchMessage, type, text); }
-  function clearMonthlyDispatchMessage() { clearMessage(elements.monthlyDispatchMessage); }
-
+  
+  
+  async 
+  
+    
   async function loadDispatchManagementCenter(options) {
     if (!elements.dispatchManagementCard || state.dispatchManagementLoading) return;
     var settings = options || {};
@@ -2351,12 +1903,9 @@
       if (row.evaluationNo) {
         actions += '<button type="button" class="secondary-button secondary-button--small" data-open-evaluation="' + escapeHtml(row.evaluationNo) + '">查看月考核表</button>';
       }
-      if (isCurrentMonth && row.canRecheck) {
-        actions += '<button type="button" class="secondary-button secondary-button--small" data-recheck-dispatch="' + escapeHtml(row.employeeId) + '">重新檢查路線</button>';
-      }
       if (isCurrentMonth && row.canBatchSelect) {
         batchControl = '<label class="confirm-row"><input type="checkbox" data-batch-dispatch="' + escapeHtml(row.employeeId) + '"' +
-          (state.batchDispatchSelectedEmployees[row.employeeId] ? ' checked' : '') + '><span>加入批次補派預覽</span></label>';
+          (state.batchDispatchSelectedEmployees[row.employeeId] ? ' checked' : '') + '><span>選取人工派發／補派</span></label>';
       }
       return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' +
         escapeHtml(joinStore(row.storeCode, row.storeName)) + '</span><strong>' +
@@ -2366,9 +1915,6 @@
         '</small>' + batchControl + (actions ? '<div class="evaluation-card__actions">' + actions + '</div>' : '') + '</div>';
     }).join('') + '</div>';
     bindEvaluationCards(elements.dispatchManagementPersons);
-    Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-recheck-dispatch]')).forEach(function (button) {
-      button.addEventListener('click', function () { previewSingleDispatchRepair(button.getAttribute('data-recheck-dispatch')); });
-    });
     Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
       checkbox.addEventListener('change', function () {
         var employeeId = checkbox.getAttribute('data-batch-dispatch');
@@ -2417,7 +1963,7 @@
 
   function updateBatchDispatchSelectionState(isCurrentMonth) {
     var selected = getSelectedBatchDispatchEmployeeIds();
-    if (elements.batchDispatchSelectedCount) elements.batchDispatchSelectedCount.textContent = '已選' + selected.length + '人';
+    if (elements.batchDispatchSelectedCount) elements.batchDispatchSelectedCount.textContent = '已選' + selected.length + '人' + (selected.length === 1 ? '（單筆）' : selected.length > 1 ? '（多人）' : '');
     if (elements.batchDispatchPreviewButton) elements.batchDispatchPreviewButton.disabled = !isCurrentMonth || !selected.length || state.dispatchManagementLoading;
     if (elements.batchDispatchSelectVisibleButton) elements.batchDispatchSelectVisibleButton.disabled = !isCurrentMonth || state.dispatchManagementLoading;
     if (elements.batchDispatchClearButton) elements.batchDispatchClearButton.disabled = !selected.length || state.dispatchManagementLoading;
@@ -2448,21 +1994,21 @@
     if (!employeeIds.length || state.dispatchManagementLoading) return;
     state.dispatchManagementLoading = true;
     setButtonLoading(elements.batchDispatchPreviewButton, true, '預覽中');
-    showDispatchManagementMessage('info', '正在逐筆重新檢查批次人員的派發資格與七階段路線…');
+    showDispatchManagementMessage('info', '正在逐筆重新檢查選取人員的派發資格與七階段路線…');
     try {
-      var result = await window.V3WorkflowService.previewBatchDispatchRepair(
+      var result = await window.V3WorkflowService.previewManualDispatch(
         employeeIds,
         String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim()
       );
       state.batchDispatchRepairPreview = result.data || {};
       renderBatchDispatchRepairPreview(state.batchDispatchRepairPreview, false);
       showDispatchManagementMessage(state.batchDispatchRepairPreview.canRun ? 'success' : 'info',
-        state.batchDispatchRepairPreview.canRun ? '批次預覽完成，請確認可建立、跳過與異常名單。' : '選取人員目前沒有可建立的R0。');
+        state.batchDispatchRepairPreview.canRun ? '人工派發預覽完成，請確認可建立、跳過與異常名單。' : '選取人員目前沒有可建立的R0。');
     } catch (error) {
       showDispatchManagementMessage('error', friendlyError(error));
     } finally {
       state.dispatchManagementLoading = false;
-      setButtonLoading(elements.batchDispatchPreviewButton, false, '預覽批次補派');
+      setButtonLoading(elements.batchDispatchPreviewButton, false, '預覽人工派發');
       updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
     }
   }
@@ -2470,7 +2016,7 @@
   function renderBatchDispatchRepairPreview(data, refreshedBecauseStale) {
     var summary = data.summary || {};
     var items = data.items || [];
-    elements.batchDispatchRepairContent.innerHTML = '<h4>批次安全補派預覽</h4>' +
+    elements.batchDispatchRepairContent.innerHTML = '<h4>人工派發／補派預覽</h4>' +
       (refreshedBecauseStale ? '<div class="form-message form-message--info">資料已變動，系統已自動更新預覽；請重新確認後執行。</div>' : '') +
       '<div class="admin-result-grid">' +
         metaItem('考核月份', data.evaluationMonth) +
@@ -2515,7 +2061,7 @@
       preview.canRun && preview.previewToken &&
       String(elements.batchDispatchRepairReason.value || '').trim() &&
       elements.batchDispatchRepairConfirm.checked &&
-      String(elements.batchDispatchRepairConfirmText.value || '').trim() === String(preview.confirmationText || '批次補派')
+      String(elements.batchDispatchRepairConfirmText.value || '').trim() === String(preview.confirmationText || '確認派發')
     );
   }
 
@@ -2524,16 +2070,16 @@
     if (!preview.canRun || !preview.previewToken || state.dispatchManagementLoading) return;
     var reason = String(elements.batchDispatchRepairReason.value || '').trim();
     var confirmationText = String(elements.batchDispatchRepairConfirmText.value || '').trim();
-    if (!reason) return showDispatchManagementMessage('error', '請填寫批次補派原因。');
+    if (!reason) return showDispatchManagementMessage('error', '請填寫人工派發／補派原因。');
     if (!elements.batchDispatchRepairConfirm.checked) return showDispatchManagementMessage('error', '請完成二次確認。');
-    if (confirmationText !== String(preview.confirmationText || '批次補派')) return showDispatchManagementMessage('error', '請正確輸入批次補派確認文字。');
-    if (!window.confirm('確定執行本次批次安全補派嗎？\n\n預計建立：' + Number(preview.summary && preview.summary.createCount || 0) + '人\n系統將逐筆驗證，單筆失敗不影響其他人。')) return;
+    if (confirmationText !== String(preview.confirmationText || '確認派發')) return showDispatchManagementMessage('error', '請正確輸入「確認派發」。');
+    if (!window.confirm('確定執行本次人工派發／補派嗎？\n\n預計建立：' + Number(preview.summary && preview.summary.createCount || 0) + '人\n系統將逐筆驗證，單筆失敗不影響其他人。')) return;
 
     state.dispatchManagementLoading = true;
-    setButtonLoading(elements.batchDispatchRepairRunButton, true, '批次處理中');
-    showGlobalNotice('processing', '正在執行批次安全補派', '系統正逐筆確認資格、七階段路線與同月份R0。', false);
+    setButtonLoading(elements.batchDispatchRepairRunButton, true, '派發處理中');
+    showGlobalNotice('processing', '正在執行人工派發／補派', '系統正逐筆確認資格、七階段路線與同月份R0。', false);
     try {
-      var result = await window.V3WorkflowService.runBatchDispatchRepair({
+      var result = await window.V3WorkflowService.runManualDispatch({
         evaluationMonth: preview.evaluationMonth,
         previewToken: preview.previewToken,
         reason: reason,
@@ -2544,28 +2090,28 @@
       renderBatchDispatchRepairResult(result.data || {});
       state.batchDispatchSelectedEmployees = {};
       state.batchDispatchRepairPreview = null;
-      showDispatchManagementMessage('success', '批次補派完成：成功' + Number(result.data && result.data.createdCount || 0) + '、跳過' + Number(result.data && result.data.skippedCount || 0) + '、失敗' + Number(result.data && result.data.failedCount || 0) + '。');
+      showDispatchManagementMessage('success', '人工派發／補派完成：成功' + Number(result.data && result.data.createdCount || 0) + '、跳過' + Number(result.data && result.data.skippedCount || 0) + '、失敗' + Number(result.data && result.data.failedCount || 0) + '。');
       await Promise.allSettled([loadDispatchManagementCenter({ quiet: true }), refreshAllAccessibleLists()]);
     } catch (error) {
       closeGlobalNotice();
       if (error && error.code === 'BATCH_DISPATCH_PREVIEW_STALE' && error.details && error.details.latestPreview) {
         state.batchDispatchRepairPreview = error.details.latestPreview;
         renderBatchDispatchRepairPreview(state.batchDispatchRepairPreview, true);
-        showDispatchManagementMessage('info', '資料已變動，系統已自動更新批次預覽；請重新確認。');
+        showDispatchManagementMessage('info', '資料已變動，系統已自動更新派發預覽；請重新確認。');
       } else {
-        showGlobalNotice('error', '批次補派失敗', friendlyError(error));
+        showGlobalNotice('error', '人工派發／補派失敗', friendlyError(error));
         showDispatchManagementMessage('error', friendlyError(error));
       }
     } finally {
       state.dispatchManagementLoading = false;
-      setButtonLoading(elements.batchDispatchRepairRunButton, false, '執行批次安全補派');
+      setButtonLoading(elements.batchDispatchRepairRunButton, false, '執行人工派發／補派');
       updateBatchDispatchRunState();
       updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
     }
   }
 
   function renderBatchDispatchRepairResult(data) {
-    var html = '<h4>批次補派結果</h4><div class="admin-result-grid">' +
+    var html = '<h4>人工派發／補派結果</h4><div class="admin-result-grid">' +
       metaItem('批次ID', data.batchId || '') +
       metaItem('本次選取', data.selectedCount || 0) +
       metaItem('成功建立', data.createdCount || 0) +
@@ -2612,7 +2158,7 @@
         metaItem('尚未派發', summary.unprocessedCount || 0) +
         metaItem('路線異常', summary.routeErrorCount || 0) +
         metaItem('系統失敗', summary.failedCount || 0) +
-        metaItem('人工補派成功', summary.manualRepairCreatedCount || 0) +
+        metaItem('人工派發／補派成功', summary.manualRepairCreatedCount || 0) +
         metaItem('完成率', Number(summary.completionRate || 0).toFixed(1) + '%') +
         metaItem('派發嘗試', summary.attemptCount || 0) +
       '</div><p class="section-help">' + escapeHtml(data.scopeNote || '') +
@@ -2644,101 +2190,11 @@
     elements.dispatchMonthAnalysisResult.hidden = false;
   }
 
-  async function previewSingleDispatchRepair(employeeId) {
-    if (state.dispatchManagementLoading) return;
-    state.dispatchManagementLoading = true;
-    showDispatchManagementMessage('info', '正在重新檢查此人員的七階段路線…');
-    try {
-      var result = await window.V3WorkflowService.previewSingleDispatchRepair(
-        employeeId,
-        String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim()
-      );
-      state.singleDispatchRepairPreview = result.data || {};
-      renderSingleDispatchRepairPreview(state.singleDispatchRepairPreview);
-      showDispatchManagementMessage(state.singleDispatchRepairPreview.canRun ? 'success' : 'info',
-        state.singleDispatchRepairPreview.canRun ? '路線檢查通過，可進行單筆安全補派。' : '目前仍不可補派，請先依原因修正。');
-    } catch (error) {
-      showDispatchManagementMessage('error', friendlyError(error));
-    } finally {
-      state.dispatchManagementLoading = false;
-    }
-  }
-
-  function renderSingleDispatchRepairPreview(data) {
-    var item = data.item || {};
-    var employee = item.employee || {};
-    var organization = item.organization || {};
-    var notes = [];
-    if (item.reason) notes.push(item.reason);
-    if (Array.isArray(item.warnings) && item.warnings.length) notes.push('提醒：' + item.warnings.join('；'));
-    elements.singleDispatchRepairContent.innerHTML = '<h4>單筆安全補派預覽</h4><div class="admin-result-grid">' +
-      metaItem('考核月份', data.evaluationMonth) +
-      metaItem('受評人員', joinText(employee.employeeId, employee.employeeName)) +
-      metaItem('店別', joinStore(organization.storeCode, organization.storeName)) +
-      metaItem('預計考核單號', item.plannedEvaluationNo || item.existingEvaluationNo) +
-      metaItem('路線結果', data.canRun ? '通過' : '不可補派') +
-      '</div><div class="detail-section"><h3>完整上呈路線（7階段）</h3><p>' + monthlyDispatchRouteHtml(item) + '</p></div>' +
-      (notes.length ? '<ul class="preview-alert-list ' + (data.canRun ? '' : 'preview-alert-list--error') + '"><li>' + escapeHtml(notes.join('；')) + '</li></ul>' : '');
-    elements.singleDispatchRepairPanel.hidden = false;
-    elements.singleDispatchRepairReason.value = '';
-    elements.singleDispatchRepairConfirm.checked = false;
-    updateSingleDispatchRepairRunState();
-    elements.singleDispatchRepairPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function closeSingleDispatchRepairPanel() {
-    state.singleDispatchRepairPreview = null;
-    if (elements.singleDispatchRepairPanel) elements.singleDispatchRepairPanel.hidden = true;
-    if (elements.singleDispatchRepairReason) elements.singleDispatchRepairReason.value = '';
-    if (elements.singleDispatchRepairConfirm) elements.singleDispatchRepairConfirm.checked = false;
-  }
-
-  function updateSingleDispatchRepairRunState() {
-    if (!elements.singleDispatchRepairRunButton) return;
-    var preview = state.singleDispatchRepairPreview || {};
-    elements.singleDispatchRepairRunButton.disabled = state.dispatchManagementLoading || !(
-      preview.canRun && preview.previewToken &&
-      String(elements.singleDispatchRepairReason.value || '').trim() &&
-      elements.singleDispatchRepairConfirm.checked
-    );
-  }
-
-  async function runSingleDispatchRepair() {
-    var preview = state.singleDispatchRepairPreview || {};
-    var item = preview.item || {};
-    var employee = item.employee || {};
-    if (!preview.canRun || !preview.previewToken || state.dispatchManagementLoading) return;
-    var reason = String(elements.singleDispatchRepairReason.value || '').trim();
-    if (!reason) return showDispatchManagementMessage('error', '請填寫單筆補派原因。');
-    if (!elements.singleDispatchRepairConfirm.checked) return showDispatchManagementMessage('error', '請完成二次確認。');
-    if (!window.confirm('確定補派 ' + joinText(employee.employeeId, employee.employeeName) + ' 的當月R0月考核表嗎？\n\n系統仍會再次檢查重複R0與路線資料。')) return;
-
-    state.dispatchManagementLoading = true;
-    setButtonLoading(elements.singleDispatchRepairRunButton, true, '補派處理中');
-    showGlobalNotice('processing', '正在執行單筆安全補派', '系統正在再次確認資格、七階段路線及同月份R0。', false);
-    try {
-      var result = await window.V3WorkflowService.runSingleDispatchRepair({
-        evaluationMonth: preview.evaluationMonth,
-        employeeId: employee.employeeId,
-        previewToken: preview.previewToken,
-        reason: reason,
-        secondConfirmed: true
-      }, window.V3ApiClient.createRequestId());
-      closeGlobalNotice();
-      closeSingleDispatchRepairPanel();
-      showDispatchManagementMessage('success', '單筆補派完成：' + String(result.data && result.data.evaluationNo || ''));
-      await Promise.allSettled([loadDispatchManagementCenter({ quiet: true }), refreshAllAccessibleLists()]);
-    } catch (error) {
-      closeGlobalNotice();
-      showGlobalNotice('error', '單筆補派失敗', friendlyError(error));
-      showDispatchManagementMessage('error', friendlyError(error));
-    } finally {
-      state.dispatchManagementLoading = false;
-      setButtonLoading(elements.singleDispatchRepairRunButton, false, '執行單筆安全補派');
-      updateSingleDispatchRepairRunState();
-    }
-  }
-
+  async 
+  
+  
+  
+  async 
   function showDispatchManagementMessage(type, text) { showMessage(elements.dispatchManagementMessage, type, text); }
 
   function isFutureRocMonth(value) {
@@ -2767,9 +2223,7 @@
     return prefix + '-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   }
 
-  function showTestDispatchMessage(type, text) { showMessage(elements.testDispatchMessage, type, text); }
-  function clearTestDispatchMessage() { clearMessage(elements.testDispatchMessage); }
-
+    
   async function handleLogout() {
     elements.logoutButton.disabled = true;
     try {
@@ -2785,7 +2239,6 @@
       state.batchDispatchSelectedEmployees = {};
       state.dispatchManagementSelectionMonth = '';
       closeBatchDispatchRepairPanel();
-      closeSingleDispatchRepairPanel();
       if (elements.dispatchMonthAnalysisResult) elements.dispatchMonthAnalysisResult.hidden = true;
       closePdfViewerModal();
       closeEvaluation({ saveDraft: false });
@@ -2945,8 +2398,6 @@
       switchTab('pending');
       return;
     }
-    if (tab === 'system' && !state.testDispatchCandidates.length) loadTestDispatchCandidates();
-    if (tab === 'system') loadMonthlyDispatchStatus({ quiet: true });
     if (tab === 'system' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
   }
 
@@ -3063,7 +2514,7 @@
       DISPATCH_PREVIEW_OWNER_MISMATCH: '此預覽不是由目前登入者建立，請重新預覽。',
       DISPATCH_PREVIEW_MONTH_MISMATCH: '預覽月份與執行月份不一致，請重新預覽。',
       DISPATCH_NO_ELIGIBLE: '目前沒有可建立的正式月考核表。',
-      DISPATCH_MONTH_NOT_CURRENT: '正式批次目前只允許處理當月。',
+      DISPATCH_MONTH_NOT_CURRENT: '人工派發目前只允許處理當月。',
       DISPATCH_ALREADY_RUNNING: '目前已有正式派發作業執行中，請稍後再試。',
       DISPATCH_REPAIR_PREVIEW_REQUIRED: '請先重新檢查此人員的派發路線。',
       DISPATCH_REPAIR_PREVIEW_EXPIRED: '單筆補派預覽已逾時，請重新檢查。',
