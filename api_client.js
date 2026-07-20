@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.0.5.1-pdf-viewer-stability */
+/* 月考核系統 V3｜版本：7.1.0A-safe-dispatch-core */
 (function () {
   'use strict';
 
@@ -86,7 +86,10 @@
       authenticatedPdfView: 60000,
       preparePdfView: 90000,
       publicPdfView: 60000,
-      verifyPdfTemplate: 60000
+      verifyPdfTemplate: 60000,
+      previewMonthlyDispatch: 90000,
+      runMonthlyDispatch: 180000,
+      monthlyDispatchStatus: 60000
     };
     var timeoutMs = Number(actionTimeouts[String(action || '')] || defaultTimeout);
     var timeoutId = window.setTimeout(function () {
