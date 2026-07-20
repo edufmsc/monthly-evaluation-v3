@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.1.0C-2-batch-repair-analysis */
+/* 月考核系統 V3｜版本：7.1.0C-2.1-unified-dispatch */
 (function () {
   'use strict';
 
@@ -44,47 +44,17 @@
     },
     deleteDraft: function (evaluationNo) { return call('deleteDraft', { evaluationNo: evaluationNo }); },
     systemHealth: function () { return call('systemHealth', {}); },
-    listTestDispatchCandidates: function (keyword) {
-      return call('listTestDispatchCandidates', { keyword: String(keyword || '') });
-    },
-    previewTestEvaluation: function (employeeId, evaluationMonth) {
-      return call('previewTestEvaluation', {
-        employeeId: String(employeeId || ''),
-        evaluationMonth: String(evaluationMonth || '')
-      });
-    },
-    createTestEvaluation: function (payload, requestId) {
-      return call('createTestEvaluation', payload || {}, requestId);
-    },
-    previewMonthlyDispatch: function (evaluationMonth) {
-      return call('previewMonthlyDispatch', { evaluationMonth: String(evaluationMonth || '') });
-    },
-    runMonthlyDispatch: function (payload, requestId) {
-      return call('runMonthlyDispatch', payload || {}, requestId);
-    },
-    monthlyDispatchStatus: function () {
-      return call('monthlyDispatchStatus', {});
-    },
     dispatchManagementCenter: function (filters) {
       return call('dispatchManagementCenter', filters || {});
     },
-    previewSingleDispatchRepair: function (employeeId, evaluationMonth) {
-      return call('previewSingleDispatchRepair', {
-        employeeId: String(employeeId || ''),
-        evaluationMonth: String(evaluationMonth || '')
-      });
-    },
-    runSingleDispatchRepair: function (payload, requestId) {
-      return call('runSingleDispatchRepair', payload || {}, requestId);
-    },
-    previewBatchDispatchRepair: function (employeeIds, evaluationMonth) {
-      return call('previewBatchDispatchRepair', {
+    previewManualDispatch: function (employeeIds, evaluationMonth) {
+      return call('previewManualDispatch', {
         employeeIds: Array.isArray(employeeIds) ? employeeIds : [],
         evaluationMonth: String(evaluationMonth || '')
       });
     },
-    runBatchDispatchRepair: function (payload, requestId) {
-      return call('runBatchDispatchRepair', payload || {}, requestId);
+    runManualDispatch: function (payload, requestId) {
+      return call('runManualDispatch', payload || {}, requestId);
     },
     dispatchMonthAnalysis: function (evaluationMonth) {
       return call('dispatchMonthAnalysis', { evaluationMonth: String(evaluationMonth || '') });
