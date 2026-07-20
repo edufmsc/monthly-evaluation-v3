@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.1.0A-safe-dispatch-core */
+/* 月考核系統 V3｜版本：7.1.0C-1-dispatch-management */
 (function () {
   'use strict';
 
@@ -89,7 +89,12 @@
       verifyPdfTemplate: 60000,
       previewMonthlyDispatch: 90000,
       runMonthlyDispatch: 180000,
-      monthlyDispatchStatus: 60000
+      monthlyDispatchStatus: 60000,
+      dispatchManagementCenter: 90000,
+      previewSingleDispatchRepair: 60000,
+      runSingleDispatchRepair: 120000,
+      forceClosePreview: 60000,
+      forceCloseEvaluation: 90000
     };
     var timeoutMs = Number(actionTimeouts[String(action || '')] || defaultTimeout);
     var timeoutId = window.setTimeout(function () {
