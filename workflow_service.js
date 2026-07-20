@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.0.5-drive-pdf-optimization */
+/* 月考核系統 V3｜版本：7.1.0A-safe-dispatch-core */
 (function () {
   'use strict';
 
@@ -55,6 +55,15 @@
     },
     createTestEvaluation: function (payload, requestId) {
       return call('createTestEvaluation', payload || {}, requestId);
+    },
+    previewMonthlyDispatch: function (evaluationMonth) {
+      return call('previewMonthlyDispatch', { evaluationMonth: String(evaluationMonth || '') });
+    },
+    runMonthlyDispatch: function (payload, requestId) {
+      return call('runMonthlyDispatch', payload || {}, requestId);
+    },
+    monthlyDispatchStatus: function () {
+      return call('monthlyDispatchStatus', {});
     },
     getMySignaturePreview: function (source, evaluationNo) {
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
