@@ -1,6 +1,8 @@
 (function () {
   'use strict';
 
+  // Production 7.0.2: the canvas height is controlled by CSS (240px, +26%).
+
   function SignaturePadController(options) {
     this.canvas = options.canvas;
     this.preview = options.preview;
