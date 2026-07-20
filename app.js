@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.1.0C-2.1-unified-dispatch';
+  var APP_BUILD = '7.2.0A-continuous-signing';
   var elements = {};
   var state = {
     session: null,
@@ -40,7 +40,15 @@
     pdfActiveMode: '',
     pdfSlowHintTimers: [],
     pdfPreloadScheduled: false,
-    pdfPreloadStarted: false
+    pdfPreloadStarted: false,
+    continuousReview: {
+      active: false,
+      queue: [],
+      currentIndex: -1,
+      completedCount: 0,
+      skippedCount: 0,
+      startedAt: 0
+    }
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -55,6 +63,7 @@
     }
     retireLegacyDispatchUi();
     ensureDispatchManagementPanel();
+    ensureContinuousReviewToolbar();
     cacheElements();
     ensurePdfViewerModal();
     bindEvents();
@@ -93,7 +102,7 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading">' +
-      '<div><p class="step-label">正式營運工具｜7.1.0C-2.1</p><h3>月考核派發管理中心</h3>' +
+      '<div><p class="step-label">正式營運工具｜7.2.0A</p><h3>月考核派發管理中心</h3>' +
       '<p>教育中心成員與教育中心主管共用同一個人工派發入口。勾選1人即單筆派發，勾選多人即多人派發；已存在的R0不會重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
       '<form id="dispatchManagementFilterForm" class="filter-grid">' +
@@ -139,6 +148,26 @@
     systemPanel.appendChild(article);
   }
 
+  function ensureContinuousReviewToolbar() {
+    if (document.getElementById('continuousReviewBar')) return;
+    var summary = document.getElementById('evaluationSummary');
+    if (!summary || !summary.parentNode) return;
+    var section = document.createElement('section');
+    section.id = 'continuousReviewBar';
+    section.className = 'detail-section';
+    section.hidden = true;
+    section.innerHTML = '<div class="test-dispatch-heading"><div>' +
+      '<p class="step-label">連續簽核</p><h3 id="continuousReviewProgress">準備中</h3>' +
+      '<p id="continuousReviewSummary" class="section-help"></p></div>' +
+      '<button id="continuousReviewEndButton" class="secondary-button secondary-button--small" type="button">結束連續簽核</button></div>' +
+      '<div class="test-dispatch-actions">' +
+        '<button id="continuousReviewPreviousButton" class="secondary-button secondary-button--small" type="button">上一張</button>' +
+        '<button id="continuousReviewSkipButton" class="secondary-button secondary-button--small" type="button">略過此張</button>' +
+        '<button id="continuousReviewNextButton" class="secondary-button secondary-button--small" type="button">下一張</button>' +
+      '</div>';
+    summary.parentNode.insertBefore(section, summary);
+  }
+
   function cacheElements() {
     var ids = [
       'connectionBadge', 'configErrorCard', 'loginView', 'dashboardView', 'loginForm',
@@ -166,6 +195,8 @@
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
       'draftStatus', 'saveDraftButton', 'submitEvaluationButton', 'evaluationDialogTitle',
+      'continuousReviewBar', 'continuousReviewProgress', 'continuousReviewSummary',
+      'continuousReviewPreviousButton', 'continuousReviewSkipButton', 'continuousReviewNextButton', 'continuousReviewEndButton',
       'globalNoticeOverlay', 'globalNoticeIcon', 'globalNoticeTitle', 'globalNoticeText', 'globalNoticeClose'
     ];
     ids.forEach(function (id) { elements[id] = document.getElementById(id); });
@@ -205,12 +236,14 @@
     elements.tabButtons.forEach(function (button) {
       button.addEventListener('click', function () { switchTab(button.getAttribute('data-tab')); });
     });
-    elements.closeEvaluationButton.addEventListener('click', function () {
-      if (!state.isSubmitting) closeEvaluation({ saveDraft: true });
-    });
+    elements.closeEvaluationButton.addEventListener('click', requestCloseEvaluationUi);
     elements.evaluationOverlay.addEventListener('click', function (event) {
-      if (event.target === elements.evaluationOverlay && !state.isSubmitting) closeEvaluation({ saveDraft: true });
+      if (event.target === elements.evaluationOverlay) requestCloseEvaluationUi();
     });
+    if (elements.continuousReviewPreviousButton) elements.continuousReviewPreviousButton.addEventListener('click', function () { navigateContinuousReview(-1); });
+    if (elements.continuousReviewNextButton) elements.continuousReviewNextButton.addEventListener('click', function () { navigateContinuousReview(1); });
+    if (elements.continuousReviewSkipButton) elements.continuousReviewSkipButton.addEventListener('click', skipCurrentContinuousReviewItem);
+    if (elements.continuousReviewEndButton) elements.continuousReviewEndButton.addEventListener('click', function () { endContinuousReviewFromUi(true); });
     elements.claimButton.addEventListener('click', handleClaim);
     elements.releaseButton.addEventListener('click', handleRelease);
     elements.actionSelector.addEventListener('change', function () { renderSelectedAction(this.value); });
@@ -368,8 +401,19 @@
       elements.pendingList.innerHTML = emptyStateHtml('目前無待處理考核表', '新的月考核表進入您的階段後，會顯示在這裡。');
       return;
     }
-    elements.pendingList.innerHTML = state.pending.map(function (item) { return evaluationCardHtml(item, 'pending'); }).join('');
+    var launcher = continuousReviewLauncherHtml();
+    elements.pendingList.innerHTML = launcher + state.pending.map(function (item) { return evaluationCardHtml(item, 'pending'); }).join('');
     bindEvaluationCards(elements.pendingList);
+  }
+
+  function continuousReviewLauncherHtml() {
+    if (!isContinuousReviewEligibleUi() || state.pending.length < 2) return '';
+    var active = Boolean(state.continuousReview && state.continuousReview.active);
+    return '<article class="detail-section"><div class="test-dispatch-heading"><div>' +
+      '<p class="step-label">快速逐張處理</p><h3>連續簽核</h3>' +
+      '<p class="section-help">每張仍須個別確認、個別送出及建立獨立簽名快照，不會一次批次通過。</p></div>' +
+      '<button class="primary-button" type="button" data-start-continuous-review' + (active ? ' disabled' : '') + '>' +
+      (active ? '連續簽核進行中' : '開始連續簽核（' + escapeHtml(state.pending.length) + '張）') + '</button></div></article>';
   }
 
   function renderProgress() {
@@ -464,6 +508,9 @@
   }
 
   function bindEvaluationCards(container) {
+    Array.prototype.slice.call(container.querySelectorAll('[data-start-continuous-review]')).forEach(function (button) {
+      button.addEventListener('click', startContinuousReview);
+    });
     Array.prototype.slice.call(container.querySelectorAll('[data-open-evaluation]')).forEach(function (button) {
       button.addEventListener('click', function () { openEvaluation(button.getAttribute('data-open-evaluation')); });
     });
@@ -1126,10 +1173,211 @@
     };
   }
 
-  async function openEvaluation(evaluationNo) {
+  function isContinuousReviewEligibleUi() {
+    var role = String(state.session && state.session.user && state.session.user.role || '').trim();
+    return ['區主管', '營業處副總', '營業處協理', '總經理'].indexOf(role) !== -1;
+  }
+
+  function resetContinuousReviewState(renderList) {
+    state.continuousReview = {
+      active: false,
+      queue: [],
+      currentIndex: -1,
+      completedCount: 0,
+      skippedCount: 0,
+      startedAt: 0
+    };
+    if (elements.continuousReviewBar) elements.continuousReviewBar.hidden = true;
+    if (renderList !== false && elements.pendingList) renderPending();
+  }
+
+  async function startContinuousReview() {
+    if (!isContinuousReviewEligibleUi() || state.isSubmitting) return;
+    var candidates = state.pending.filter(function(item) {
+      return item && item.evaluationNo && !isPendingMutationLocked(item.evaluationNo);
+    });
+    if (candidates.length < 2) {
+      showGlobalNotice('info', '不需要啟動連續簽核', '目前可處理的待辦少於2張，請直接開啟單張處理。');
+      return;
+    }
+    state.continuousReview = {
+      active: true,
+      queue: candidates.map(function(item) {
+        return {
+          evaluationNo: String(item.evaluationNo || ''),
+          employeeName: String(item.employeeName || ''),
+          status: 'pending'
+        };
+      }),
+      currentIndex: -1,
+      completedCount: 0,
+      skippedCount: 0,
+      startedAt: Date.now()
+    };
+    renderPending();
+    await openNextContinuousReviewItem(0);
+  }
+
+  function requestCloseEvaluationUi() {
+    if (state.isSubmitting) return;
+    if (state.continuousReview && state.continuousReview.active) {
+      if (!window.confirm('目前正在連續簽核。確定要結束連續簽核並回到待辦清單嗎？\n\n尚未送出的表單仍會保留在待辦中。')) return;
+      resetContinuousReviewState(false);
+    }
+    closeEvaluation({ saveDraft: true });
+    renderPending();
+  }
+
+  function endContinuousReviewFromUi(askConfirm) {
+    if (!state.continuousReview || !state.continuousReview.active || state.isSubmitting) return;
+    if (askConfirm && !window.confirm('確定結束連續簽核嗎？\n\n尚未完成或略過的表單仍會保留在待辦中。')) return;
+    var completed = Number(state.continuousReview.completedCount || 0);
+    var skipped = Number(state.continuousReview.skippedCount || 0);
+    resetContinuousReviewState(false);
+    closeEvaluation({ saveDraft: true });
+    renderPending();
+    setDashboardMessage('info', '已結束連續簽核。完成' + completed + '張，略過' + skipped + '張。');
+  }
+
+  function getContinuousPendingIndices() {
+    var review = state.continuousReview || {};
+    var queue = Array.isArray(review.queue) ? review.queue : [];
+    var result = [];
+    queue.forEach(function(item, index) {
+      if (item && item.status === 'pending') result.push(index);
+    });
+    return result;
+  }
+
+  function findContinuousReviewIndex(direction, startIndex) {
+    var review = state.continuousReview || {};
+    var queue = Array.isArray(review.queue) ? review.queue : [];
+    if (!queue.length) return -1;
+    var step = direction < 0 ? -1 : 1;
+    var index = Number(startIndex);
+    if (!isFinite(index)) index = review.currentIndex;
+    for (var offset = 1; offset <= queue.length; offset += 1) {
+      var candidate = (index + step * offset + queue.length) % queue.length;
+      if (queue[candidate] && queue[candidate].status === 'pending') return candidate;
+    }
+    return -1;
+  }
+
+  async function navigateContinuousReview(direction) {
+    if (!state.continuousReview || !state.continuousReview.active || state.isSubmitting) return;
+    var nextIndex = findContinuousReviewIndex(direction, state.continuousReview.currentIndex);
+    if (nextIndex < 0 || nextIndex === state.continuousReview.currentIndex) {
+      showEvaluationMessage('info', '目前沒有其他尚待處理的連續簽核項目。');
+      return;
+    }
+    saveLocalDraft();
+    closeEvaluation({ saveDraft: false });
+    await openContinuousReviewAtIndex(nextIndex);
+  }
+
+  async function skipCurrentContinuousReviewItem() {
+    if (!state.continuousReview || !state.continuousReview.active || state.isSubmitting) return;
+    var review = state.continuousReview;
+    var current = review.queue[review.currentIndex];
+    if (current && current.status === 'pending') {
+      current.status = 'skipped';
+      review.skippedCount += 1;
+    }
+    closeEvaluation({ saveDraft: true });
+    var nextIndex = findContinuousReviewIndex(1, review.currentIndex);
+    if (nextIndex < 0) {
+      await finishContinuousReviewSession();
+      return;
+    }
+    await openContinuousReviewAtIndex(nextIndex);
+  }
+
+  async function openNextContinuousReviewItem(startIndex) {
+    if (!state.continuousReview || !state.continuousReview.active) return;
+    var review = state.continuousReview;
+    var queue = review.queue || [];
+    var initial = Number(startIndex);
+    if (!isFinite(initial)) initial = review.currentIndex;
+    var attempts = 0;
+    while (attempts < queue.length) {
+      var index;
+      if (review.currentIndex < 0 && attempts === 0 && initial >= 0 && queue[initial] && queue[initial].status === 'pending') {
+        index = initial;
+      } else {
+        index = findContinuousReviewIndex(1, attempts === 0 ? initial - 1 : review.currentIndex);
+      }
+      if (index < 0) break;
+      var opened = await openContinuousReviewAtIndex(index);
+      if (opened) return;
+      var unavailable = queue[index];
+      if (unavailable && unavailable.status === 'pending') {
+        unavailable.status = 'skipped';
+        review.skippedCount += 1;
+      }
+      attempts += 1;
+    }
+    await finishContinuousReviewSession();
+  }
+
+  async function openContinuousReviewAtIndex(index) {
+    var review = state.continuousReview || {};
+    var item = review.queue && review.queue[index];
+    if (!review.active || !item || item.status !== 'pending') return false;
+    review.currentIndex = index;
+    var opened = await openEvaluation(item.evaluationNo, { fromContinuous: true });
+    renderContinuousReviewBar();
+    return opened;
+  }
+
+  function renderContinuousReviewBar() {
+    if (!elements.continuousReviewBar) return;
+    var review = state.continuousReview || {};
+    if (!review.active) {
+      elements.continuousReviewBar.hidden = true;
+      return;
+    }
+    var queue = Array.isArray(review.queue) ? review.queue : [];
+    var current = queue[review.currentIndex] || {};
+    var pendingCount = getContinuousPendingIndices().length;
+    elements.continuousReviewBar.hidden = false;
+    elements.continuousReviewProgress.textContent = '第' + Math.max(1, review.currentIndex + 1) + '張／共' + queue.length + '張' +
+      (current.employeeName ? '｜' + current.employeeName : '');
+    elements.continuousReviewSummary.textContent = '已完成' + Number(review.completedCount || 0) + '張｜略過' +
+      Number(review.skippedCount || 0) + '張｜尚待' + pendingCount + '張。每張仍須個別確認與送出。';
+    var hasOther = pendingCount > 1;
+    elements.continuousReviewPreviousButton.disabled = !hasOther || state.isSubmitting;
+    elements.continuousReviewNextButton.disabled = !hasOther || state.isSubmitting;
+    elements.continuousReviewSkipButton.disabled = !current.evaluationNo || current.status !== 'pending' || state.isSubmitting;
+    elements.continuousReviewEndButton.disabled = state.isSubmitting;
+  }
+
+  function markContinuousReviewCompleted(evaluationNo) {
+    var review = state.continuousReview || {};
+    var queue = Array.isArray(review.queue) ? review.queue : [];
+    queue.forEach(function(item) {
+      if (item && item.status === 'pending' && String(item.evaluationNo || '') === String(evaluationNo || '')) {
+        item.status = 'completed';
+        review.completedCount += 1;
+      }
+    });
+  }
+
+  async function finishContinuousReviewSession() {
+    var review = state.continuousReview || {};
+    var completed = Number(review.completedCount || 0);
+    var skipped = Number(review.skippedCount || 0);
+    resetContinuousReviewState(false);
+    closeEvaluation({ saveDraft: false });
+    await refreshAllAccessibleLists();
+    renderPending();
+    setDashboardMessage('success', '連續簽核已完成：完成' + completed + '張，略過' + skipped + '張。略過項目仍保留在待辦中。');
+  }
+
+  async function openEvaluation(evaluationNo, options) {
+    var settings = options || {};
     if (isPendingMutationLocked(evaluationNo)) {
       showGlobalNotice('processing', '正在確認送出結果', '這張考核表剛完成送出，系統正在同步最新流程，暫時不可用舊卡片重新開啟。', false);
-      return;
+      return false;
     }
     clearDraftTimers();
     state.currentDetail = null;
@@ -1138,6 +1386,7 @@
     state.draftLoaded = false;
     elements.evaluationOverlay.hidden = false;
     document.body.classList.add('is-locked');
+    if (settings.fromContinuous) renderContinuousReviewBar();
     elements.evaluationLoading.hidden = false;
     elements.evaluationContent.hidden = true;
     clearEvaluationMessage();
@@ -1146,8 +1395,11 @@
       state.currentDetail = result.data || {};
       renderEvaluationDetail();
       elements.evaluationContent.hidden = false;
+      renderContinuousReviewBar();
+      return true;
     } catch (error) {
       showEvaluationMessage('error', friendlyError(error));
+      return false;
     } finally {
       elements.evaluationLoading.hidden = true;
     }
@@ -1160,6 +1412,7 @@
     elements.evaluationOverlay.hidden = true;
     document.body.classList.remove('is-locked');
     elements.evaluationContent.hidden = true;
+    if (elements.continuousReviewBar) elements.continuousReviewBar.hidden = true;
     state.currentDetail = null;
     state.currentAction = '';
     state.signatureController = null;
@@ -1318,6 +1571,15 @@
     return window.V3EvaluationForm.getActionLabel(record || {}, action) || action || '送出';
   }
 
+  function getSubmitButtonLabelUi(record, action) {
+    var label = getActionLabelUi(record || {}, action);
+    if (state.continuousReview && state.continuousReview.active && isContinuousReviewEligibleUi() &&
+        action !== 'force_close' && action !== 'force_transition') {
+      return label + '並開啟下一張';
+    }
+    return label;
+  }
+
   async function renderSelectedAction(action) {
     clearDraftTimers();
     state.currentAction = action;
@@ -1326,7 +1588,7 @@
     state.forceClosePreview = null;
     elements.saveDraftButton.hidden = action === 'force_close';
     elements.draftStatus.textContent = action === 'force_close' ? '強制結案不建立草稿' : '尚未儲存草稿';
-    elements.submitEvaluationButton.querySelector('.button-label').textContent = getActionLabelUi(state.currentDetail || {}, action);
+    elements.submitEvaluationButton.querySelector('.button-label').textContent = getSubmitButtonLabelUi(state.currentDetail || {}, action);
 
     if (action === 'force_close') {
       await renderForceCloseAction();
@@ -1539,7 +1801,8 @@
       }
       payload.evaluationNo = evaluationNo;
       payload.expectedVersion = version;
-      if (!window.confirm('確定要「' + label + '」嗎？\n\n送出後將進入下一個流程階段。')) return;
+      var continuousNote = state.continuousReview && state.continuousReview.active ? '\n\n連續簽核：成功後會自動開啟下一張待辦。' : '';
+      if (!window.confirm('確定要「' + label + '」嗎？\n\n送出後將進入下一個流程階段。' + continuousNote)) return;
     }
 
     var requestId = window.V3ApiClient.createRequestId();
@@ -1566,20 +1829,23 @@
           return;
         }
         if (recovery.changed) {
+          resetContinuousReviewState(false);
           closeEvaluation({ saveDraft: false });
           await refreshAllAccessibleLists();
-          showGlobalNotice('warning', '表單已更新', '此考核表在送出期間已發生更新。請重新開啟表單確認最新狀態，不要再次使用舊畫面送出。');
+          showGlobalNotice('warning', '表單已更新', '此考核表在送出期間已發生更新。連續簽核已暫停，請重新開啟表單確認最新狀態。');
           resetSubmissionUi(label);
           return;
         }
+        resetContinuousReviewState(false);
         closeEvaluation({ saveDraft: false });
         await refreshAllAccessibleLists();
-        showGlobalNotice('warning', '送出結果仍在同步', '系統已暫時鎖定這張考核表，避免使用舊卡片重複送出。請等待約10秒後重新整理；若流程已送出，案件會出現在下一位承辦人的待辦。');
+        showGlobalNotice('warning', '送出結果仍在同步', '系統已暫時鎖定這張考核表，連續簽核已暫停。請等待約10秒後重新整理並確認最新流程。');
         window.setTimeout(function () { refreshAllAccessibleLists(); }, 10000);
       } else if (error && (error.code === 'VERSION_CONFLICT' || error.code === 'DUPLICATE_REQUEST')) {
         releasePendingMutation(evaluationNo);
+        resetContinuousReviewState(false);
         await refreshAllAccessibleLists();
-        showGlobalNotice('warning', '表單已更新', friendlyError(error));
+        showGlobalNotice('warning', '表單已更新', friendlyError(error) + ' 連續簽核已暫停。');
       } else {
         releasePendingMutation(evaluationNo);
         await refreshAllAccessibleLists();
@@ -1592,6 +1858,27 @@
   async function finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label) {
     removeLocalDraft(evaluationNo, action, version, workflowStatus);
     clearDraftTimers();
+
+    if (state.continuousReview && state.continuousReview.active && isContinuousReviewEligibleUi()) {
+      markContinuousReviewCompleted(evaluationNo);
+      var completedIndex = Number(state.continuousReview.currentIndex || 0);
+      closeEvaluation({ saveDraft: false });
+      await loadPending({ quiet: true });
+      window.setTimeout(function () {
+        releasePendingMutation(evaluationNo);
+        loadPending({ quiet: true });
+      }, 10000);
+      setDashboardMessage('success', label + '完成，正在開啟下一張待辦。');
+      resetSubmissionUi(label);
+      var nextIndex = findContinuousReviewIndex(1, completedIndex);
+      if (nextIndex < 0) {
+        await finishContinuousReviewSession();
+        return;
+      }
+      await openContinuousReviewAtIndex(nextIndex);
+      return;
+    }
+
     closeEvaluation({ saveDraft: false });
     await refreshAllAccessibleLists();
     window.setTimeout(function () {
@@ -1605,7 +1892,11 @@
   function resetSubmissionUi(label) {
     state.isSubmitting = false;
     elements.closeEvaluationButton.disabled = false;
-    setButtonLoading(elements.submitEvaluationButton, false, label || '送出');
+    var buttonLabel = state.currentDetail && state.currentAction
+      ? getSubmitButtonLabelUi(state.currentDetail, state.currentAction)
+      : (label || '送出');
+    setButtonLoading(elements.submitEvaluationButton, false, buttonLabel);
+    renderContinuousReviewBar();
   }
 
   async function recoverMutationResult(evaluationNo, requestId, expectedVersion) {
@@ -2238,6 +2529,7 @@
       state.batchDispatchRepairPreview = null;
       state.batchDispatchSelectedEmployees = {};
       state.dispatchManagementSelectionMonth = '';
+      resetContinuousReviewState(false);
       closeBatchDispatchRepairPanel();
       if (elements.dispatchMonthAnalysisResult) elements.dispatchMonthAnalysisResult.hidden = true;
       closePdfViewerModal();
