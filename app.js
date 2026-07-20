@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.1.0A-safe-dispatch-core';
+  var APP_BUILD = '7.1.0A.2-complete-route-preview';
   var elements = {};
   var state = {
     session: null,
@@ -1909,20 +1909,15 @@
       var route = item.route || {};
       var label = monthlyDispatchActionLabel(item.action);
       var cssClass = item.action === 'CREATE' ? ' tag--success' : (item.action === 'DUPLICATE' ? ' tag--warning' : ' tag--danger');
-      var routeText = [
-        personLabelForMonthlyDispatch(route.manager),
-        personLabelForMonthlyDispatch(route.areaSupervisor),
-        personLabelForMonthlyDispatch(route.departmentExecutive),
-        personLabelForMonthlyDispatch(route.generalManager)
-      ].filter(Boolean).join(' → ');
+      var routeHtml = monthlyDispatchRouteHtml(item);
       var notes = [];
       if (item.reason) notes.push(item.reason);
       if (Array.isArray(item.warnings) && item.warnings.length) notes.push('提醒：' + item.warnings.join('；'));
       return '<div class="route-row"><span><span class="tag' + cssClass + '">' + escapeHtml(label) + '</span> ' +
         escapeHtml(joinStore(organization.storeCode, organization.storeName)) + '</span><strong>' +
         escapeHtml(joinText(employee.employeeId, employee.employeeName)) + '｜' + escapeHtml(item.plannedEvaluationNo || item.existingEvaluationNo || '') +
-        '</strong><small>' + escapeHtml(routeText || notes.join('；') || '—') +
-        (notes.length ? '<br>' + escapeHtml(notes.join('；')) : '') + '</small></div>';
+        '</strong><small><strong>完整上呈路線（7階段）</strong><br>' + routeHtml +
+        (notes.length ? '<br><br>' + escapeHtml(notes.join('；')) : '') + '</small></div>';
     }).join('');
 
     html += '</div>';
@@ -1931,9 +1926,41 @@
     elements.monthlyDispatchPreviewContent.innerHTML = html;
   }
 
+  function monthlyDispatchRouteHtml(item) {
+    var stages = monthlyDispatchRouteStages(item);
+    if (!stages.length) return escapeHtml('尚未取得完整上呈路線');
+    return stages.map(function (stage, index) {
+      var person = stage.person || stage || {};
+      var order = Number(stage.order || index + 1);
+      var label = String(stage.label || '未命名階段');
+      var personText = personLabelForMonthlyDispatch(person) || '尚未判定';
+      return escapeHtml(order + '. ' + label + '：' + personText);
+    }).join('<br>');
+  }
+
+  function monthlyDispatchRouteStages(item) {
+    var data = item || {};
+    if (Array.isArray(data.routeOrder) && data.routeOrder.length) return data.routeOrder;
+    var route = data.route || {};
+    return [
+      { order: 1, label: '門市店主管', person: route.manager },
+      { order: 2, label: '教育中心成員', person: route.educationMember },
+      { order: 3, label: '教育中心主管', person: route.educationSupervisor },
+      { order: 4, label: '區主管', person: route.areaSupervisor },
+      { order: 5, label: '受評人員確認', person: route.employee },
+      { order: 6, label: '營業處主管', person: route.departmentExecutive },
+      { order: 7, label: '總經理', person: route.generalManager }
+    ];
+  }
+
   function personLabelForMonthlyDispatch(person) {
     var item = person || {};
-    return joinText(item.employeeId, item.employeeName);
+    var label = joinText(item.employeeId, item.employeeName);
+    if (label) return label;
+    if (Number(item.memberCount || 0) > 0) {
+      return String(item.role || '共同待辦') + '（' + Number(item.memberCount || 0) + '人）';
+    }
+    return '';
   }
 
   function monthlyDispatchActionLabel(action) {
