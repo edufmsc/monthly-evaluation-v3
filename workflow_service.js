@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.1.0A-safe-dispatch-core */
+/* 月考核系統 V3｜版本：7.1.0C-1-dispatch-management */
 (function () {
   'use strict';
 
@@ -64,6 +64,24 @@
     },
     monthlyDispatchStatus: function () {
       return call('monthlyDispatchStatus', {});
+    },
+    dispatchManagementCenter: function (filters) {
+      return call('dispatchManagementCenter', filters || {});
+    },
+    previewSingleDispatchRepair: function (employeeId, evaluationMonth) {
+      return call('previewSingleDispatchRepair', {
+        employeeId: String(employeeId || ''),
+        evaluationMonth: String(evaluationMonth || '')
+      });
+    },
+    runSingleDispatchRepair: function (payload, requestId) {
+      return call('runSingleDispatchRepair', payload || {}, requestId);
+    },
+    forceClosePreview: function (evaluationNo) {
+      return call('forceClosePreview', { evaluationNo: String(evaluationNo || '') });
+    },
+    forceCloseEvaluation: function (payload, requestId) {
+      return call('forceCloseEvaluation', payload || {}, requestId);
     },
     getMySignaturePreview: function (source, evaluationNo) {
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
