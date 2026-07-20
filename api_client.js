@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.1.0C-1-dispatch-management */
+/* 月考核系統 V3｜版本：7.1.0C-2-batch-repair-analysis */
 (function () {
   'use strict';
 
@@ -93,6 +93,9 @@
       dispatchManagementCenter: 90000,
       previewSingleDispatchRepair: 60000,
       runSingleDispatchRepair: 120000,
+      previewBatchDispatchRepair: 90000,
+      runBatchDispatchRepair: 180000,
+      dispatchMonthAnalysis: 90000,
       forceClosePreview: 60000,
       forceCloseEvaluation: 90000
     };
