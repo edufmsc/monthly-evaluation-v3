@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.2.0A-continuous-signing';
+  var APP_BUILD = '7.2.0A.1-state-sync-claim-performance';
   var elements = {};
   var state = {
     session: null,
@@ -41,6 +41,7 @@
     pdfSlowHintTimers: [],
     pdfPreloadScheduled: false,
     pdfPreloadStarted: false,
+    backgroundSyncTimer: null,
     continuousReview: {
       active: false,
       queue: [],
@@ -489,7 +490,7 @@
     }
 
     return '<article class="evaluation-card">' +
-      '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3><p>' + escapeHtml(item.evaluationNo || '') + '</p></div><div>' + tagParts.join('') + '</div></div>' +
+      '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3><p>月考核單號：' + escapeHtml(item.evaluationNo || '') + '</p></div><div>' + tagParts.join('') + '</div></div>' +
       '<div class="evaluation-card__meta">' +
         metaItem('考核月份', item.evaluationMonth) +
         metaItem('店別', joinStore(item.storeCode, item.storeName)) +
@@ -1368,9 +1369,9 @@
     var skipped = Number(review.skippedCount || 0);
     resetContinuousReviewState(false);
     closeEvaluation({ saveDraft: false });
-    await refreshAllAccessibleLists();
     renderPending();
     setDashboardMessage('success', '連續簽核已完成：完成' + completed + '張，略過' + skipped + '張。略過項目仍保留在待辦中。');
+    scheduleTargetedReconciliationV3({ pending: true, progress: true, delayMs: 1200 });
   }
 
   async function openEvaluation(evaluationNo, options) {
@@ -1858,18 +1859,16 @@
   async function finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label) {
     removeLocalDraft(evaluationNo, action, version, workflowStatus);
     clearDraftTimers();
+    removePendingItemLocallyV3(evaluationNo);
 
     if (state.continuousReview && state.continuousReview.active && isContinuousReviewEligibleUi()) {
       markContinuousReviewCompleted(evaluationNo);
       var completedIndex = Number(state.continuousReview.currentIndex || 0);
       closeEvaluation({ saveDraft: false });
-      await loadPending({ quiet: true });
-      window.setTimeout(function () {
-        releasePendingMutation(evaluationNo);
-        loadPending({ quiet: true });
-      }, 10000);
+      releasePendingMutation(evaluationNo);
       setDashboardMessage('success', label + '完成，正在開啟下一張待辦。');
       resetSubmissionUi(label);
+      scheduleTargetedReconciliationV3({ pending: true, progress: true, delayMs: 1800 });
       var nextIndex = findContinuousReviewIndex(1, completedIndex);
       if (nextIndex < 0) {
         await finishContinuousReviewSession();
@@ -1880,13 +1879,10 @@
     }
 
     closeEvaluation({ saveDraft: false });
-    await refreshAllAccessibleLists();
-    window.setTimeout(function () {
-      releasePendingMutation(evaluationNo);
-      refreshAllAccessibleLists();
-    }, 10000);
+    releasePendingMutation(evaluationNo);
     setDashboardMessage('success', label + '完成，流程已更新。');
     resetSubmissionUi(label);
+    scheduleTargetedReconciliationV3({ pending: true, progress: true, delayMs: 1500 });
   }
 
   function resetSubmissionUi(label) {
@@ -1939,6 +1935,51 @@
     return true;
   }
 
+  function updatePendingSummaryLocallyV3(summary) {
+    if (!summary || !summary.evaluationNo) return;
+    var found = false;
+    state.pending = state.pending.map(function(item) {
+      if (String(item.evaluationNo || '') !== String(summary.evaluationNo || '')) return item;
+      found = true;
+      return Object.assign({}, item, summary);
+    });
+    if (!found) state.pending.unshift(summary);
+    state.pendingRenderSignature = createListRenderSignature(state.pending, { total: state.pending.length });
+    elements.pendingCountBadge.textContent = String(state.pending.length);
+    renderPending();
+  }
+
+  function removePendingItemLocallyV3(evaluationNo) {
+    var key = String(evaluationNo || '').trim();
+    if (!key) return;
+    state.pending = state.pending.filter(function(item) {
+      return String(item.evaluationNo || '').trim() !== key;
+    });
+    state.pendingRenderSignature = createListRenderSignature(state.pending, { total: state.pending.length });
+    elements.pendingCountBadge.textContent = String(state.pending.length);
+    renderPending();
+  }
+
+  function scheduleTargetedReconciliationV3(options) {
+    var settings = options || {};
+    if (state.backgroundSyncTimer) window.clearTimeout(state.backgroundSyncTimer);
+    state.backgroundSyncTimer = window.setTimeout(function() {
+      state.backgroundSyncTimer = null;
+      var run = function() {
+        var jobs = [];
+        if (settings.pending !== false) jobs.push(loadPending({ quiet: true }));
+        if (settings.progress && (!elements.progressPanel.hidden || state.progress.length)) jobs.push(loadProgress({ quiet: true }));
+        if (settings.dispatch && elements.dispatchManagementCard) jobs.push(loadDispatchManagementCenter({ quiet: true }));
+        Promise.allSettled(jobs).catch(function() {});
+      };
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 3000 });
+      } else {
+        run();
+      }
+    }, Number(settings.delayMs || 1800));
+  }
+
   function refreshVisibleListsAfterMutation() {
     refreshAllAccessibleLists();
   }
@@ -1967,14 +2008,29 @@
 
   async function handleClaim() {
     if (!state.currentDetail) return;
+    var evaluationNo = String(state.currentDetail['考核單號'] || '').trim();
+    var startedAt = performanceNowV3();
     elements.claimButton.disabled = true;
     try {
-      await window.V3WorkflowService.claim(state.currentDetail['考核單號'], state.currentDetail.dataVersion);
-      showEvaluationMessage('success', '已成功領取案件。');
-      await reloadCurrentEvaluation();
-      await loadPending();
+      var result = await window.V3WorkflowService.claim(evaluationNo, state.currentDetail.dataVersion);
+      var data = result.data || {};
+      if (data.detail) {
+        state.currentDetail = data.detail;
+      } else {
+        // 舊後端相容：只有在尚未更新後端時才回退到單張重新讀取。
+        await reloadCurrentEvaluation();
+      }
+      if (data.summary) updatePendingSummaryLocallyV3(data.summary);
+      else renderPending();
+      renderEvaluationDetail();
+      showEvaluationMessage('success', '已成功領取月考核表，可直接開始填寫。');
+      scheduleTargetedReconciliationV3({ pending: true, progress: true, delayMs: 2200 });
+      console.info('[V3 CLAIM] 領取至可編輯耗時：' + Math.max(0, Math.round(performanceNowV3() - startedAt)) + 'ms');
     } catch (error) {
       showEvaluationMessage('error', friendlyError(error));
+      if (error && (error.code === 'ALREADY_CLAIMED' || error.code === 'VERSION_CONFLICT')) {
+        scheduleTargetedReconciliationV3({ pending: true, progress: true, delayMs: 0 });
+      }
     } finally {
       elements.claimButton.disabled = false;
     }
@@ -2187,7 +2243,8 @@
       updateBatchDispatchSelectionState(isCurrentMonth);
       return;
     }
-    elements.dispatchManagementPersons.innerHTML = '<h4>人員派發狀態</h4><div class="route-list">' + rows.map(function (row) {
+    var monthTitle = rocMonthDisplayLabelV3(state.dispatchManagement && state.dispatchManagement.evaluationMonth || elements.dispatchManagementMonth.value || currentRocMonthFirstDay());
+    elements.dispatchManagementPersons.innerHTML = '<h4>' + escapeHtml(monthTitle + '人員派發狀態') + '</h4><div class="route-list">' + rows.map(function (row) {
       var tone = dispatchCategoryTone(row.category);
       var actions = '';
       var batchControl = '';
@@ -2229,6 +2286,13 @@
         escapeHtml(row.completedAt || '') + (row.batchId ? '｜批次 ' + escapeHtml(row.batchId) : '') +
         (row.reason ? '<br>' + escapeHtml(row.reason) : '') + '</small></div>';
     }).join('') + '</div>';
+  }
+
+  function rocMonthDisplayLabelV3(value) {
+    var text = String(value || '').trim();
+    var match = /^(\d{3})\/(\d{2})\/(\d{2})$/.exec(text);
+    if (!match) return text ? text + '｜' : '';
+    return Number(match[1]) + '年' + Number(match[2]) + '月｜';
   }
 
   function dispatchCategoryLabel(category) {
@@ -2356,6 +2420,49 @@
     );
   }
 
+  function applyManualDispatchResultLocallyV3(data) {
+    var result = data || {};
+    var created = {};
+    (result.createdItems || []).forEach(function(item) {
+      created[String(item.employeeId || '').trim()] = item;
+    });
+    if (!state.dispatchManagement || !Array.isArray(state.dispatchManagement.persons)) return;
+
+    var categoryDeltas = { UNPROCESSED: 0, ROUTE_ERROR: 0, SYSTEM_FAILED: 0 };
+    state.dispatchManagement.persons = state.dispatchManagement.persons.map(function(row) {
+      var item = created[String(row.employeeId || '').trim()];
+      if (!item) return row;
+      var previousCategory = String(row.category || '');
+      if (Object.prototype.hasOwnProperty.call(categoryDeltas, previousCategory)) categoryDeltas[previousCategory] += 1;
+      return Object.assign({}, row, {
+        category: 'CREATED',
+        evaluationNo: String(item.evaluationNo || ''),
+        workflowStatus: '待門市店主管填寫',
+        reason: '',
+        latestResult: '已建立R0',
+        executionSource: String(result.executionSource || '教育中心人工派發／補派'),
+        batchId: String(result.batchId || ''),
+        completedAt: String(result.completedAt || ''),
+        canRecheck: false,
+        canRepair: false,
+        canBatchSelect: false
+      });
+    });
+
+    var summary = state.dispatchManagement.summary || {};
+    var createdCount = Object.keys(created).length;
+    summary.createdCount = Number(summary.createdCount || 0) + createdCount;
+    summary.unprocessedCount = Math.max(0, Number(summary.unprocessedCount || 0) - categoryDeltas.UNPROCESSED);
+    summary.routeErrorCount = Math.max(0, Number(summary.routeErrorCount || 0) - categoryDeltas.ROUTE_ERROR);
+    summary.failedCount = Math.max(0, Number(summary.failedCount || 0) - categoryDeltas.SYSTEM_FAILED);
+    state.dispatchManagement.summary = summary;
+    state.dispatchManagement.filteredSummary = Object.assign({}, summary);
+    state.batchDispatchSelectedEmployees = {};
+    state.dispatchMonthAnalysis = null;
+    if (elements.dispatchMonthAnalysisResult) elements.dispatchMonthAnalysisResult.hidden = true;
+    renderDispatchManagementCenter(state.dispatchManagement);
+  }
+
   async function runBatchDispatchRepair() {
     var preview = state.batchDispatchRepairPreview || {};
     if (!preview.canRun || !preview.previewToken || state.dispatchManagementLoading) return;
@@ -2378,11 +2485,11 @@
         confirmationText: confirmationText
       }, window.V3ApiClient.createRequestId());
       closeGlobalNotice();
-      renderBatchDispatchRepairResult(result.data || {});
-      state.batchDispatchSelectedEmployees = {};
-      state.batchDispatchRepairPreview = null;
-      showDispatchManagementMessage('success', '人工派發／補派完成：成功' + Number(result.data && result.data.createdCount || 0) + '、跳過' + Number(result.data && result.data.skippedCount || 0) + '、失敗' + Number(result.data && result.data.failedCount || 0) + '。');
-      await Promise.allSettled([loadDispatchManagementCenter({ quiet: true }), refreshAllAccessibleLists()]);
+      var dispatchResult = result.data || {};
+      applyManualDispatchResultLocallyV3(dispatchResult);
+      closeBatchDispatchRepairPanel();
+      showDispatchManagementMessage('success', '人工派發／補派完成：成功' + Number(dispatchResult.createdCount || 0) + '、跳過' + Number(dispatchResult.skippedCount || 0) + '、失敗' + Number(dispatchResult.failedCount || 0) + '。已立即更新當月人員狀態。');
+      scheduleTargetedReconciliationV3({ pending: false, progress: false, dispatch: true, delayMs: 1200 });
     } catch (error) {
       closeGlobalNotice();
       if (error && error.code === 'BATCH_DISPATCH_PREVIEW_STALE' && error.details && error.details.latestPreview) {
