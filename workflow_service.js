@@ -1,3 +1,4 @@
+/* 月考核系統 V3｜版本：7.0.5-drive-pdf-optimization */
 (function () {
   'use strict';
 
@@ -63,6 +64,12 @@
     },
     publishPdf: function (evaluationNo, requestId) {
       return call('publishPdf', { evaluationNo: String(evaluationNo || '') }, requestId);
+    },
+    prepareDrivePdfView: function (evaluationNo, requestId) {
+      return call('prepareDrivePdfView', { evaluationNo: String(evaluationNo || '') }, requestId);
+    },
+    authenticatedPdfView: function (evaluationNo, requestId) {
+      return call('authenticatedPdfView', { evaluationNo: String(evaluationNo || '') }, requestId);
     },
     preparePdfView: function (evaluationNo, requestId) {
       return call('preparePdfView', { evaluationNo: String(evaluationNo || '') }, requestId);
