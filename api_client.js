@@ -27,12 +27,24 @@
     return 'web-' + Date.now() + '-' + Math.random().toString(16).slice(2);
   }
 
+  function nowMilliseconds() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  function textByteLength(text) {
+    // JSON與Base64主要為ASCII；使用字串長度避免為大型PDF回應再建立一份Blob。
+    return String(text || '').length;
+  }
+
   async function request(action, payload, sessionToken, requestId) {
     var config = getConfig();
     if (!isConfigured()) {
       throw new ApiError('API_URL_NOT_CONFIGURED', '尚未設定 Apps Script /exec 網址。');
     }
 
+    var requestStartedAt = nowMilliseconds();
     var controller = new AbortController();
     var defaultTimeout = Number(config.REQUEST_TIMEOUT_MS || 30000);
     var actionTimeouts = {
@@ -74,24 +86,53 @@
       });
 
       var text = await response.text();
+      var requestEndedAt = nowMilliseconds();
+      var clientPerformance = {
+        action: String(action || ''),
+        requestId: String(body.requestId || ''),
+        requestMs: Math.max(0, Math.round(requestEndedAt - requestStartedAt)),
+        responseBytes: textByteLength(text),
+        httpStatus: Number(response.status || 0)
+      };
       var result;
       try {
         result = JSON.parse(text);
       } catch (parseError) {
-        throw new ApiError('INVALID_RESPONSE', '後端回傳內容不是有效 JSON。', response.status, text.slice(0, 300));
+        var invalidError = new ApiError('INVALID_RESPONSE', '後端回傳內容不是有效 JSON。', response.status, text.slice(0, 300));
+        invalidError.clientPerformance = clientPerformance;
+        throw invalidError;
       }
 
       if (!result || result.success !== true) {
         var source = result && result.error ? result.error : {};
-        throw new ApiError(source.code, source.message, source.httpStatus || response.status, source.details);
+        var apiError = new ApiError(source.code, source.message, source.httpStatus || response.status, source.details);
+        apiError.clientPerformance = clientPerformance;
+        throw apiError;
       }
+      result.clientPerformance = clientPerformance;
       return result;
     } catch (error) {
       if (error && error.name === 'AbortError') {
-        throw new ApiError('REQUEST_TIMEOUT', '連線逾時，請確認網路後再試一次。');
+        var timeoutError = new ApiError('REQUEST_TIMEOUT', '連線逾時，請確認網路後再試一次。');
+        timeoutError.clientPerformance = {
+          action: String(action || ''),
+          requestId: String(body.requestId || ''),
+          requestMs: Math.max(0, Math.round(nowMilliseconds() - requestStartedAt)),
+          responseBytes: 0,
+          httpStatus: 0
+        };
+        throw timeoutError;
       }
       if (error instanceof ApiError) throw error;
-      throw new ApiError('NETWORK_ERROR', '無法連線到後端。請確認 GitHub 網頁與 Apps Script 部署設定。', 0, String(error && error.message || error));
+      var networkError = new ApiError('NETWORK_ERROR', '無法連線到後端。請確認 GitHub 網頁與 Apps Script 部署設定。', 0, String(error && error.message || error));
+      networkError.clientPerformance = {
+        action: String(action || ''),
+        requestId: String(body.requestId || ''),
+        requestMs: Math.max(0, Math.round(nowMilliseconds() - requestStartedAt)),
+        responseBytes: 0,
+        httpStatus: 0
+      };
+      throw networkError;
     } finally {
       window.clearTimeout(timeoutId);
     }
