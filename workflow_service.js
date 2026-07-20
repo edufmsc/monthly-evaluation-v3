@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.1.0C-1-dispatch-management */
+/* 月考核系統 V3｜版本：7.1.0C-2-batch-repair-analysis */
 (function () {
   'use strict';
 
@@ -76,6 +76,18 @@
     },
     runSingleDispatchRepair: function (payload, requestId) {
       return call('runSingleDispatchRepair', payload || {}, requestId);
+    },
+    previewBatchDispatchRepair: function (employeeIds, evaluationMonth) {
+      return call('previewBatchDispatchRepair', {
+        employeeIds: Array.isArray(employeeIds) ? employeeIds : [],
+        evaluationMonth: String(evaluationMonth || '')
+      });
+    },
+    runBatchDispatchRepair: function (payload, requestId) {
+      return call('runBatchDispatchRepair', payload || {}, requestId);
+    },
+    dispatchMonthAnalysis: function (evaluationMonth) {
+      return call('dispatchMonthAnalysis', { evaluationMonth: String(evaluationMonth || '') });
     },
     forceClosePreview: function (evaluationNo) {
       return call('forceClosePreview', { evaluationNo: String(evaluationNo || '') });
