@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.0.1-production-hotfix';
+  var APP_BUILD = '7.0.2-production-pdf-modal';
   var elements = {};
   var state = {
     session: null,
@@ -24,7 +24,10 @@
     pendingRenderSignature: '',
     progressRenderSignature: '',
     historyRenderSignature: '',
-    pendingMutationLocks: {}
+    pendingMutationLocks: {},
+    pdfViewerOpen: false,
+    pdfViewerRenderId: 0,
+    pdfJsModulePromise: null
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -38,6 +41,7 @@
       return;
     }
     cacheElements();
+    ensurePdfViewerModal();
     bindEvents();
     elements.appVersion.textContent = APP_BUILD;
     elements.testDispatchMonth.value = currentRocMonthFirstDay();
@@ -436,21 +440,21 @@
   async function prepareAndViewPdfFromCard(evaluationNo, button) {
     var safeNo = String(evaluationNo || '').trim();
     if (!safeNo || !button || button.disabled) return;
-    var popup = window.open('', '_blank');
     var originalLabel = button.textContent;
     button.disabled = true;
     button.textContent = '開啟中…';
+    openPdfViewerModal('正在取得月考核表PDF…', safeNo);
     try {
-      var result = await window.V3WorkflowService.preparePdfView(safeNo, window.V3ApiClient.createRequestId());
-      var token = String(result.data && result.data.publicToken || '').trim();
+      var prepared = await window.V3WorkflowService.preparePdfView(safeNo, window.V3ApiClient.createRequestId());
+      var token = String(prepared.data && prepared.data.publicToken || '').trim();
       if (!token) throw new Error('後端未回傳PDF查看碼。');
-      var targetUrl = buildPublicPdfViewUrl(token);
-      if (popup) popup.location.replace(targetUrl);
-      else window.location.href = targetUrl;
+      var result = await window.V3ApiClient.request('publicPdfView', { token: token }, '', window.V3ApiClient.createRequestId());
+      var data = result.data || {};
+      if (!data.pdfBase64) throw new Error('後端未回傳可顯示的PDF內容。');
+      await renderPdfBase64InViewer(data.pdfBase64, data.fileName || safeNo + '.pdf');
       await refreshAllAccessibleLists();
     } catch (error) {
-      if (popup) popup.close();
-      showGlobalNotice('error', '無法查看月考核表PDF', friendlyError(error));
+      showPdfViewerError(friendlyError(error));
     } finally {
       button.disabled = false;
       button.textContent = originalLabel;
@@ -459,6 +463,134 @@
 
   function buildPublicPdfViewUrl(token) {
     return window.location.origin + window.location.pathname + '?pdf=' + encodeURIComponent(String(token || ''));
+  }
+
+  function ensurePdfViewerModal() {
+    if (document.getElementById('pdfViewerOverlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'pdfViewerOverlay';
+    overlay.className = 'pdf-modal-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML = '<section class="pdf-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="pdfViewerTitle">' +
+      '<header class="pdf-modal-header"><div><span>月考核表</span><strong id="pdfViewerTitle">PDF檢視</strong></div>' +
+      '<button type="button" id="pdfViewerClose" class="pdf-modal-close" aria-label="關閉PDF檢視">×</button></header>' +
+      '<div id="pdfViewerStatus" class="pdf-modal-status">正在載入PDF…</div>' +
+      '<div id="pdfViewerPages" class="pdf-modal-pages" aria-live="polite"></div>' +
+      '<footer class="pdf-modal-footer">僅供線上檢視；系統不提供下載、列印或另存功能。</footer>' +
+      '</section>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('contextmenu', function (event) { event.preventDefault(); });
+    overlay.addEventListener('dragstart', function (event) { event.preventDefault(); });
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) closePdfViewerModal();
+    });
+    document.getElementById('pdfViewerClose').addEventListener('click', closePdfViewerModal);
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && state.pdfViewerOpen) closePdfViewerModal();
+    });
+  }
+
+  function openPdfViewerModal(statusText, titleText) {
+    ensurePdfViewerModal();
+    var overlay = document.getElementById('pdfViewerOverlay');
+    var status = document.getElementById('pdfViewerStatus');
+    var pages = document.getElementById('pdfViewerPages');
+    var title = document.getElementById('pdfViewerTitle');
+    state.pdfViewerRenderId += 1;
+    state.pdfViewerOpen = true;
+    title.textContent = String(titleText || 'PDF檢視');
+    status.className = 'pdf-modal-status';
+    status.textContent = String(statusText || '正在載入PDF…');
+    status.hidden = false;
+    pages.innerHTML = '';
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('is-locked');
+    document.getElementById('pdfViewerClose').focus();
+  }
+
+  function closePdfViewerModal() {
+    var overlay = document.getElementById('pdfViewerOverlay');
+    if (!overlay) return;
+    state.pdfViewerRenderId += 1;
+    state.pdfViewerOpen = false;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    document.getElementById('pdfViewerPages').innerHTML = '';
+    if (elements.evaluationOverlay && !elements.evaluationOverlay.hidden) return;
+    document.body.classList.remove('is-locked');
+    if (state.deferredAutoRefresh) {
+      state.deferredAutoRefresh = false;
+      window.setTimeout(function () { refreshAllAccessibleLists(); }, 0);
+    }
+  }
+
+  function showPdfViewerError(message) {
+    ensurePdfViewerModal();
+    var status = document.getElementById('pdfViewerStatus');
+    status.className = 'pdf-modal-status pdf-modal-status--error';
+    status.textContent = String(message || 'PDF無法開啟。');
+    status.hidden = false;
+  }
+
+  function loadPdfJsModule() {
+    if (!state.pdfJsModulePromise) {
+      state.pdfJsModulePromise = import('./pdf.min.mjs').then(function (pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+        return pdfjsLib;
+      });
+    }
+    return state.pdfJsModulePromise;
+  }
+
+  function decodeBase64Pdf(base64Text) {
+    var binary = window.atob(String(base64Text || ''));
+    var bytes = new Uint8Array(binary.length);
+    for (var index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function renderPdfBase64InViewer(base64Text, fileName) {
+    ensurePdfViewerModal();
+    var renderId = state.pdfViewerRenderId;
+    var title = document.getElementById('pdfViewerTitle');
+    var status = document.getElementById('pdfViewerStatus');
+    var pages = document.getElementById('pdfViewerPages');
+    title.textContent = String(fileName || '月考核表PDF');
+    status.className = 'pdf-modal-status';
+    status.textContent = '正在渲染PDF…';
+    status.hidden = false;
+    pages.innerHTML = '';
+
+    var pdfjsLib = await loadPdfJsModule();
+    var loadingTask = pdfjsLib.getDocument({ data: decodeBase64Pdf(base64Text) });
+    var pdf = await loadingTask.promise;
+    for (var pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      if (renderId !== state.pdfViewerRenderId || !state.pdfViewerOpen) return;
+      var page = await pdf.getPage(pageNumber);
+      var baseViewport = page.getViewport({ scale: 1 });
+      var availableWidth = Math.max(280, Math.min(pages.clientWidth - 24, 1180));
+      var cssScale = Math.max(0.5, Math.min(2.2, availableWidth / baseViewport.width));
+      var viewport = page.getViewport({ scale: cssScale });
+      var pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      var canvas = document.createElement('canvas');
+      canvas.className = 'pdf-page-canvas';
+      canvas.width = Math.floor(viewport.width * pixelRatio);
+      canvas.height = Math.floor(viewport.height * pixelRatio);
+      canvas.style.width = Math.floor(viewport.width) + 'px';
+      canvas.style.height = Math.floor(viewport.height) + 'px';
+      canvas.setAttribute('aria-label', 'PDF第' + pageNumber + '頁');
+      canvas.addEventListener('contextmenu', function (event) { event.preventDefault(); });
+      pages.appendChild(canvas);
+      var context = canvas.getContext('2d', { alpha: false });
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+        transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0]
+      }).promise;
+    }
+    status.hidden = true;
   }
 
   async function openEvaluation(evaluationNo) {
@@ -893,7 +1025,7 @@
 
     // 手機切換應用程式、鍵盤收合或瀏覽器重新取得焦點時，
     // 不可在使用者正在閱讀考核表時重繪背景清單，避免明細視窗跳動或消失。
-    if (!elements.evaluationOverlay.hidden || state.currentDetail) {
+    if (!elements.evaluationOverlay.hidden || state.currentDetail || state.pdfViewerOpen) {
       state.deferredAutoRefresh = true;
       return;
     }
@@ -1248,18 +1380,43 @@
     document.body.innerHTML = '<main class="public-pdf-shell">' +
       '<header class="public-pdf-header"><div><strong>月考核表PDF</strong><span id="publicPdfFileName">正在載入…</span></div></header>' +
       '<section id="publicPdfStatus" class="public-pdf-status">正在取得PDF檢視資料…</section>' +
-      '<iframe id="publicPdfFrame" class="public-pdf-frame" title="月考核表PDF" hidden></iframe>' +
+      '<section id="publicPdfPages" class="public-pdf-pages" aria-live="polite"></section>' +
+      '<footer class="public-pdf-footer">僅供線上檢視；系統不提供下載、列印或另存功能。</footer>' +
       '</main>';
+    document.body.addEventListener('contextmenu', function (event) { event.preventDefault(); });
+    document.body.addEventListener('dragstart', function (event) { event.preventDefault(); });
     var status = document.getElementById('publicPdfStatus');
-    var frame = document.getElementById('publicPdfFrame');
+    var pages = document.getElementById('publicPdfPages');
     var fileName = document.getElementById('publicPdfFileName');
     try {
       if (!window.V3ApiClient.isConfigured()) throw new Error('尚未設定Apps Script API網址。');
       var result = await window.V3ApiClient.request('publicPdfView', { token: token }, '', window.V3ApiClient.createRequestId());
       var data = result.data || {};
+      if (!data.pdfBase64) throw new Error('後端未回傳可顯示的PDF內容。');
       fileName.textContent = data.fileName || '月考核表.pdf';
-      frame.src = data.previewUrl;
-      frame.hidden = false;
+      var pdfjsLib = await loadPdfJsModule();
+      var pdf = await pdfjsLib.getDocument({ data: decodeBase64Pdf(data.pdfBase64) }).promise;
+      for (var pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+        var page = await pdf.getPage(pageNumber);
+        var baseViewport = page.getViewport({ scale: 1 });
+        var availableWidth = Math.max(280, Math.min(window.innerWidth - 24, 1180));
+        var cssScale = Math.max(0.5, Math.min(2.2, availableWidth / baseViewport.width));
+        var viewport = page.getViewport({ scale: cssScale });
+        var pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        var canvas = document.createElement('canvas');
+        canvas.className = 'pdf-page-canvas';
+        canvas.width = Math.floor(viewport.width * pixelRatio);
+        canvas.height = Math.floor(viewport.height * pixelRatio);
+        canvas.style.width = Math.floor(viewport.width) + 'px';
+        canvas.style.height = Math.floor(viewport.height) + 'px';
+        canvas.addEventListener('contextmenu', function (event) { event.preventDefault(); });
+        pages.appendChild(canvas);
+        await page.render({
+          canvasContext: canvas.getContext('2d', { alpha: false }),
+          viewport: viewport,
+          transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0]
+        }).promise;
+      }
       status.hidden = true;
     } catch (error) {
       status.className = 'public-pdf-status public-pdf-status--error';
