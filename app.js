@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.1.0C-1-dispatch-management';
+  var APP_BUILD = '7.1.0C-2-batch-repair-analysis';
   var elements = {};
   var state = {
     session: null,
@@ -24,6 +24,10 @@
     dispatchManagement: null,
     dispatchManagementLoading: false,
     singleDispatchRepairPreview: null,
+    batchDispatchRepairPreview: null,
+    batchDispatchSelectedEmployees: {},
+    dispatchManagementSelectionMonth: '',
+    dispatchMonthAnalysis: null,
     forceClosePreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
@@ -125,8 +129,8 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading">' +
-      '<div><p class="step-label">正式營運工具｜7.1.0C-1</p><h3>月考核派發管理中心</h3>' +
-      '<p>教育中心成員與教育中心主管皆可查詢、重新檢查路線及執行單筆安全補派。已存在的R0不會重複建立。</p></div>' +
+      '<div><p class="step-label">正式營運工具｜7.1.0C-2</p><h3>月考核派發管理中心</h3>' +
+      '<p>教育中心成員與教育中心主管皆可查詢、單筆或批次安全補派，並按需產生所選月份的總整分析。已存在的R0不會重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
       '<form id="dispatchManagementFilterForm" class="filter-grid">' +
         '<label class="field-group"><span>考核月份</span><input id="dispatchManagementMonth" type="text" placeholder="115/07/01"></label>' +
@@ -144,6 +148,16 @@
       '</form>' +
       '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
       '<div id="dispatchManagementSummary"></div>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>月份總整分析</h4>' +
+        '<p class="section-help">不會在登入時自動載入；按下按鈕後只分析上方所選月份，不匯出CSV。</p></div>' +
+        '<button id="dispatchMonthAnalysisButton" class="secondary-button secondary-button--small" type="button"><span class="button-label">產生月份分析</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<article id="dispatchMonthAnalysisResult" class="card admin-result-card" hidden></article></section>' +
+      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>批次安全補派</h4>' +
+        '<p class="section-help">可勾選尚未派發、路線異常或系統失敗人員；正式執行前會逐筆重新驗證。</p></div>' +
+        '<strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
+        '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可選人員</button>' +
+        '<button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button>' +
+        '<button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽批次補派</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
       '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary>' +
         '<div id="dispatchManagementAttempts"></div></details>' +
@@ -155,6 +169,17 @@
         '<div class="test-dispatch-actions"><button id="singleDispatchRepairCancelButton" class="secondary-button" type="button">取消</button>' +
           '<button id="singleDispatchRepairRunButton" class="primary-button" type="button" disabled>' +
           '<span class="button-label">執行單筆安全補派</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+      '</section>' +
+      '<section id="batchDispatchRepairPanel" class="test-dispatch-preview" hidden>' +
+        '<div id="batchDispatchRepairContent"></div>' +
+        '<label class="field-group"><span>批次補派原因</span><textarea id="batchDispatchRepairReason" rows="3" maxlength="300" placeholder="請具體說明本次批次補派原因"></textarea></label>' +
+        '<label class="confirm-row"><input id="batchDispatchRepairConfirm" type="checkbox">' +
+          '<span>我已確認每位人員仍會獨立檢查派發資格、七階段路線與同月份R0。</span></label>' +
+        '<label class="field-group"><span>最終確認文字</span><input id="batchDispatchRepairConfirmText" type="text" maxlength="20" autocomplete="off" placeholder="請輸入：批次補派"></label>' +
+        '<div class="test-dispatch-actions"><button id="batchDispatchRepairCancelButton" class="secondary-button" type="button">取消</button>' +
+          '<button id="batchDispatchRepairRunButton" class="primary-button" type="button" disabled>' +
+          '<span class="button-label">執行批次安全補派</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<article id="batchDispatchRepairResult" class="card admin-result-card" hidden></article>' +
       '</section>';
     systemPanel.appendChild(article);
   }
@@ -184,6 +209,11 @@
       'dispatchManagementStore', 'dispatchManagementArea', 'dispatchManagementSource',
       'dispatchManagementSearchButton', 'dispatchManagementMessage', 'dispatchManagementSummary',
       'dispatchManagementPersons', 'dispatchManagementAttemptsPanel', 'dispatchManagementAttempts',
+      'dispatchMonthAnalysisButton', 'dispatchMonthAnalysisResult', 'batchDispatchTools',
+      'batchDispatchSelectedCount', 'batchDispatchSelectVisibleButton', 'batchDispatchClearButton',
+      'batchDispatchPreviewButton', 'batchDispatchRepairPanel', 'batchDispatchRepairContent',
+      'batchDispatchRepairReason', 'batchDispatchRepairConfirm', 'batchDispatchRepairConfirmText',
+      'batchDispatchRepairCancelButton', 'batchDispatchRepairRunButton', 'batchDispatchRepairResult',
       'singleDispatchRepairPanel', 'singleDispatchRepairContent', 'singleDispatchRepairReason',
       'singleDispatchRepairConfirm', 'singleDispatchRepairCancelButton', 'singleDispatchRepairRunButton',
       'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
@@ -223,6 +253,15 @@
     if (elements.singleDispatchRepairConfirm) elements.singleDispatchRepairConfirm.addEventListener('change', updateSingleDispatchRepairRunState);
     if (elements.singleDispatchRepairCancelButton) elements.singleDispatchRepairCancelButton.addEventListener('click', closeSingleDispatchRepairPanel);
     if (elements.singleDispatchRepairRunButton) elements.singleDispatchRepairRunButton.addEventListener('click', runSingleDispatchRepair);
+    if (elements.dispatchMonthAnalysisButton) elements.dispatchMonthAnalysisButton.addEventListener('click', loadDispatchMonthAnalysis);
+    if (elements.batchDispatchSelectVisibleButton) elements.batchDispatchSelectVisibleButton.addEventListener('click', selectVisibleBatchDispatchEmployees);
+    if (elements.batchDispatchClearButton) elements.batchDispatchClearButton.addEventListener('click', clearBatchDispatchSelection);
+    if (elements.batchDispatchPreviewButton) elements.batchDispatchPreviewButton.addEventListener('click', previewBatchDispatchRepair);
+    if (elements.batchDispatchRepairReason) elements.batchDispatchRepairReason.addEventListener('input', updateBatchDispatchRunState);
+    if (elements.batchDispatchRepairConfirm) elements.batchDispatchRepairConfirm.addEventListener('change', updateBatchDispatchRunState);
+    if (elements.batchDispatchRepairConfirmText) elements.batchDispatchRepairConfirmText.addEventListener('input', updateBatchDispatchRunState);
+    if (elements.batchDispatchRepairCancelButton) elements.batchDispatchRepairCancelButton.addEventListener('click', closeBatchDispatchRepairPanel);
+    if (elements.batchDispatchRepairRunButton) elements.batchDispatchRepairRunButton.addEventListener('click', runBatchDispatchRepair);
     elements.refreshPendingButton.addEventListener('click', loadPending);
     elements.refreshProgressButton.addEventListener('click', loadProgress);
     elements.progressFilterForm.addEventListener('submit', function (event) {
@@ -2235,7 +2274,16 @@
         source: String(elements.dispatchManagementSource.value || '')
       });
       state.dispatchManagement = result.data || {};
-      elements.dispatchManagementMonth.value = state.dispatchManagement.evaluationMonth || currentRocMonthFirstDay();
+      var loadedMonth = state.dispatchManagement.evaluationMonth || currentRocMonthFirstDay();
+      if (state.dispatchManagementSelectionMonth && state.dispatchManagementSelectionMonth !== loadedMonth) {
+        state.batchDispatchSelectedEmployees = {};
+        state.batchDispatchRepairPreview = null;
+        closeBatchDispatchRepairPanel();
+        state.dispatchMonthAnalysis = null;
+        if (elements.dispatchMonthAnalysisResult) elements.dispatchMonthAnalysisResult.hidden = true;
+      }
+      state.dispatchManagementSelectionMonth = loadedMonth;
+      elements.dispatchManagementMonth.value = loadedMonth;
       renderDispatchManagementCenter(state.dispatchManagement);
       if (!settings.quiet) showDispatchManagementMessage('success', '派發管理資料已更新。');
     } catch (error) {
@@ -2265,6 +2313,7 @@
       (filtered.candidateCount !== summary.candidateCount ? '｜目前篩選顯示 ' + escapeHtml(filtered.candidateCount) + ' 人。' : '') + '</p>';
     updateDispatchManagementFilterOptions(data.filterOptions || {});
     renderDispatchManagementPersons(data.persons || [], Boolean(data.isCurrentMonth));
+    updateBatchDispatchSelectionState(Boolean(data.isCurrentMonth));
     renderDispatchManagementAttempts(data.attempts || []);
   }
 
@@ -2292,27 +2341,41 @@
   function renderDispatchManagementPersons(rows, isCurrentMonth) {
     if (!rows.length) {
       elements.dispatchManagementPersons.innerHTML = emptyStateHtml('查無符合條件的人員', '請調整月份或篩選條件後重新查詢。');
+      updateBatchDispatchSelectionState(isCurrentMonth);
       return;
     }
     elements.dispatchManagementPersons.innerHTML = '<h4>人員派發狀態</h4><div class="route-list">' + rows.map(function (row) {
       var tone = dispatchCategoryTone(row.category);
       var actions = '';
+      var batchControl = '';
       if (row.evaluationNo) {
         actions += '<button type="button" class="secondary-button secondary-button--small" data-open-evaluation="' + escapeHtml(row.evaluationNo) + '">查看月考核表</button>';
       }
       if (isCurrentMonth && row.canRecheck) {
         actions += '<button type="button" class="secondary-button secondary-button--small" data-recheck-dispatch="' + escapeHtml(row.employeeId) + '">重新檢查路線</button>';
       }
+      if (isCurrentMonth && row.canBatchSelect) {
+        batchControl = '<label class="confirm-row"><input type="checkbox" data-batch-dispatch="' + escapeHtml(row.employeeId) + '"' +
+          (state.batchDispatchSelectedEmployees[row.employeeId] ? ' checked' : '') + '><span>加入批次補派預覽</span></label>';
+      }
       return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' +
         escapeHtml(joinStore(row.storeCode, row.storeName)) + '</span><strong>' +
         escapeHtml(joinText(row.employeeId, row.employeeName)) + (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') +
         '</strong><small>' + escapeHtml(row.reason || row.workflowStatus || '目前無異常') +
         (row.executionSource ? '<br>最近來源：' + escapeHtml(row.executionSource) + '｜' + escapeHtml(row.completedAt || '') : '') +
-        '</small>' + (actions ? '<div class="evaluation-card__actions">' + actions + '</div>' : '') + '</div>';
+        '</small>' + batchControl + (actions ? '<div class="evaluation-card__actions">' + actions + '</div>' : '') + '</div>';
     }).join('') + '</div>';
     bindEvaluationCards(elements.dispatchManagementPersons);
     Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-recheck-dispatch]')).forEach(function (button) {
       button.addEventListener('click', function () { previewSingleDispatchRepair(button.getAttribute('data-recheck-dispatch')); });
+    });
+    Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
+      checkbox.addEventListener('change', function () {
+        var employeeId = checkbox.getAttribute('data-batch-dispatch');
+        if (checkbox.checked) state.batchDispatchSelectedEmployees[employeeId] = true;
+        else delete state.batchDispatchSelectedEmployees[employeeId];
+        updateBatchDispatchSelectionState(isCurrentMonth);
+      });
     });
   }
 
@@ -2343,6 +2406,242 @@
     if (category === 'CREATED') return 'tag--success';
     if (category === 'DUPLICATE' || category === 'UNPROCESSED') return 'tag--warning';
     return 'tag--danger';
+  }
+
+
+  function getSelectedBatchDispatchEmployeeIds() {
+    return Object.keys(state.batchDispatchSelectedEmployees || {}).filter(function (employeeId) {
+      return state.batchDispatchSelectedEmployees[employeeId] === true;
+    }).sort();
+  }
+
+  function updateBatchDispatchSelectionState(isCurrentMonth) {
+    var selected = getSelectedBatchDispatchEmployeeIds();
+    if (elements.batchDispatchSelectedCount) elements.batchDispatchSelectedCount.textContent = '已選' + selected.length + '人';
+    if (elements.batchDispatchPreviewButton) elements.batchDispatchPreviewButton.disabled = !isCurrentMonth || !selected.length || state.dispatchManagementLoading;
+    if (elements.batchDispatchSelectVisibleButton) elements.batchDispatchSelectVisibleButton.disabled = !isCurrentMonth || state.dispatchManagementLoading;
+    if (elements.batchDispatchClearButton) elements.batchDispatchClearButton.disabled = !selected.length || state.dispatchManagementLoading;
+  }
+
+  function selectVisibleBatchDispatchEmployees() {
+    if (!elements.dispatchManagementPersons) return;
+    Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
+      checkbox.checked = true;
+      state.batchDispatchSelectedEmployees[checkbox.getAttribute('data-batch-dispatch')] = true;
+    });
+    updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
+  }
+
+  function clearBatchDispatchSelection() {
+    state.batchDispatchSelectedEmployees = {};
+    if (elements.dispatchManagementPersons) {
+      Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
+        checkbox.checked = false;
+      });
+    }
+    closeBatchDispatchRepairPanel();
+    updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
+  }
+
+  async function previewBatchDispatchRepair() {
+    var employeeIds = getSelectedBatchDispatchEmployeeIds();
+    if (!employeeIds.length || state.dispatchManagementLoading) return;
+    state.dispatchManagementLoading = true;
+    setButtonLoading(elements.batchDispatchPreviewButton, true, '預覽中');
+    showDispatchManagementMessage('info', '正在逐筆重新檢查批次人員的派發資格與七階段路線…');
+    try {
+      var result = await window.V3WorkflowService.previewBatchDispatchRepair(
+        employeeIds,
+        String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim()
+      );
+      state.batchDispatchRepairPreview = result.data || {};
+      renderBatchDispatchRepairPreview(state.batchDispatchRepairPreview, false);
+      showDispatchManagementMessage(state.batchDispatchRepairPreview.canRun ? 'success' : 'info',
+        state.batchDispatchRepairPreview.canRun ? '批次預覽完成，請確認可建立、跳過與異常名單。' : '選取人員目前沒有可建立的R0。');
+    } catch (error) {
+      showDispatchManagementMessage('error', friendlyError(error));
+    } finally {
+      state.dispatchManagementLoading = false;
+      setButtonLoading(elements.batchDispatchPreviewButton, false, '預覽批次補派');
+      updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
+    }
+  }
+
+  function renderBatchDispatchRepairPreview(data, refreshedBecauseStale) {
+    var summary = data.summary || {};
+    var items = data.items || [];
+    elements.batchDispatchRepairContent.innerHTML = '<h4>批次安全補派預覽</h4>' +
+      (refreshedBecauseStale ? '<div class="form-message form-message--info">資料已變動，系統已自動更新預覽；請重新確認後執行。</div>' : '') +
+      '<div class="admin-result-grid">' +
+        metaItem('考核月份', data.evaluationMonth) +
+        metaItem('本次選取', summary.selectedCount || 0) +
+        metaItem('預計建立', summary.createCount || 0) +
+        metaItem('已有R0跳過', summary.duplicateCount || 0) +
+        metaItem('路線／資格異常', summary.routeErrorCount || 0) +
+        metaItem('提醒數', summary.warningCount || 0) +
+      '</div><div class="route-list">' + items.map(function (item) {
+        var employee = item.employee || {};
+        var organization = item.organization || {};
+        var label = item.action === 'CREATE' ? '預計建立' : (item.action === 'DUPLICATE' ? '重複跳過' : '不可建立');
+        var tone = item.action === 'CREATE' ? 'tag--success' : (item.action === 'DUPLICATE' ? 'tag--warning' : 'tag--danger');
+        var reason = item.reason || (item.errors || []).join('；') || '路線檢查通過';
+        return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(label) + '</span> ' +
+          escapeHtml(joinStore(organization.storeCode, organization.storeName)) + '</span><strong>' +
+          escapeHtml(joinText(employee.employeeId, employee.employeeName)) +
+          (item.plannedEvaluationNo || item.existingEvaluationNo ? '｜' + escapeHtml(item.plannedEvaluationNo || item.existingEvaluationNo) : '') +
+          '</strong><small>' + escapeHtml(reason) + '</small></div>';
+      }).join('') + '</div><p class="section-help">' + escapeHtml(data.note || '') + '</p>';
+    elements.batchDispatchRepairPanel.hidden = false;
+    elements.batchDispatchRepairResult.hidden = true;
+    elements.batchDispatchRepairReason.value = '';
+    elements.batchDispatchRepairConfirm.checked = false;
+    elements.batchDispatchRepairConfirmText.value = '';
+    updateBatchDispatchRunState();
+    elements.batchDispatchRepairPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeBatchDispatchRepairPanel() {
+    state.batchDispatchRepairPreview = null;
+    if (elements.batchDispatchRepairPanel) elements.batchDispatchRepairPanel.hidden = true;
+    if (elements.batchDispatchRepairReason) elements.batchDispatchRepairReason.value = '';
+    if (elements.batchDispatchRepairConfirm) elements.batchDispatchRepairConfirm.checked = false;
+    if (elements.batchDispatchRepairConfirmText) elements.batchDispatchRepairConfirmText.value = '';
+  }
+
+  function updateBatchDispatchRunState() {
+    if (!elements.batchDispatchRepairRunButton) return;
+    var preview = state.batchDispatchRepairPreview || {};
+    elements.batchDispatchRepairRunButton.disabled = state.dispatchManagementLoading || !(
+      preview.canRun && preview.previewToken &&
+      String(elements.batchDispatchRepairReason.value || '').trim() &&
+      elements.batchDispatchRepairConfirm.checked &&
+      String(elements.batchDispatchRepairConfirmText.value || '').trim() === String(preview.confirmationText || '批次補派')
+    );
+  }
+
+  async function runBatchDispatchRepair() {
+    var preview = state.batchDispatchRepairPreview || {};
+    if (!preview.canRun || !preview.previewToken || state.dispatchManagementLoading) return;
+    var reason = String(elements.batchDispatchRepairReason.value || '').trim();
+    var confirmationText = String(elements.batchDispatchRepairConfirmText.value || '').trim();
+    if (!reason) return showDispatchManagementMessage('error', '請填寫批次補派原因。');
+    if (!elements.batchDispatchRepairConfirm.checked) return showDispatchManagementMessage('error', '請完成二次確認。');
+    if (confirmationText !== String(preview.confirmationText || '批次補派')) return showDispatchManagementMessage('error', '請正確輸入批次補派確認文字。');
+    if (!window.confirm('確定執行本次批次安全補派嗎？\n\n預計建立：' + Number(preview.summary && preview.summary.createCount || 0) + '人\n系統將逐筆驗證，單筆失敗不影響其他人。')) return;
+
+    state.dispatchManagementLoading = true;
+    setButtonLoading(elements.batchDispatchRepairRunButton, true, '批次處理中');
+    showGlobalNotice('processing', '正在執行批次安全補派', '系統正逐筆確認資格、七階段路線與同月份R0。', false);
+    try {
+      var result = await window.V3WorkflowService.runBatchDispatchRepair({
+        evaluationMonth: preview.evaluationMonth,
+        previewToken: preview.previewToken,
+        reason: reason,
+        secondConfirmed: true,
+        confirmationText: confirmationText
+      }, window.V3ApiClient.createRequestId());
+      closeGlobalNotice();
+      renderBatchDispatchRepairResult(result.data || {});
+      state.batchDispatchSelectedEmployees = {};
+      state.batchDispatchRepairPreview = null;
+      showDispatchManagementMessage('success', '批次補派完成：成功' + Number(result.data && result.data.createdCount || 0) + '、跳過' + Number(result.data && result.data.skippedCount || 0) + '、失敗' + Number(result.data && result.data.failedCount || 0) + '。');
+      await Promise.allSettled([loadDispatchManagementCenter({ quiet: true }), refreshAllAccessibleLists()]);
+    } catch (error) {
+      closeGlobalNotice();
+      if (error && error.code === 'BATCH_DISPATCH_PREVIEW_STALE' && error.details && error.details.latestPreview) {
+        state.batchDispatchRepairPreview = error.details.latestPreview;
+        renderBatchDispatchRepairPreview(state.batchDispatchRepairPreview, true);
+        showDispatchManagementMessage('info', '資料已變動，系統已自動更新批次預覽；請重新確認。');
+      } else {
+        showGlobalNotice('error', '批次補派失敗', friendlyError(error));
+        showDispatchManagementMessage('error', friendlyError(error));
+      }
+    } finally {
+      state.dispatchManagementLoading = false;
+      setButtonLoading(elements.batchDispatchRepairRunButton, false, '執行批次安全補派');
+      updateBatchDispatchRunState();
+      updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
+    }
+  }
+
+  function renderBatchDispatchRepairResult(data) {
+    var html = '<h4>批次補派結果</h4><div class="admin-result-grid">' +
+      metaItem('批次ID', data.batchId || '') +
+      metaItem('本次選取', data.selectedCount || 0) +
+      metaItem('成功建立', data.createdCount || 0) +
+      metaItem('跳過', data.skippedCount || 0) +
+      metaItem('失敗', data.failedCount || 0) +
+      metaItem('完成時間', data.completedAt || '') + '</div>';
+    if (Array.isArray(data.failedItems) && data.failedItems.length) {
+      html += '<h5>失敗明細</h5><ul class="preview-alert-list preview-alert-list--error">' + data.failedItems.map(function (item) {
+        return '<li>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '｜' + escapeHtml(item.reason || '建立失敗') + '</li>';
+      }).join('') + '</ul>';
+    }
+    elements.batchDispatchRepairResult.innerHTML = html;
+    elements.batchDispatchRepairResult.hidden = false;
+    elements.batchDispatchRepairPanel.hidden = false;
+  }
+
+  async function loadDispatchMonthAnalysis() {
+    if (state.dispatchManagementLoading) return;
+    state.dispatchManagementLoading = true;
+    setButtonLoading(elements.dispatchMonthAnalysisButton, true, '分析中');
+    showDispatchManagementMessage('info', '正在產生所選月份的派發總整分析…');
+    try {
+      var result = await window.V3WorkflowService.dispatchMonthAnalysis(
+        String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim()
+      );
+      state.dispatchMonthAnalysis = result.data || {};
+      renderDispatchMonthAnalysis(state.dispatchMonthAnalysis);
+      showDispatchManagementMessage('success', '月份分析已產生。');
+    } catch (error) {
+      showDispatchManagementMessage('error', friendlyError(error));
+    } finally {
+      state.dispatchManagementLoading = false;
+      setButtonLoading(elements.dispatchMonthAnalysisButton, false, '產生月份分析');
+      updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
+    }
+  }
+
+  function renderDispatchMonthAnalysis(data) {
+    var summary = data.summary || {};
+    var html = '<h4>' + escapeHtml(data.evaluationMonth || '') + ' 派發總整分析</h4>' +
+      '<div class="admin-result-grid">' +
+        metaItem(data.populationLabel || '統計人數', summary.populationCount || 0) +
+        metaItem('已建立R0', summary.createdCount || 0) +
+        metaItem('尚未派發', summary.unprocessedCount || 0) +
+        metaItem('路線異常', summary.routeErrorCount || 0) +
+        metaItem('系統失敗', summary.failedCount || 0) +
+        metaItem('人工補派成功', summary.manualRepairCreatedCount || 0) +
+        metaItem('完成率', Number(summary.completionRate || 0).toFixed(1) + '%') +
+        metaItem('派發嘗試', summary.attemptCount || 0) +
+      '</div><p class="section-help">' + escapeHtml(data.scopeNote || '') +
+      (data.cacheHit ? '｜本次使用短時間快取。' : '｜本次重新計算。') + '</p>';
+    var sources = data.sources || [];
+    if (sources.length) {
+      html += '<details class="detail-section" open><summary>依派發來源統計</summary><div class="route-list">' + sources.map(function (row) {
+        return '<div class="route-row"><span>' + escapeHtml(row.source) + '</span><strong>成功 ' + Number(row.createdCount || 0) +
+          '｜跳過 ' + Number(row.skippedCount || 0) + '｜失敗 ' + Number(row.failedCount || 0) +
+          '</strong><small>涉及人員 ' + Number(row.employeeCount || 0) + '｜嘗試 ' + Number(row.attemptCount || 0) + '</small></div>';
+      }).join('') + '</div></details>';
+    }
+    var anomalies = data.anomalies || [];
+    html += '<details class="detail-section"' + (anomalies.length ? ' open' : '') + '><summary>需要處理的異常名單（' + anomalies.length + '）</summary>' +
+      (anomalies.length ? '<div class="route-list">' + anomalies.map(function (row) {
+        return '<div class="route-row"><span><span class="tag ' + dispatchCategoryTone(row.category) + '">' + escapeHtml(dispatchCategoryLabel(row.category)) +
+          '</span> ' + escapeHtml(joinStore(row.storeCode, row.storeName)) + '</span><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) +
+          '</strong><small>' + escapeHtml(row.reason || '尚未處理') + '</small></div>';
+      }).join('') + '</div>' : '<p class="section-help">本月份目前沒有尚未派發、路線異常或系統失敗人員。</p>') + '</details>';
+    var batches = data.batches || [];
+    if (batches.length) {
+      html += '<details class="detail-section"><summary>批次執行紀錄（' + batches.length + '）</summary><div class="route-list">' + batches.map(function (row) {
+        return '<div class="route-row"><span>' + escapeHtml(row.source || '未標示來源') + '</span><strong>' + escapeHtml(row.batchId || '') +
+          '</strong><small>' + escapeHtml(row.completedAt || row.startedAt || '') + '｜候選 ' + Number(row.candidateCount || 0) +
+          '｜成功 ' + Number(row.createdCount || 0) + '｜跳過 ' + Number(row.skippedCount || 0) + '｜失敗 ' + Number(row.failedCount || 0) + '</small></div>';
+      }).join('') + '</div></details>';
+    }
+    elements.dispatchMonthAnalysisResult.innerHTML = html;
+    elements.dispatchMonthAnalysisResult.hidden = false;
   }
 
   async function previewSingleDispatchRepair(employeeId) {
@@ -2480,6 +2779,14 @@
     } finally {
       elements.logoutButton.disabled = false;
       state.pdfFallbackCache = {};
+      state.dispatchManagement = null;
+      state.dispatchMonthAnalysis = null;
+      state.batchDispatchRepairPreview = null;
+      state.batchDispatchSelectedEmployees = {};
+      state.dispatchManagementSelectionMonth = '';
+      closeBatchDispatchRepairPanel();
+      closeSingleDispatchRepairPanel();
+      if (elements.dispatchMonthAnalysisResult) elements.dispatchMonthAnalysisResult.hidden = true;
       closePdfViewerModal();
       closeEvaluation({ saveDraft: false });
       showLogin();
