@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.0.5-drive-pdf-optimization';
+  var APP_BUILD = '7.0.5.1-pdf-viewer-stability';
   var elements = {};
   var state = {
     session: null,
@@ -30,7 +30,12 @@
     pdfJsModulePromise: null,
     pdfViewerContext: null,
     pdfFallbackCache: {},
-    pdfFallbackLoading: false
+    pdfFallbackLoading: false,
+    pdfActiveRequestId: '',
+    pdfActiveMode: '',
+    pdfSlowHintTimers: [],
+    pdfPreloadScheduled: false,
+    pdfPreloadStarted: false
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
@@ -264,6 +269,7 @@
       state.history = nextItems;
       if (!settings.quiet || nextSignature !== state.historyRenderSignature) renderHistory();
       state.historyRenderSignature = nextSignature;
+      schedulePdfJsPreloadV3();
     } catch (error) {
       if (!settings.quiet) elements.historyList.innerHTML = emptyStateHtml('歷史查詢失敗', friendlyError(error));
     }
@@ -444,109 +450,323 @@
     var safeNo = String(evaluationNo || '').trim();
     if (!safeNo || !button || button.disabled) return;
     var originalLabel = button.textContent;
-    var correlationId = 'pdf-drive-' + window.V3ApiClient.createRequestId();
-    var startedAt = performanceNowV3();
-    var prepareRequestMs = 0;
-    var responseBytes = 0;
-    var operationResult = '成功';
-    var operationErrorCode = '';
-    var driveEmbedLoadMs = 0;
-    var preparedData = null;
+    var correlationId = 'pdf-stable-' + window.V3ApiClient.createRequestId();
 
     button.disabled = true;
     button.textContent = '開啟中…';
-    openPdfViewerModal('正在確認PDF查看權限…', safeNo);
-    try {
-      var prepared = await window.V3WorkflowService.prepareDrivePdfView(safeNo, correlationId + '-prepare');
-      prepareRequestMs = Number(prepared.clientPerformance && prepared.clientPerformance.requestMs || 0);
-      responseBytes += Number(prepared.clientPerformance && prepared.clientPerformance.responseBytes || 0);
-      preparedData = prepared.data || {};
-      state.pdfViewerContext = {
-        evaluationNo: safeNo,
-        fileName: preparedData.fileName || safeNo + '.pdf',
-        pdfVersion: preparedData.pdfVersion || '',
-        correlationId: correlationId,
-        settings: preparedData,
-        fallbackReason: preparedData.fallbackReason || '',
-        originalStartedAt: startedAt,
-        prepareRequestMs: prepareRequestMs,
-        prepareResponseBytes: responseBytes
-      };
+    openPdfViewerModal('正在啟動系統檢視…', safeNo);
+    state.pdfViewerContext = {
+      evaluationNo: safeNo,
+      fileName: safeNo + '.pdf',
+      pdfVersion: '',
+      correlationId: correlationId,
+      originalStartedAt: performanceNowV3(),
+      activeMode: '',
+      attemptToken: 0,
+      settings: {
+        memoryCacheEnabled: true,
+        renderMaxDprDesktop: 1.75,
+        renderMaxDprMobile: 2,
+        driveEmbedTimeoutMs: 12000
+      }
+    };
 
-      if (preparedData.viewMode === 'drive_embed' && preparedData.previewUrl) {
-        var driveResult = await renderDrivePdfInViewerV3(preparedData, state.pdfViewerContext);
-        driveEmbedLoadMs = Number(driveResult && driveResult.loadMs || 0);
-        if (!state.pdfViewerContext.driveMetricRecorded) {
-          state.pdfViewerContext.driveMetricRecorded = true;
-          queuePdfViewPerformanceMetricV3({
-          operation: 'PDF_VIEW_DRIVE_EMBED',
-          correlationId: correlationId,
-          result: driveResult && driveResult.timedOut ? '失敗' : '成功',
-          errorCode: driveResult && driveResult.timedOut ? 'DRIVE_EMBED_TIMEOUT' : '',
-          deviceType: detectDeviceTypeV3(),
-          cacheHit: false,
-          viewMode: 'drive_embed',
-          fallbackUsed: false,
-          prepareRequestMs: prepareRequestMs,
-          pdfRequestMs: 0,
-          networkMs: prepareRequestMs,
-          driveEmbedLoadMs: driveEmbedLoadMs,
-          frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - startedAt)),
-          postViewRefreshMs: 0,
-          responseBytes: responseBytes,
-          pdfSizeBytes: 0
-          });
-        }
-      } else {
-        await activatePdfCanvasFallbackV3(preparedData.fallbackReason || '系統設定使用相容檢視', true);
-      }
-    } catch (error) {
-      operationResult = '失敗';
-      operationErrorCode = String(error && error.code || error && error.name || 'PDF_VIEW_FAILED');
-      if (error && error.clientPerformance) {
-        prepareRequestMs = Number(error.clientPerformance.requestMs || prepareRequestMs || 0);
-        responseBytes += Number(error.clientPerformance.responseBytes || 0);
-      }
-      showPdfViewerError(friendlyError(error));
-      queuePdfViewPerformanceMetricV3({
-        operation: 'PDF_VIEW_DRIVE_EMBED',
-        correlationId: correlationId,
-        result: operationResult,
-        errorCode: operationErrorCode,
-        deviceType: detectDeviceTypeV3(),
-        cacheHit: false,
-        viewMode: 'drive_embed',
-        fallbackUsed: false,
-        prepareRequestMs: prepareRequestMs,
-        pdfRequestMs: 0,
-        networkMs: prepareRequestMs,
-        driveEmbedLoadMs: driveEmbedLoadMs,
-        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - startedAt)),
-        postViewRefreshMs: 0,
-        responseBytes: responseBytes,
-        pdfSizeBytes: 0
-      });
+    try {
+      await activatePdfCanvasViewerV3('系統預設檢視', false);
     } finally {
       button.disabled = false;
       button.textContent = originalLabel;
     }
   }
 
-  function renderDrivePdfInViewerV3(data, context) {
+  function cancelActivePdfRequestV3() {
+    var requestId = String(state.pdfActiveRequestId || '').trim();
+    if (requestId && window.V3ApiClient && typeof window.V3ApiClient.cancelRequest === 'function') {
+      window.V3ApiClient.cancelRequest(requestId);
+    }
+    state.pdfActiveRequestId = '';
+  }
+
+  function clearPdfSlowHintTimersV3() {
+    (state.pdfSlowHintTimers || []).forEach(function(timerId) { window.clearTimeout(timerId); });
+    state.pdfSlowHintTimers = [];
+  }
+
+  function resetPdfViewerSurfaceV3() {
+    clearPdfSlowHintTimersV3();
+    state.pdfViewerRenderId += 1;
+    var pages = document.getElementById('pdfViewerPages');
+    if (!pages) return;
+    Array.prototype.slice.call(pages.querySelectorAll('iframe')).forEach(function(frame) {
+      try { frame.src = 'about:blank'; } catch (ignore) {}
+    });
+    pages.innerHTML = '';
+  }
+
+  function configurePdfViewerModeV3(mode) {
+    var switchButton = document.getElementById('pdfViewerFallback');
+    var modeNote = document.getElementById('pdfViewerModeNote');
+    var isCanvas = mode === 'canvas_proxy';
+    state.pdfActiveMode = mode;
+    if (switchButton) {
+      switchButton.hidden = false;
+      switchButton.disabled = false;
+      switchButton.textContent = isCanvas ? '改用Google快速檢視' : '改用系統檢視';
+    }
+    if (modeNote) {
+      modeNote.textContent = isCanvas
+        ? '目前：系統檢視（建議，無Google工具列）'
+        : '目前：Google快速檢視（工具列由Google控制）';
+    }
+  }
+
+  function schedulePdfLoadingHintsV3(mode, attemptToken) {
+    clearPdfSlowHintTimersV3();
+    var status = document.getElementById('pdfViewerStatus');
+    state.pdfSlowHintTimers.push(window.setTimeout(function() {
+      var context = state.pdfViewerContext || {};
+      if (!state.pdfViewerOpen || context.attemptToken !== attemptToken || context.activeMode !== mode) return;
+      status.className = 'pdf-modal-status pdf-modal-status--warning';
+      status.textContent = mode === 'canvas_proxy'
+        ? '系統檢視載入時間較久，可繼續等待或改用Google快速檢視。'
+        : 'Google快速檢視載入時間較久，可繼續等待或改用系統檢視。';
+      status.hidden = false;
+    }, 6000));
+    state.pdfSlowHintTimers.push(window.setTimeout(function() {
+      var context = state.pdfViewerContext || {};
+      if (!state.pdfViewerOpen || context.attemptToken !== attemptToken || context.activeMode !== mode) return;
+      status.className = 'pdf-modal-status pdf-modal-status--warning';
+      status.textContent = mode === 'canvas_proxy'
+        ? 'PDF仍在載入。建議改用Google快速檢視，或稍後重新嘗試。'
+        : 'Google檢視器仍未完成。建議改回系統檢視。';
+      status.hidden = false;
+    }, 12000));
+  }
+
+  async function switchPdfViewerModeV3() {
+    var context = state.pdfViewerContext;
+    if (!context || !state.pdfViewerOpen) return;
+    if (context.activeMode === 'drive_embed') {
+      await activatePdfCanvasViewerV3('使用者由Google快速檢視切回系統檢視', true);
+    } else {
+      await activateDrivePdfViewerV3('使用者由系統檢視切換Google快速檢視');
+    }
+  }
+
+  async function activatePdfCanvasViewerV3(reason, secondaryUsed) {
+    var context = state.pdfViewerContext || {};
+    var evaluationNo = String(context.evaluationNo || '').trim();
+    if (!evaluationNo || !state.pdfViewerOpen) return;
+
+    cancelActivePdfRequestV3();
+    resetPdfViewerSurfaceV3();
+    context.attemptToken = Number(context.attemptToken || 0) + 1;
+    context.activeMode = 'canvas_proxy';
+    var attemptToken = context.attemptToken;
+    var renderId = state.pdfViewerRenderId;
+    configurePdfViewerModeV3('canvas_proxy');
+
+    var status = document.getElementById('pdfViewerStatus');
+    status.className = 'pdf-modal-status';
+    status.textContent = '正在取得PDF並啟動系統檢視…';
+    status.hidden = false;
+    schedulePdfLoadingHintsV3('canvas_proxy', attemptToken);
+
+    var startedAt = performanceNowV3();
+    var requestMs = 0;
+    var responseBytes = 0;
+    var cacheHit = false;
+    var renderMetrics = null;
+    var requestId = context.correlationId + '-canvas-' + attemptToken;
+    state.pdfActiveRequestId = requestId;
+
+    try {
+      var cacheKey = context.pdfVersion ? evaluationNo + '|' + String(context.pdfVersion) : '';
+      var cached = cacheKey && context.settings.memoryCacheEnabled !== false ? state.pdfFallbackCache[cacheKey] : null;
+      var data;
+      if (cached && cached.pdfBase64) {
+        cacheHit = true;
+        data = cached;
+      } else {
+        var result = await window.V3WorkflowService.authenticatedPdfView(evaluationNo, requestId);
+        requestMs = Number(result.clientPerformance && result.clientPerformance.requestMs || 0);
+        responseBytes = Number(result.clientPerformance && result.clientPerformance.responseBytes || 0);
+        data = result.data || {};
+        if (!data.pdfBase64) throw new Error('後端未回傳可顯示的PDF內容。');
+        var viewerSettings = data.viewerSettings || {};
+        context.settings = {
+          memoryCacheEnabled: viewerSettings.memoryCacheEnabled !== false,
+          renderMaxDprDesktop: Number(viewerSettings.renderMaxDprDesktop || 1.75),
+          renderMaxDprMobile: Number(viewerSettings.renderMaxDprMobile || 2),
+          driveEmbedTimeoutMs: Number(viewerSettings.driveEmbedTimeoutMs || 12000)
+        };
+        context.fileName = data.fileName || context.fileName;
+        context.pdfVersion = data.pdfVersion || context.pdfVersion || '';
+        cacheKey = evaluationNo + '|' + String(context.pdfVersion || '');
+        if (context.settings.memoryCacheEnabled !== false) {
+          state.pdfFallbackCache[cacheKey] = {
+            pdfBase64: data.pdfBase64,
+            fileName: context.fileName,
+            pdfVersion: context.pdfVersion,
+            viewerSettings: viewerSettings
+          };
+        }
+      }
+
+      if (!state.pdfViewerOpen || context.attemptToken !== attemptToken || context.activeMode !== 'canvas_proxy' || renderId !== state.pdfViewerRenderId) return;
+      renderMetrics = await renderPdfBase64InViewer(data.pdfBase64, data.fileName || context.fileName || evaluationNo + '.pdf', context.settings);
+      if (!state.pdfViewerOpen || context.attemptToken !== attemptToken || context.activeMode !== 'canvas_proxy') return;
+      clearPdfSlowHintTimersV3();
+      configurePdfViewerModeV3('canvas_proxy');
+      queuePdfViewPerformanceMetricV3({
+        operation: secondaryUsed ? 'PDF_VIEW_CANVAS_SECONDARY' : 'PDF_VIEW_CANVAS_PRIMARY',
+        correlationId: context.correlationId + '-canvas-view-' + attemptToken,
+        result: '成功',
+        deviceType: detectDeviceTypeV3(),
+        cacheHit: cacheHit,
+        viewMode: 'canvas_proxy',
+        fallbackUsed: Boolean(secondaryUsed),
+        fallbackReason: String(reason || ''),
+        prepareRequestMs: 0,
+        pdfRequestMs: requestMs,
+        networkMs: requestMs,
+        pdfJsLoadMs: renderMetrics && renderMetrics.pdfJsLoadMs || 0,
+        base64DecodeMs: renderMetrics && renderMetrics.base64DecodeMs || 0,
+        pdfParseMs: renderMetrics && renderMetrics.pdfParseMs || 0,
+        canvasRenderMs: renderMetrics && renderMetrics.canvasRenderMs || 0,
+        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - startedAt)),
+        postViewRefreshMs: 0,
+        responseBytes: responseBytes,
+        pdfSizeBytes: renderMetrics && renderMetrics.pdfSizeBytes || 0,
+        note: '一次登入API完成權限驗證、PDF讀取與系統Canvas顯示'
+      });
+    } catch (error) {
+      if (String(error && error.code || '') === 'REQUEST_CANCELLED') return;
+      clearPdfSlowHintTimersV3();
+      showPdfViewerError(friendlyError(error) + ' 可改用Google快速檢視。');
+      configurePdfViewerModeV3('canvas_proxy');
+      queuePdfViewPerformanceMetricV3({
+        operation: secondaryUsed ? 'PDF_VIEW_CANVAS_SECONDARY' : 'PDF_VIEW_CANVAS_PRIMARY',
+        correlationId: context.correlationId + '-canvas-view-' + attemptToken,
+        result: '失敗',
+        errorCode: String(error && error.code || error && error.name || 'PDF_CANVAS_FAILED'),
+        deviceType: detectDeviceTypeV3(),
+        cacheHit: cacheHit,
+        viewMode: 'canvas_proxy',
+        fallbackUsed: Boolean(secondaryUsed),
+        fallbackReason: String(reason || ''),
+        pdfRequestMs: requestMs,
+        networkMs: requestMs,
+        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - startedAt)),
+        postViewRefreshMs: 0,
+        responseBytes: responseBytes,
+        pdfSizeBytes: 0
+      });
+    } finally {
+      if (state.pdfActiveRequestId === requestId) state.pdfActiveRequestId = '';
+    }
+  }
+
+  async function activateDrivePdfViewerV3(reason) {
+    var context = state.pdfViewerContext || {};
+    var evaluationNo = String(context.evaluationNo || '').trim();
+    if (!evaluationNo || !state.pdfViewerOpen) return;
+
+    cancelActivePdfRequestV3();
+    resetPdfViewerSurfaceV3();
+    context.attemptToken = Number(context.attemptToken || 0) + 1;
+    context.activeMode = 'drive_embed';
+    var attemptToken = context.attemptToken;
+    var renderId = state.pdfViewerRenderId;
+    configurePdfViewerModeV3('drive_embed');
+
+    var status = document.getElementById('pdfViewerStatus');
+    status.className = 'pdf-modal-status';
+    status.textContent = '正在取得Google Drive快速檢視連結…';
+    status.hidden = false;
+    schedulePdfLoadingHintsV3('drive_embed', attemptToken);
+
+    var startedAt = performanceNowV3();
+    var requestMs = 0;
+    var responseBytes = 0;
+    var requestId = context.correlationId + '-drive-' + attemptToken;
+    state.pdfActiveRequestId = requestId;
+
+    try {
+      var prepared = await window.V3WorkflowService.prepareDrivePdfView(evaluationNo, requestId);
+      requestMs = Number(prepared.clientPerformance && prepared.clientPerformance.requestMs || 0);
+      responseBytes = Number(prepared.clientPerformance && prepared.clientPerformance.responseBytes || 0);
+      var data = prepared.data || {};
+      if (!data.previewUrl) throw new Error(data.fallbackReason || 'Google Drive快速檢視連結無法取得。');
+      context.fileName = data.fileName || context.fileName;
+      context.pdfVersion = data.pdfVersion || context.pdfVersion || '';
+      context.settings.driveEmbedTimeoutMs = Number(data.driveEmbedTimeoutMs || context.settings.driveEmbedTimeoutMs || 12000);
+
+      if (!state.pdfViewerOpen || context.attemptToken !== attemptToken || context.activeMode !== 'drive_embed' || renderId !== state.pdfViewerRenderId) return;
+      var driveResult = await renderDrivePdfInViewerV3(data, context, attemptToken);
+      if (!state.pdfViewerOpen || context.attemptToken !== attemptToken || context.activeMode !== 'drive_embed') return;
+      clearPdfSlowHintTimersV3();
+      configurePdfViewerModeV3('drive_embed');
+      queuePdfViewPerformanceMetricV3({
+        operation: driveResult && driveResult.timedOut ? 'PDF_VIEW_DRIVE_IFRAME_TIMEOUT' : 'PDF_VIEW_DRIVE_IFRAME_LOAD',
+        correlationId: context.correlationId + '-drive-view-' + attemptToken,
+        result: driveResult && driveResult.timedOut ? '失敗' : '成功',
+        errorCode: driveResult && driveResult.timedOut ? 'DRIVE_IFRAME_TIMEOUT' : '',
+        deviceType: detectDeviceTypeV3(),
+        cacheHit: false,
+        viewMode: 'drive_embed',
+        fallbackUsed: true,
+        fallbackReason: String(reason || ''),
+        prepareRequestMs: requestMs,
+        pdfRequestMs: 0,
+        networkMs: requestMs,
+        driveEmbedLoadMs: driveResult && driveResult.loadMs || 0,
+        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - startedAt)),
+        postViewRefreshMs: 0,
+        responseBytes: responseBytes,
+        pdfSizeBytes: 0,
+        note: driveResult && driveResult.timedOut
+          ? 'iframe逾時提示，不代表Drive檔案不存在'
+          : '只記錄iframe load事件，不代表PDF內容已被系統驗證'
+      });
+    } catch (error) {
+      if (String(error && error.code || '') === 'REQUEST_CANCELLED') return;
+      clearPdfSlowHintTimersV3();
+      showPdfViewerError(friendlyError(error) + ' 請改用系統檢視。');
+      configurePdfViewerModeV3('drive_embed');
+      queuePdfViewPerformanceMetricV3({
+        operation: 'PDF_VIEW_DRIVE_IFRAME_LOAD',
+        correlationId: context.correlationId + '-drive-view-' + attemptToken,
+        result: '失敗',
+        errorCode: String(error && error.code || error && error.name || 'PDF_DRIVE_FAILED'),
+        deviceType: detectDeviceTypeV3(),
+        cacheHit: false,
+        viewMode: 'drive_embed',
+        fallbackUsed: true,
+        fallbackReason: String(reason || ''),
+        prepareRequestMs: requestMs,
+        networkMs: requestMs,
+        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - startedAt)),
+        postViewRefreshMs: 0,
+        responseBytes: responseBytes,
+        pdfSizeBytes: 0
+      });
+    } finally {
+      if (state.pdfActiveRequestId === requestId) state.pdfActiveRequestId = '';
+    }
+  }
+
+  function renderDrivePdfInViewerV3(data, context, attemptToken) {
     ensurePdfViewerModal();
     var renderId = state.pdfViewerRenderId;
     var title = document.getElementById('pdfViewerTitle');
     var status = document.getElementById('pdfViewerStatus');
     var pages = document.getElementById('pdfViewerPages');
-    var fallbackButton = document.getElementById('pdfViewerFallback');
     title.textContent = String(data.fileName || '月考核表PDF');
     status.className = 'pdf-modal-status';
-    status.textContent = '正在載入Google Drive PDF檢視器…';
+    status.textContent = '正在載入Google Drive快速檢視器…';
     status.hidden = false;
     pages.innerHTML = '';
-    fallbackButton.hidden = !data.fallbackAvailable;
-    fallbackButton.disabled = false;
-    fallbackButton.textContent = '改用相容檢視';
 
     var frame = document.createElement('iframe');
     frame.className = 'pdf-drive-iframe';
@@ -558,191 +778,37 @@
     var startedAt = performanceNowV3();
     var timeoutMs = Math.max(4000, Math.min(30000, Number(data.driveEmbedTimeoutMs || 12000)));
     return new Promise(function(resolve, reject) {
-      var terminal = false;
-      var promiseResolved = false;
+      var settled = false;
       var timeoutId = window.setTimeout(function() {
-        if (terminal || renderId !== state.pdfViewerRenderId || !state.pdfViewerOpen) return;
+        if (settled || renderId !== state.pdfViewerRenderId || !state.pdfViewerOpen || context.attemptToken !== attemptToken) return;
+        settled = true;
         status.className = 'pdf-modal-status pdf-modal-status--warning';
-        status.textContent = 'Google Drive檢視器載入時間較久，可繼續等待或改用相容檢視。';
-        fallbackButton.hidden = false;
-        if (!promiseResolved) {
-          promiseResolved = true;
-          resolve({ loadMs: Math.max(0, Math.round(performanceNowV3() - startedAt)), timedOut: true });
-        }
+        status.textContent = 'Google快速檢視載入較久，可繼續等待或改用系統檢視。';
+        resolve({ loadMs: Math.max(0, Math.round(performanceNowV3() - startedAt)), timedOut: true });
       }, timeoutMs);
 
       frame.addEventListener('load', function() {
-        if (terminal) return;
-        if (context && context.fallbackActivated) {
-          terminal = true;
-          window.clearTimeout(timeoutId);
-          if (!promiseResolved) {
-            promiseResolved = true;
-            resolve({ loadMs: Math.max(0, Math.round(performanceNowV3() - startedAt)), timedOut: true });
-          }
-          return;
-        }
-        terminal = true;
+        if (renderId !== state.pdfViewerRenderId || !state.pdfViewerOpen || context.attemptToken !== attemptToken) return;
         window.clearTimeout(timeoutId);
-        if (renderId === state.pdfViewerRenderId && state.pdfViewerOpen && !state.pdfFallbackLoading) {
-          status.hidden = true;
-          fallbackButton.hidden = !data.fallbackAvailable;
-        }
-        if (!promiseResolved) {
-          promiseResolved = true;
+        status.hidden = true;
+        if (!settled) {
+          settled = true;
           resolve({ loadMs: Math.max(0, Math.round(performanceNowV3() - startedAt)), timedOut: false });
         }
-      }, { once: true });
+      });
 
       frame.addEventListener('error', function() {
-        if (terminal) return;
-        if (context && context.fallbackActivated) {
-          terminal = true;
-          window.clearTimeout(timeoutId);
-          if (!promiseResolved) {
-            promiseResolved = true;
-            resolve({ loadMs: Math.max(0, Math.round(performanceNowV3() - startedAt)), timedOut: true });
-          }
-          return;
-        }
-        terminal = true;
+        if (renderId !== state.pdfViewerRenderId || !state.pdfViewerOpen || context.attemptToken !== attemptToken) return;
         window.clearTimeout(timeoutId);
-        status.className = 'pdf-modal-status pdf-modal-status--error';
-        status.textContent = 'Google Drive檢視器無法載入，請改用相容檢視。';
-        fallbackButton.hidden = false;
-        if (!promiseResolved) {
-          promiseResolved = true;
-          reject(new Error('Google Drive PDF檢視器載入失敗。'));
+        if (!settled) {
+          settled = true;
+          reject(new Error('Google Drive快速檢視器載入失敗。'));
         }
-      }, { once: true });
+      });
 
       frame.src = String(data.previewUrl || '');
       pages.appendChild(frame);
     });
-  }
-
-  async function activatePdfCanvasFallbackV3(reason, automatic) {
-    var context = state.pdfViewerContext || {};
-    var evaluationNo = String(context.evaluationNo || '').trim();
-    if (!evaluationNo || state.pdfFallbackLoading) return;
-    state.pdfFallbackLoading = true;
-    var fallbackButton = document.getElementById('pdfViewerFallback');
-    var pages = document.getElementById('pdfViewerPages');
-    var status = document.getElementById('pdfViewerStatus');
-    var correlationId = String(context.correlationId || ('pdf-fallback-' + window.V3ApiClient.createRequestId()));
-    var startedAt = performanceNowV3();
-    var requestMs = 0;
-    var responseBytes = 0;
-    var cacheHit = false;
-    var renderMetrics = null;
-    var settings = context.settings || {};
-    var cacheKey = evaluationNo + '|' + String(context.pdfVersion || '');
-    var fallbackUsed = Boolean(context.settings && context.settings.viewMode === 'drive_embed');
-
-    context.fallbackActivated = true;
-    if (context.settings && context.settings.viewMode === 'drive_embed' && !context.driveMetricRecorded) {
-      context.driveMetricRecorded = true;
-      queuePdfViewPerformanceMetricV3({
-        operation: 'PDF_VIEW_DRIVE_EMBED',
-        correlationId: correlationId + '-drive-attempt',
-        result: '失敗',
-        errorCode: 'DRIVE_EMBED_FALLBACK',
-        deviceType: detectDeviceTypeV3(),
-        cacheHit: false,
-        viewMode: 'drive_embed',
-        fallbackUsed: true,
-        fallbackReason: String(reason || context.fallbackReason || ''),
-        prepareRequestMs: Number(context.prepareRequestMs || 0),
-        pdfRequestMs: 0,
-        networkMs: Number(context.prepareRequestMs || 0),
-        driveEmbedLoadMs: Math.max(0, Math.round(performanceNowV3() - Number(context.originalStartedAt || performanceNowV3()))),
-        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - Number(context.originalStartedAt || performanceNowV3()))),
-        postViewRefreshMs: 0,
-        responseBytes: Number(context.prepareResponseBytes || 0),
-        pdfSizeBytes: 0
-      });
-    }
-
-    fallbackButton.hidden = false;
-    fallbackButton.disabled = true;
-    fallbackButton.textContent = '相容檢視載入中…';
-    status.className = 'pdf-modal-status';
-    status.textContent = '正在啟動相容檢視…';
-    status.hidden = false;
-    Array.prototype.slice.call(pages.querySelectorAll('iframe')).forEach(function(frame) {
-      try { frame.src = 'about:blank'; } catch (ignore) {}
-    });
-    pages.innerHTML = '';
-
-    try {
-      var cached = settings.memoryCacheEnabled !== false ? state.pdfFallbackCache[cacheKey] : null;
-      var data;
-      if (cached && cached.pdfBase64) {
-        cacheHit = true;
-        data = cached;
-      } else {
-        var result = await window.V3WorkflowService.authenticatedPdfView(evaluationNo, correlationId + '-fallback');
-        requestMs = Number(result.clientPerformance && result.clientPerformance.requestMs || 0);
-        responseBytes = Number(result.clientPerformance && result.clientPerformance.responseBytes || 0);
-        data = result.data || {};
-        if (!data.pdfBase64) throw new Error('後端未回傳可顯示的PDF內容。');
-        if (settings.memoryCacheEnabled !== false) {
-          state.pdfFallbackCache[cacheKey] = {
-            pdfBase64: data.pdfBase64,
-            fileName: data.fileName || context.fileName || evaluationNo + '.pdf',
-            pdfVersion: data.pdfVersion || context.pdfVersion || ''
-          };
-        }
-      }
-      renderMetrics = await renderPdfBase64InViewer(data.pdfBase64, data.fileName || context.fileName || evaluationNo + '.pdf', settings);
-      fallbackButton.hidden = true;
-      queuePdfViewPerformanceMetricV3({
-        operation: 'PDF_VIEW_CANVAS_FALLBACK',
-        correlationId: correlationId + '-fallback-view',
-        result: '成功',
-        deviceType: detectDeviceTypeV3(),
-        cacheHit: cacheHit,
-        viewMode: 'canvas_proxy',
-        fallbackUsed: fallbackUsed,
-        fallbackReason: String(reason || context.fallbackReason || ''),
-        prepareRequestMs: Number(context.prepareRequestMs || 0),
-        pdfRequestMs: requestMs,
-        networkMs: Number(context.prepareRequestMs || 0) + requestMs,
-        pdfJsLoadMs: renderMetrics && renderMetrics.pdfJsLoadMs || 0,
-        base64DecodeMs: renderMetrics && renderMetrics.base64DecodeMs || 0,
-        pdfParseMs: renderMetrics && renderMetrics.pdfParseMs || 0,
-        canvasRenderMs: renderMetrics && renderMetrics.canvasRenderMs || 0,
-        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - Number(context.originalStartedAt || startedAt))),
-        postViewRefreshMs: 0,
-        responseBytes: Number(context.prepareResponseBytes || 0) + responseBytes,
-        pdfSizeBytes: renderMetrics && renderMetrics.pdfSizeBytes || 0
-      });
-    } catch (error) {
-      showPdfViewerError(friendlyError(error));
-      fallbackButton.hidden = true;
-      queuePdfViewPerformanceMetricV3({
-        operation: 'PDF_VIEW_CANVAS_FALLBACK',
-        correlationId: correlationId + '-fallback-view',
-        result: '失敗',
-        errorCode: String(error && error.code || error && error.name || 'PDF_FALLBACK_FAILED'),
-        deviceType: detectDeviceTypeV3(),
-        cacheHit: cacheHit,
-        viewMode: 'canvas_proxy',
-        fallbackUsed: fallbackUsed,
-        fallbackReason: String(reason || context.fallbackReason || ''),
-        prepareRequestMs: Number(context.prepareRequestMs || 0),
-        pdfRequestMs: requestMs,
-        networkMs: Number(context.prepareRequestMs || 0) + requestMs,
-        frontendTotalMs: Math.max(0, Math.round(performanceNowV3() - Number(context.originalStartedAt || startedAt))),
-        postViewRefreshMs: 0,
-        responseBytes: Number(context.prepareResponseBytes || 0) + responseBytes,
-        pdfSizeBytes: 0
-      });
-    } finally {
-      state.pdfFallbackLoading = false;
-      fallbackButton.disabled = false;
-      fallbackButton.textContent = '改用相容檢視';
-    }
   }
 
   function buildPublicPdfViewUrl(token) {
@@ -786,8 +852,8 @@
       '<button type="button" id="pdfViewerClose" class="pdf-modal-close" aria-label="關閉PDF檢視">×</button></header>' +
       '<div id="pdfViewerStatus" class="pdf-modal-status">正在載入PDF…</div>' +
       '<div id="pdfViewerPages" class="pdf-modal-pages" aria-live="polite"></div>' +
-      '<footer class="pdf-modal-footer"><span>僅供線上檢視；Drive模式的工具列由Google控制。</span>' +
-      '<button type="button" id="pdfViewerFallback" class="secondary-button" hidden>改用相容檢視</button></footer>' +
+      '<footer class="pdf-modal-footer"><span id="pdfViewerModeNote">目前：系統檢視（建議，無Google工具列）</span>' +
+      '<button type="button" id="pdfViewerFallback" class="secondary-button">改用Google快速檢視</button></footer>' +
       '</section>';
     document.body.appendChild(overlay);
     overlay.addEventListener('contextmenu', function (event) { event.preventDefault(); });
@@ -797,7 +863,7 @@
     });
     document.getElementById('pdfViewerClose').addEventListener('click', closePdfViewerModal);
     document.getElementById('pdfViewerFallback').addEventListener('click', function () {
-      activatePdfCanvasFallbackV3('使用者手動切換', false);
+      switchPdfViewerModeV3();
     });
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state.pdfViewerOpen) closePdfViewerModal();
@@ -819,11 +885,14 @@
     pages.innerHTML = '';
     var fallbackButton = document.getElementById('pdfViewerFallback');
     if (fallbackButton) {
-      fallbackButton.hidden = true;
+      fallbackButton.hidden = false;
       fallbackButton.disabled = false;
-      fallbackButton.textContent = '改用相容檢視';
+      fallbackButton.textContent = '改用Google快速檢視';
     }
     state.pdfFallbackLoading = false;
+    state.pdfActiveMode = 'canvas_proxy';
+    var modeNote = document.getElementById('pdfViewerModeNote');
+    if (modeNote) modeNote.textContent = '目前：系統檢視（建議，無Google工具列）';
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
     document.body.classList.add('is-locked');
@@ -833,6 +902,8 @@
   function closePdfViewerModal() {
     var overlay = document.getElementById('pdfViewerOverlay');
     if (!overlay) return;
+    cancelActivePdfRequestV3();
+    clearPdfSlowHintTimersV3();
     state.pdfViewerRenderId += 1;
     state.pdfViewerOpen = false;
     state.pdfFallbackLoading = false;
@@ -844,6 +915,7 @@
     });
     pages.innerHTML = '';
     state.pdfViewerContext = null;
+    state.pdfActiveMode = '';
     state.deferredAutoRefresh = false;
     if (elements.evaluationOverlay && !elements.evaluationOverlay.hidden) return;
     document.body.classList.remove('is-locked');
@@ -855,6 +927,33 @@
     status.className = 'pdf-modal-status pdf-modal-status--error';
     status.textContent = String(message || 'PDF無法開啟。');
     status.hidden = false;
+  }
+
+  function canPreloadPdfJsV3() {
+    var connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!connection) return true;
+    if (connection.saveData) return false;
+    var effectiveType = String(connection.effectiveType || '').toLowerCase();
+    return ['slow-2g', '2g'].indexOf(effectiveType) === -1;
+  }
+
+  function schedulePdfJsPreloadV3() {
+    if (state.pdfPreloadScheduled || state.pdfPreloadStarted || !canPreloadPdfJsV3()) return;
+    state.pdfPreloadScheduled = true;
+    var run = function() {
+      state.pdfPreloadScheduled = false;
+      if (state.pdfPreloadStarted) return;
+      state.pdfPreloadStarted = true;
+      loadPdfJsModule().catch(function(error) {
+        state.pdfPreloadStarted = false;
+        console.warn('PDF.js背景預載失敗，首次查看時會重新載入：', error && error.message || error);
+      });
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(run, { timeout: 4000 });
+    } else {
+      window.setTimeout(run, 2000);
+    }
   }
 
   function loadPdfJsModule() {
@@ -1950,6 +2049,7 @@
       SESSION_INVALID: '登入狀態無效，請重新登入。',
       SESSION_REVOKED: '帳號資料已更新，請重新登入。',
       REQUEST_TIMEOUT: '連線逾時，請確認網路後重試。',
+      REQUEST_CANCELLED: '已切換PDF檢視方式。',
       NETWORK_ERROR: '無法連線到後端，請確認網路與Apps Script部署。',
       INVALID_RESPONSE: '後端回傳格式異常，請聯絡系統管理人員。',
       VERSION_CONFLICT: '此考核表已被其他人更新，請關閉後重新開啟。',
