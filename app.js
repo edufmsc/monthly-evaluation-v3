@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.3.0AB-account-management';
+  var APP_BUILD = '7.3.1A-account-security-fix';
   var elements = {};
   var state = {
     session: null,
@@ -26,6 +26,7 @@
     accountManagementLoading: false,
     accountManagementPage: 1,
     accountAction: null,
+    accountCredentialLookup: null,
     forceClosePreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
@@ -164,9 +165,20 @@
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading"><div>' +
-      '<p class="step-label">帳號與登入管理｜7.3.0AB</p><h3>帳號管理中心</h3>' +
-      '<p>教育中心成員與主管權限一致。由本頁操作後，系統會安全更新員工主檔並寫入帳號操作紀錄；不提供員工自行修改密碼，也不開放批次強制登出。</p></div>' +
+      '<p class="step-label">帳號與登入管理｜7.3.1A</p><h3>帳號管理中心</h3>' +
+      '<p>教育中心成員與主管權限一致。密碼由教育中心在員工主檔統一維護；本頁可查詢帳密、解除暫時鎖定、啟停帳號及強制登出，但不提供網頁修改密碼。</p></div>' +
       '<button id="accountManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
+      '<section class="detail-section account-credential-section">' +
+        '<div class="test-dispatch-heading"><div><h4>協助查詢登入帳密</h4>' +
+        '<p class="section-help">僅教育中心可使用。輸入姓名或工號；同名時會先要求選擇正確人員。查詢紀錄不保存密碼內容。</p></div></div>' +
+        '<form id="accountCredentialLookupForm" class="account-credential-form">' +
+          '<label class="field-group"><span>員工姓名／工號</span><input id="accountCredentialLookupQuery" type="text" maxlength="80" autocomplete="off" placeholder="例如：王小明或 FMSC0000123"></label>' +
+          '<div class="test-dispatch-actions"><button id="accountCredentialLookupButton" class="primary-button primary-button--small" type="submit"><span class="button-label">查詢帳密</span><span class="button-spinner" aria-hidden="true"></span></button>' +
+          '<button id="accountCredentialClearButton" class="secondary-button secondary-button--small" type="button">清除結果</button></div>' +
+        '</form>' +
+        '<div id="accountCredentialLookupMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
+        '<div id="accountCredentialLookupResult" hidden></div>' +
+      '</section>' +
       '<form id="accountManagementFilterForm" class="filter-grid">' +
         '<label class="field-group"><span>工號／姓名／店別</span><input id="accountManagementKeyword" type="text" maxlength="80" autocomplete="off"></label>' +
         '<label class="field-group"><span>系統角色</span><select id="accountManagementRole"><option value="">全部角色</option></select></label>' +
@@ -182,12 +194,6 @@
       '<section id="accountActionPanel" class="test-dispatch-preview" hidden>' +
         '<div id="accountActionContent"></div>' +
         '<label class="field-group"><span>處理原因</span><textarea id="accountActionReason" rows="3" maxlength="300" placeholder="請填寫至少4個字的具體原因"></textarea></label>' +
-        '<div id="accountPasswordFields" hidden>' +
-          '<label class="field-group"><span>新密碼（4碼數字）</span><input id="accountNewPassword" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></label>' +
-          '<label class="field-group"><span>再次輸入新密碼</span><input id="accountConfirmPassword" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></label>' +
-          '<button id="accountGeneratePasswordButton" class="secondary-button secondary-button--small" type="button">產生4碼密碼</button>' +
-          '<p class="section-help">系統不顯示舊密碼；新密碼只會寫入員工主檔，不會寫入操作紀錄。</p>' +
-        '</div>' +
         '<label class="confirm-row"><input id="accountActionConfirm" type="checkbox"><span id="accountActionConfirmLabel">我已確認此操作的影響。</span></label>' +
         '<label class="field-group"><span>最終確認文字</span><input id="accountActionConfirmText" type="text" maxlength="20" autocomplete="off"><small id="accountActionConfirmHint"></small></label>' +
         '<div class="test-dispatch-actions"><button id="accountActionCancelButton" class="secondary-button" type="button">取消</button>' +
@@ -245,8 +251,9 @@
       'accountManagementKeyword', 'accountManagementRole', 'accountManagementEmployment', 'accountManagementStatus',
       'accountManagementSearchButton', 'accountManagementMessage', 'accountManagementSummary', 'accountManagementList',
       'accountManagementPreviousButton', 'accountManagementNextButton', 'accountManagementPageText',
-      'accountActionPanel', 'accountActionContent', 'accountActionReason', 'accountPasswordFields',
-      'accountNewPassword', 'accountConfirmPassword', 'accountGeneratePasswordButton', 'accountActionConfirm',
+      'accountCredentialLookupForm', 'accountCredentialLookupQuery', 'accountCredentialLookupButton',
+      'accountCredentialClearButton', 'accountCredentialLookupMessage', 'accountCredentialLookupResult',
+      'accountActionPanel', 'accountActionContent', 'accountActionReason', 'accountActionConfirm',
       'accountActionConfirmLabel', 'accountActionConfirmText', 'accountActionConfirmHint', 'accountActionCancelButton',
       'accountActionRunButton', 'accountActionResult', 'accountAuditPanel', 'accountAuditList',
       'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
@@ -285,12 +292,11 @@
     if (elements.accountManagementRefreshButton) elements.accountManagementRefreshButton.addEventListener('click', function () { loadAccountManagementCenter(); });
     if (elements.accountManagementPreviousButton) elements.accountManagementPreviousButton.addEventListener('click', function () { if (state.accountManagementPage > 1) { state.accountManagementPage -= 1; loadAccountManagementCenter(); } });
     if (elements.accountManagementNextButton) elements.accountManagementNextButton.addEventListener('click', function () { var totalPages = Number(state.accountManagement && state.accountManagement.totalPages || 1); if (state.accountManagementPage < totalPages) { state.accountManagementPage += 1; loadAccountManagementCenter(); } });
+    if (elements.accountCredentialLookupForm) elements.accountCredentialLookupForm.addEventListener('submit', function (event) { event.preventDefault(); lookupAccountCredentialV3_(''); });
+    if (elements.accountCredentialClearButton) elements.accountCredentialClearButton.addEventListener('click', clearAccountCredentialLookupV3_);
     if (elements.accountActionReason) elements.accountActionReason.addEventListener('input', updateAccountActionRunState);
     if (elements.accountActionConfirm) elements.accountActionConfirm.addEventListener('change', updateAccountActionRunState);
     if (elements.accountActionConfirmText) elements.accountActionConfirmText.addEventListener('input', updateAccountActionRunState);
-    if (elements.accountNewPassword) elements.accountNewPassword.addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); updateAccountActionRunState(); });
-    if (elements.accountConfirmPassword) elements.accountConfirmPassword.addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); updateAccountActionRunState(); });
-    if (elements.accountGeneratePasswordButton) elements.accountGeneratePasswordButton.addEventListener('click', generateManagedPasswordV3);
     if (elements.accountActionCancelButton) elements.accountActionCancelButton.addEventListener('click', closeAccountActionPanel);
     if (elements.accountActionRunButton) elements.accountActionRunButton.addEventListener('click', runAccountManagementAction);
     elements.refreshPendingButton.addEventListener('click', loadPending);
@@ -2189,27 +2195,12 @@
       metaItem('PDF失敗數', data.pdfFailedCount) +
     '</div><p class="section-help">此健檢只讀取資料，不會修改、清空或刪除任何工作表內容。</p>';
   }
-
-  async 
-  
-  async 
-  
   function routeRowHtml(label, person) {
     var item = person || {};
     return '<div class="route-row"><span>' + escapeHtml(label) + '</span><strong>' +
       escapeHtml(joinText(item.employeeId, item.employeeName) || '尚未判定') + '</strong><small>' +
       escapeHtml(item.source || item.role || '') + '</small></div>';
   }
-
-  
-  async 
-
-  async 
-  
-  async 
-  
-  
-  
   function personLabelForMonthlyDispatch(person) {
     var item = person || {};
     var label = joinText(item.employeeId, item.employeeName);
@@ -2219,13 +2210,6 @@
     }
     return '';
   }
-
-  
-  
-  async 
-  
-    
-
   async function loadAccountManagementCenter(options) {
     var settings = options || {};
     if (!elements.accountManagementCard || state.accountManagementLoading) return;
@@ -2260,10 +2244,10 @@
     var filtered = data.filteredSummary || {};
     elements.accountManagementSummary.innerHTML = '<div class="admin-result-grid">' +
       metaItem('全部帳號', summary.total || 0) +
-      metaItem('可登入', summary.loginReady || 0) +
+      metaItem('目前可登入', summary.loginReady || 0) +
       metaItem('已啟用', summary.enabled || 0) +
       metaItem('已停用', summary.disabled || 0) +
-      metaItem('已鎖定', summary.locked || 0) +
+      metaItem('暫時鎖定', summary.locked || 0) +
       metaItem('符合篩選', filtered.total || 0) + '</div>';
 
     var options = data.options || {};
@@ -2294,23 +2278,34 @@
     var actions = item.actions || {};
     var tags = [
       '<span class="tag' + (item.accountStatus === '啟用' ? ' tag--success' : item.accountStatus === '鎖定' ? ' tag--danger' : ' tag--warning') + '">' + escapeHtml(item.accountStatus || '未設定') + '</span>',
-      '<span class="tag">' + escapeHtml(item.employmentStatus || '未設定') + '</span>'
+      '<span class="tag">' + escapeHtml(item.employmentStatus || '未設定') + '</span>',
+      '<span class="tag' + (item.canLogin ? ' tag--success' : ' tag--danger') + '">' + (item.canLogin ? '可登入' : '不可登入') + '</span>'
     ];
-    if (!item.passwordConfigured) tags.push('<span class="tag tag--danger">密碼未設定</span>');
+    if (!item.passwordConfigured) tags.push('<span class="tag tag--danger">密碼格式異常</span>');
+    if (item.temporaryLockActive) tags.push('<span class="tag tag--danger">剩餘約' + escapeHtml(item.lockRemainingMinutes || 1) + '分鐘</span>');
+    if (item.temporaryLockExpired) tags.push('<span class="tag tag--warning">鎖定已到期</span>');
     if (item.isSelf) tags.push('<span class="tag">目前帳號</span>');
+
     var buttons = [];
-    if (actions.canUnlock) buttons.push(accountActionButtonHtmlV3('unlock', item.employeeId, '解除鎖定'));
+    if (actions.canUnlock) buttons.push(accountActionButtonHtmlV3('unlock', item.employeeId, '解除鎖定／清除失敗次數'));
     if (actions.canEnable) buttons.push(accountActionButtonHtmlV3('enable', item.employeeId, '啟用帳號'));
     if (actions.canDisable) buttons.push(accountActionButtonHtmlV3('disable', item.employeeId, '停用帳號'));
     if (actions.canForceLogout) buttons.push(accountActionButtonHtmlV3('forceLogout', item.employeeId, '強制登出'));
-    if (actions.canResetPassword) buttons.push(accountActionButtonHtmlV3('resetPassword', item.employeeId, '重設密碼'));
     if (!buttons.length) buttons.push('<button class="secondary-button secondary-button--small" type="button" disabled>無可用操作</button>');
+
+    var lockText = item.lockedAt || '—';
+    var unlockText = item.lockExpiresAt || '—';
+    var remainingText = item.temporaryLockActive ? '約' + String(item.lockRemainingMinutes || 1) + '分鐘' : '—';
     return '<article class="evaluation-card"><div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3>' +
       '<p>員工工號：' + escapeHtml(item.employeeId || '') + '</p></div><div>' + tags.join('') + '</div></div>' +
       '<div class="evaluation-card__meta">' +
-        metaItem('系統角色', item.role) + metaItem('部門／區域', joinText(item.department, item.area)) +
-        metaItem('店別', joinStore(item.storeCode, item.storeName)) + metaItem('登入失敗次數', String(item.failedAttempts || 0)) +
+        metaItem('系統角色', item.role || '未設定') + metaItem('部門／區域', joinText(item.department, item.area)) +
+        metaItem('店別', joinStore(item.storeCode, item.storeName)) + metaItem('目前可登入', item.canLogin ? '是' : '否') +
+        metaItem('異常原因', item.issueReason || '無') + metaItem('登入失敗次數', String(item.failedAttempts || 0) + '次') +
+        metaItem('鎖定時間', lockText) + metaItem('預計解除時間', unlockText) +
+        metaItem('剩餘鎖定時間', remainingText) + metaItem('密碼狀態', item.passwordConfigured ? '有效4碼' : '格式異常／未設定') +
         metaItem('最後登入', item.lastLoginAt || '尚無紀錄') + metaItem('密碼最後更新', item.passwordUpdatedAt || '尚無紀錄') +
+        metaItem('密碼更新人員', item.passwordUpdatedBy || '尚無紀錄') +
       '</div><div class="evaluation-card__actions">' + buttons.join('') + '</div></article>';
   }
 
@@ -2323,11 +2318,10 @@
     var item = (data.items || []).filter(function (row) { return String(row.employeeId || '') === String(employeeId || ''); })[0];
     if (!item) return;
     var map = {
-      unlock: { label: '解除鎖定', description: '清除登入失敗次數與鎖定時間，並撤銷舊登入。' },
-      enable: { label: '啟用帳號', description: '恢復登入資格並清除登入失敗與鎖定狀態。' },
-      disable: { label: '停用帳號', description: '停止後續登入並撤銷此人員目前所有登入狀態。' },
-      forceLogout: { label: '強制登出', description: '不改變帳號狀態，只撤銷此人員目前所有裝置登入。' },
-      resetPassword: { label: '重設密碼', description: '由教育中心設定新的4碼數字密碼；員工不得自行修改。' }
+      unlock: { label: '解除鎖定', description: '清除登入失敗次數與鎖定時間；若為暫時鎖定，帳號恢復啟用並撤銷舊登入。' },
+      enable: { label: '啟用帳號', description: '恢復帳號登入資格並撤銷舊登入；原登入失敗次數與鎖定時間不會被清除。' },
+      disable: { label: '停用帳號', description: '停止後續登入並撤銷此人員目前所有登入狀態；原登入失敗次數與鎖定時間不會被清除。' },
+      forceLogout: { label: '強制登出', description: '不改變帳號狀態，只撤銷此人員目前所有裝置登入。' }
     };
     var config = map[action];
     if (!config) return;
@@ -2339,11 +2333,6 @@
     elements.accountActionConfirmText.placeholder = '請輸入：' + config.label;
     elements.accountActionConfirmHint.textContent = '請完整輸入「' + config.label + '」';
     elements.accountActionConfirmLabel.textContent = '我已確認此次「' + config.label + '」的影響範圍。';
-    elements.accountPasswordFields.hidden = action !== 'resetPassword';
-    elements.accountNewPassword.type = 'password';
-    elements.accountConfirmPassword.type = 'password';
-    elements.accountNewPassword.value = '';
-    elements.accountConfirmPassword.value = '';
     elements.accountActionResult.hidden = true;
     elements.accountActionPanel.hidden = false;
     updateAccountActionRunState();
@@ -2357,8 +2346,6 @@
     elements.accountActionReason.value = '';
     elements.accountActionConfirm.checked = false;
     elements.accountActionConfirmText.value = '';
-    elements.accountNewPassword.value = '';
-    elements.accountConfirmPassword.value = '';
     elements.accountActionResult.hidden = true;
   }
 
@@ -2367,28 +2354,7 @@
     var action = state.accountAction;
     var ready = Boolean(action) && String(elements.accountActionReason.value || '').trim().length >= 4 &&
       elements.accountActionConfirm.checked && String(elements.accountActionConfirmText.value || '').trim() === String(action && action.confirmText || '');
-    if (action && action.action === 'resetPassword') {
-      ready = ready && /^\d{4}$/.test(String(elements.accountNewPassword.value || '')) &&
-        String(elements.accountNewPassword.value || '') === String(elements.accountConfirmPassword.value || '');
-    }
     elements.accountActionRunButton.disabled = !ready || state.accountManagementLoading;
-  }
-
-  function generateManagedPasswordV3() {
-    var number;
-    if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
-      var values = new Uint32Array(1);
-      window.crypto.getRandomValues(values);
-      number = values[0] % 10000;
-    } else {
-      number = Math.floor(Math.random() * 10000);
-    }
-    var password = String(number).padStart(4, '0');
-    elements.accountNewPassword.value = password;
-    elements.accountConfirmPassword.value = password;
-    elements.accountNewPassword.type = 'text';
-    elements.accountConfirmPassword.type = 'text';
-    updateAccountActionRunState();
   }
 
   async function runAccountManagementAction() {
@@ -2410,11 +2376,6 @@
       else if (action.action === 'enable') { service = window.V3WorkflowService.accountSetStatus; payload.newStatus = '啟用'; }
       else if (action.action === 'disable') { service = window.V3WorkflowService.accountSetStatus; payload.newStatus = '停用'; }
       else if (action.action === 'forceLogout') service = window.V3WorkflowService.accountForceLogout;
-      else if (action.action === 'resetPassword') {
-        service = window.V3WorkflowService.accountResetPassword;
-        payload.newPassword = String(elements.accountNewPassword.value || '');
-        payload.confirmPassword = String(elements.accountConfirmPassword.value || '');
-      }
       if (!service) throw new Error('無法辨識帳號管理操作。');
       var result = await service(payload, window.V3ApiClient.createRequestId());
       var data = result.data || {};
@@ -2434,6 +2395,73 @@
       setButtonLoading(elements.accountActionRunButton, false, '執行');
       updateAccountActionRunState();
     }
+  }
+
+  async function lookupAccountCredentialV3_(employeeId) {
+    if (state.accountManagementLoading) return;
+    var query = String(elements.accountCredentialLookupQuery.value || '').trim();
+    if (!query && !employeeId) {
+      showMessage(elements.accountCredentialLookupMessage, 'error', '請輸入員工姓名或工號。');
+      elements.accountCredentialLookupQuery.focus();
+      return;
+    }
+    state.accountManagementLoading = true;
+    setButtonLoading(elements.accountCredentialLookupButton, true, '查詢中');
+    elements.accountCredentialClearButton.disabled = true;
+    clearMessage(elements.accountCredentialLookupMessage);
+    try {
+      var result = await window.V3WorkflowService.accountCredentialLookup(query, employeeId || '', window.V3ApiClient.createRequestId());
+      state.accountCredentialLookup = result.data || {};
+      renderAccountCredentialLookupV3_(state.accountCredentialLookup);
+    } catch (error) {
+      state.accountCredentialLookup = null;
+      elements.accountCredentialLookupResult.hidden = true;
+      elements.accountCredentialLookupResult.innerHTML = '';
+      showMessage(elements.accountCredentialLookupMessage, 'error', friendlyError(error));
+    } finally {
+      state.accountManagementLoading = false;
+      setButtonLoading(elements.accountCredentialLookupButton, false, '查詢帳密');
+      elements.accountCredentialClearButton.disabled = false;
+    }
+  }
+
+  function renderAccountCredentialLookupV3_(data) {
+    var result = elements.accountCredentialLookupResult;
+    result.hidden = false;
+    if (data.resolved && data.credential) {
+      var item = data.credential;
+      result.innerHTML = '<article class="credential-result-card">' +
+        '<div><span>員工</span><strong>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '</strong></div>' +
+        '<div><span>角色／店別</span><strong>' + escapeHtml(joinText(item.role, joinStore(item.storeCode, item.storeName))) + '</strong></div>' +
+        '<div><span>帳號狀態</span><strong>' + escapeHtml(joinText(item.employmentStatus, item.accountStatus)) + '</strong></div>' +
+        '<div class="credential-password-box"><span>目前登入密碼</span><strong>' + escapeHtml(item.password || '未設定') + '</strong>' +
+          '<small>' + (item.passwordValid ? '有效4碼密碼' : '目前內容不是有效4碼密碼，請至員工主檔修正') + '</small></div>' +
+      '</article>';
+      showMessage(elements.accountCredentialLookupMessage, item.passwordValid ? 'success' : 'error', item.passwordValid ? '帳密查詢完成。' : '已找到人員，但密碼格式異常。');
+      return;
+    }
+
+    var candidates = Array.isArray(data.candidates) ? data.candidates : [];
+    result.innerHTML = '<p class="section-help">' + escapeHtml(data.message || '請選擇正確人員。') + '</p><div class="credential-candidate-list">' +
+      candidates.map(function (item) {
+        return '<button type="button" class="credential-candidate" data-credential-employee="' + escapeHtml(item.employeeId) + '">' +
+          '<strong>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '</strong>' +
+          '<span>' + escapeHtml(joinText(item.role, joinStore(item.storeCode, item.storeName))) + '</span>' +
+          '<small>' + escapeHtml(joinText(item.employmentStatus, item.accountStatus)) + '</small></button>';
+      }).join('') + '</div>' + (data.hasMore ? '<p class="section-help">符合人員超過20位，請輸入更完整的姓名或工號。</p>' : '');
+    Array.prototype.slice.call(result.querySelectorAll('[data-credential-employee]')).forEach(function (button) {
+      button.addEventListener('click', function () { lookupAccountCredentialV3_(button.getAttribute('data-credential-employee')); });
+    });
+    showMessage(elements.accountCredentialLookupMessage, 'info', '找到多位符合人員，請選擇正確人員。');
+  }
+
+  function clearAccountCredentialLookupV3_() {
+    state.accountCredentialLookup = null;
+    elements.accountCredentialLookupQuery.value = '';
+    elements.accountCredentialLookupResult.innerHTML = '';
+    elements.accountCredentialLookupResult.hidden = true;
+    clearMessage(elements.accountCredentialLookupMessage);
+    elements.accountCredentialLookupQuery.focus();
   }
 
   function renderAccountAuditListV3(rows) {
@@ -2884,12 +2912,6 @@
     elements.dispatchMonthAnalysisResult.innerHTML = html;
     elements.dispatchMonthAnalysisResult.hidden = false;
   }
-
-  async 
-  
-  
-  
-  async 
   function showDispatchManagementMessage(type, text) { showMessage(elements.dispatchManagementMessage, type, text); }
 
   function isFutureRocMonth(value) {
@@ -3178,6 +3200,7 @@
     var code = String(error && error.code || '');
     var messages = {
       LOGIN_FAILED: '工號或密碼錯誤，請重新確認。',
+      ACCOUNT_TEMP_LOCKED: '工號或密碼錯誤次數過多，帳號暫停登入5分鐘。請稍後再試或聯絡教育中心。',
       ACCOUNT_LOCKED: '帳號已鎖定，請聯絡教育中心解鎖。',
       ACCOUNT_DISABLED: '此帳號目前未啟用，請聯絡教育中心。',
       ROLE_NOT_CONFIGURED: '此帳號尚未設定有效角色，請聯絡教育中心。',
@@ -3228,11 +3251,13 @@
       FORCE_CLOSE_NOT_AVAILABLE: '此月考核表目前不能執行強制結案。',
       SELF_ACCOUNT_DISABLE_BLOCKED: '不可停用自己目前登入中的帳號。',
       SELF_FORCE_LOGOUT_BLOCKED: '不可從管理中心強制登出自己。',
-      SELF_PASSWORD_RESET_BLOCKED: '禁止自行修改密碼，請由另一位教育中心管理者協助重設。',
       LAST_ACCOUNT_MANAGER_BLOCKED: '不可停用最後一個可登入的教育中心管理帳號。',
-      PASSWORD_CONFIRMATION_MISMATCH: '兩次輸入的新密碼不一致。',
-      PASSWORD_NOT_CONFIGURED: '此人員尚未設定有效的4碼密碼，請先重設密碼。',
+      PASSWORD_NOT_CONFIGURED: '此人員尚未設定有效的4碼密碼，請先至員工主檔修正密碼。',
       ACCOUNT_DISABLED_REQUIRES_ENABLE: '此帳號是人工停用，請使用啟用帳號功能。',
+      ACCOUNT_STATUS_NOT_CONFIGURED: '此帳號尚未設定狀態，請先啟用帳號或至員工主檔設定。',
+      ACCOUNT_NOT_LOCKED: '此帳號目前沒有鎖定或登入失敗次數可清除。',
+      CREDENTIAL_QUERY_REQUIRED: '請輸入員工姓名或工號。',
+      CREDENTIAL_EMPLOYEE_NOT_FOUND: '查無符合姓名或工號的人員。',
       ACCOUNT_REASON_REQUIRED: '請填寫至少4個字的帳號處理原因。',
       CONFIRM_TEXT_MISMATCH: '最終確認文字不正確。'
     };
