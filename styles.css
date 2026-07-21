@@ -1267,3 +1267,208 @@ body.system-management-active .app-shell { width: min(100%, 1180px); }
   .account-management-pagination strong { order: -1; min-width: 0; }
   .account-management-pagination button { width: 100%; }
 }
+
+/* 7.4.0C: mobile dispatch layout, idle warning and account quick filters */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+body.idle-warning-open {
+  overflow: hidden;
+}
+
+.account-quick-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -2px 0 14px;
+  border: 1px solid rgba(143, 59, 18, 0.14);
+  border-radius: 13px;
+  padding: 10px 12px;
+  background: var(--brand-soft);
+}
+
+.account-quick-filter-bar > span {
+  color: var(--brand-dark);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.account-quick-filter-bar button {
+  min-width: 220px;
+}
+
+.idle-warning-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(35, 27, 22, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.idle-warning-overlay[hidden] {
+  display: none !important;
+}
+
+.idle-warning-dialog {
+  width: min(100%, 500px);
+  border: 1px solid rgba(143, 59, 18, 0.18);
+  border-radius: 22px;
+  padding: 26px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(25, 17, 12, 0.28);
+}
+
+.idle-warning-dialog h2 {
+  margin-bottom: 10px;
+}
+
+.idle-warning-countdown {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 18px 0;
+  border-radius: 16px;
+  padding: 16px;
+  color: var(--brand-dark);
+  background: var(--brand-soft);
+}
+
+.idle-warning-countdown strong {
+  font-size: clamp(2.2rem, 12vw, 3.6rem);
+  line-height: 1;
+}
+
+.idle-warning-countdown span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.idle-warning-note {
+  margin-bottom: 16px;
+  color: var(--warning);
+  font-size: 0.88rem;
+}
+
+.idle-warning-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 10px;
+}
+
+.idle-warning-actions .primary-button,
+.idle-warning-actions .secondary-button {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  body.system-management-active .app-shell {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .system-management-workspace,
+  .system-management-layout,
+  .system-management-pages,
+  .system-management-page,
+  #dispatchManagementCard,
+  #dispatchManagementCard form,
+  #dispatchManagementCard section,
+  #dispatchManagementCard .detail-section,
+  #dispatchManagementCard .test-dispatch-preview {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #dispatchManagementCard {
+    padding: 16px 12px;
+  }
+
+  #dispatchManagementCard input,
+  #dispatchManagementCard select,
+  #dispatchManagementCard textarea,
+  .system-management-mobile-select select {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 16px;
+  }
+
+  #dispatchManagementCard .test-dispatch-heading,
+  #dispatchManagementCard .test-dispatch-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  #dispatchManagementCard .test-dispatch-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  #dispatchManagementCard .test-dispatch-actions button,
+  #dispatchManagementCard .test-dispatch-heading button {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #dispatchManagementCard .test-dispatch-preview {
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  #dispatchManagementCard .admin-result-grid,
+  #dispatchManagementCard .test-dispatch-preview-grid,
+  #dispatchManagementCard .route-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #dispatchManagementCard h3,
+  #dispatchManagementCard h4,
+  #dispatchManagementCard p,
+  #dispatchManagementCard span,
+  #dispatchManagementCard strong,
+  #dispatchManagementCard small,
+  #dispatchManagementCard label {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .account-quick-filter-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-quick-filter-bar button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .idle-warning-dialog {
+    padding: 22px 18px;
+  }
+
+  .idle-warning-actions {
+    grid-template-columns: 1fr;
+  }
+}
