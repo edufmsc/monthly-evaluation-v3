@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.1.0C-2-batch-repair-analysis */
+/* 月考核系統 V3｜版本：7.4.0A-pdf-retry-center */
 (function () {
   'use strict';
 
@@ -97,7 +97,11 @@
       runBatchDispatchRepair: 180000,
       dispatchMonthAnalysis: 90000,
       forceClosePreview: 60000,
-      forceCloseEvaluation: 90000
+      forceCloseEvaluation: 90000,
+      pdfManagementCenter: 90000,
+      pdfRetryBatch: 300000,
+      pdfRetryPublication: 90000,
+      pdfInspectHealth: 60000
     };
     var timeoutMs = Number(actionTimeouts[String(action || '')] || defaultTimeout);
     var timeoutId = window.setTimeout(function () {
