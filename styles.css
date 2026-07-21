@@ -1500,3 +1500,20 @@ body.idle-warning-open {
   .archive-batch-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .archive-batch-actions > * { width: 100%; min-width: 0; white-space: normal; }
 }
+
+
+/* 7.5.0B｜歷史紀錄後端分頁 */
+.history-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 18px 0 4px;
+}
+.history-pager strong { text-align: center; }
+@media (max-width: 640px) {
+  .history-pager { gap: 8px; }
+  .history-pager .secondary-button { flex: 1 1 120px; }
+  .history-pager strong { flex: 1 0 100%; order: -1; }
+}
