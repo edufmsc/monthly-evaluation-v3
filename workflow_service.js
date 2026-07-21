@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.3.1A-account-security-fix */
+/* 月考核系統 V3｜版本：7.4.0A-pdf-retry-center */
 (function () {
   'use strict';
 
@@ -74,6 +74,18 @@
     },
     getMySignaturePreview: function (source, evaluationNo) {
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
+    },
+    pdfManagementCenter: function (filters) {
+      return call('pdfManagementCenter', filters || {});
+    },
+    pdfRetryBatch: function (payload, requestId) {
+      return call('pdfRetryBatch', payload || {}, requestId);
+    },
+    pdfRetryPublication: function (payload, requestId) {
+      return call('pdfRetryPublication', payload || {}, requestId);
+    },
+    pdfInspectHealth: function (evaluationNo) {
+      return call('pdfInspectHealth', { evaluationNo: String(evaluationNo || '') });
     },
     generatePdf: function (evaluationNo, requestId) {
       return call('generatePdf', { evaluationNo: String(evaluationNo || '') }, requestId);
