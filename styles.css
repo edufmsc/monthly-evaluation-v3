@@ -1163,3 +1163,38 @@ html.public-pdf-page body {
   .credential-result-card { grid-template-columns: 1fr; }
   .credential-password-box { grid-column: 1; }
 }
+
+/* 7.4.0A: PDF失敗重試與處理中心 */
+.pdf-management-card { margin-top: 16px; }
+.pdf-management-filter { grid-template-columns: 0.8fr 1.4fr 1fr auto; }
+.pdf-management-summary { margin: 14px 0; }
+.pdf-management-tools { margin: 14px 0; }
+.pdf-management-list { background: var(--surface-soft); }
+.pdf-management-row { display: grid; gap: 12px; }
+.pdf-management-tags { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.pdf-retry-checkbox { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: #fff; font-size: 0.78rem; font-weight: 800; }
+.pdf-retry-checkbox input { width: auto; min-height: auto; margin: 0; }
+.pdf-retry-unavailable { color: var(--muted); font-size: 0.78rem; }
+.pdf-error-grid { display: grid; gap: 8px; }
+.pdf-error-grid > div { border: 1px solid rgba(180, 35, 24, 0.18); border-radius: 12px; padding: 10px 12px; background: var(--danger-soft); }
+.pdf-error-grid span { display: block; color: var(--danger); font-size: 0.76rem; font-weight: 800; }
+.pdf-error-grid strong { display: block; margin-top: 3px; font-size: 0.86rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pdf-action-list { display: flex; gap: 7px; flex-wrap: wrap; margin: 10px 0 16px; }
+.pdf-action-list span { border-radius: 999px; padding: 5px 10px; color: var(--brand-dark); background: var(--brand-soft); font-size: 0.78rem; font-weight: 800; }
+.pdf-retry-result-list { display: grid; gap: 8px; margin-top: 12px; }
+.pdf-retry-result-list > div { display: flex; justify-content: space-between; gap: 12px; border-radius: 12px; padding: 10px 12px; }
+.pdf-retry-result-list .is-success { color: var(--success); background: var(--success-soft); }
+.pdf-retry-result-list .is-error { color: var(--danger); background: var(--danger-soft); }
+.pdf-retry-result-list span { text-align: right; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .pdf-management-filter { grid-template-columns: 1fr 1fr; }
+  .pdf-management-filter .test-dispatch-actions { grid-column: 1 / -1; }
+}
+
+@media (max-width: 620px) {
+  .pdf-management-filter { grid-template-columns: 1fr; }
+  .pdf-management-tags { justify-content: flex-start; }
+  .pdf-retry-result-list > div { flex-direction: column; }
+  .pdf-retry-result-list span { text-align: left; }
+}
