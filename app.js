@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.3.1B-lookup-search-fix';
+  var APP_BUILD = '7.4.0A-pdf-retry-center';
   var elements = {};
   var state = {
     session: null,
@@ -27,6 +27,10 @@
     accountManagementPage: 1,
     accountAction: null,
     accountCredentialLookup: null,
+    pdfManagement: null,
+    pdfManagementLoading: false,
+    pdfManagementSelected: {},
+    pdfManagementAction: null,
     forceClosePreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
@@ -70,6 +74,7 @@
     retireLegacyDispatchUi();
     ensureDispatchManagementPanel();
     ensureAccountManagementPanel();
+    ensurePdfManagementPanel();
     ensureContinuousReviewToolbar();
     cacheElements();
     ensurePdfViewerModal();
@@ -204,6 +209,51 @@
     systemPanel.appendChild(article);
   }
 
+  function ensurePdfManagementPanel() {
+    if (document.getElementById('pdfManagementCard')) return;
+    var systemPanel = document.getElementById('systemPanel');
+    if (!systemPanel) return;
+
+    var article = document.createElement('article');
+    article.id = 'pdfManagementCard';
+    article.className = 'card test-dispatch-card pdf-management-card';
+    article.innerHTML = '<div class="test-dispatch-heading"><div>' +
+      '<p class="step-label">PDF失敗重試與處理｜7.4.0A</p><h3>PDF處理中心</h3>' +
+      '<p>集中查詢PDF產生、公開與檢視狀態。可勾選多張逐筆重新產生；每張仍會獨立驗證，舊PDF不會刪除。</p></div>' +
+      '<button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
+      '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter">' +
+        '<label class="field-group"><span>考核月份</span><input id="pdfManagementMonth" type="text" maxlength="9" placeholder="例如 115/07"></label>' +
+        '<label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" type="text" maxlength="80" autocomplete="off"></label>' +
+        '<label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus">' +
+          '<option value="ALL">全部狀態</option><option value="GENERATION_FAILED">PDF產生失敗</option>' +
+          '<option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option>' +
+          '<option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option>' +
+          '<option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option>' +
+        '</select></label>' +
+        '<div class="test-dispatch-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+      '</form>' +
+      '<div id="pdfManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
+      '<div id="pdfManagementSummary" class="admin-result-grid pdf-management-summary"></div>' +
+      '<section class="detail-section pdf-management-tools"><div class="test-dispatch-heading"><div><h4>重新產生PDF</h4>' +
+        '<p class="section-help">一次最多5張。完成PDF也可重新產生；新檔成功後才更新目前檢視資料，舊檔保留。</p></div>' +
+        '<strong id="pdfManagementSelectedCount">已選0張</strong></div>' +
+        '<div class="test-dispatch-actions"><button id="pdfManagementSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可重試PDF</button>' +
+          '<button id="pdfManagementClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button>' +
+          '<button id="pdfManagementRetrySelectedButton" class="primary-button primary-button--small" type="button" disabled><span class="button-label">重試選取PDF</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+      '</section>' +
+      '<section id="pdfManagementList" class="test-dispatch-preview pdf-management-list"></section>' +
+      '<section id="pdfManagementActionPanel" class="test-dispatch-preview" hidden>' +
+        '<div id="pdfManagementActionContent"></div>' +
+        '<label class="field-group"><span>處理原因</span><textarea id="pdfManagementReason" rows="3" maxlength="300" placeholder="請填寫至少4個字的具體原因"></textarea></label>' +
+        '<label class="confirm-row"><input id="pdfManagementConfirm" type="checkbox"><span>我已確認本次操作不會刪除舊PDF、考核資料或簽名快照。</span></label>' +
+        '<label class="field-group"><span>最終確認文字</span><input id="pdfManagementConfirmText" type="text" maxlength="20" autocomplete="off"><small id="pdfManagementConfirmHint"></small></label>' +
+        '<div class="test-dispatch-actions"><button id="pdfManagementCancelButton" class="secondary-button" type="button">取消</button>' +
+          '<button id="pdfManagementRunButton" class="primary-button" type="button" disabled><span class="button-label">執行</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<article id="pdfManagementActionResult" class="card admin-result-card" hidden></article>' +
+      '</section>';
+    systemPanel.appendChild(article);
+  }
+
   function ensureContinuousReviewToolbar() {
     if (document.getElementById('continuousReviewBar')) return;
     var summary = document.getElementById('evaluationSummary');
@@ -256,6 +306,13 @@
       'accountActionPanel', 'accountActionContent', 'accountActionReason', 'accountActionConfirm',
       'accountActionConfirmLabel', 'accountActionConfirmText', 'accountActionConfirmHint', 'accountActionCancelButton',
       'accountActionRunButton', 'accountActionResult', 'accountAuditPanel', 'accountAuditList',
+      'pdfManagementCard', 'pdfManagementRefreshButton', 'pdfManagementFilterForm', 'pdfManagementMonth',
+      'pdfManagementKeyword', 'pdfManagementStatus', 'pdfManagementSearchButton', 'pdfManagementMessage',
+      'pdfManagementSummary', 'pdfManagementSelectedCount', 'pdfManagementSelectVisibleButton',
+      'pdfManagementClearButton', 'pdfManagementRetrySelectedButton', 'pdfManagementList',
+      'pdfManagementActionPanel', 'pdfManagementActionContent', 'pdfManagementReason', 'pdfManagementConfirm',
+      'pdfManagementConfirmText', 'pdfManagementConfirmHint', 'pdfManagementCancelButton',
+      'pdfManagementRunButton', 'pdfManagementActionResult',
       'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
@@ -299,6 +356,16 @@
     if (elements.accountActionConfirmText) elements.accountActionConfirmText.addEventListener('input', updateAccountActionRunState);
     if (elements.accountActionCancelButton) elements.accountActionCancelButton.addEventListener('click', closeAccountActionPanel);
     if (elements.accountActionRunButton) elements.accountActionRunButton.addEventListener('click', runAccountManagementAction);
+    if (elements.pdfManagementFilterForm) elements.pdfManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); loadPdfManagementCenter(); });
+    if (elements.pdfManagementRefreshButton) elements.pdfManagementRefreshButton.addEventListener('click', function () { loadPdfManagementCenter(); });
+    if (elements.pdfManagementSelectVisibleButton) elements.pdfManagementSelectVisibleButton.addEventListener('click', selectVisiblePdfRetriesV3_);
+    if (elements.pdfManagementClearButton) elements.pdfManagementClearButton.addEventListener('click', clearPdfManagementSelectionV3_);
+    if (elements.pdfManagementRetrySelectedButton) elements.pdfManagementRetrySelectedButton.addEventListener('click', openPdfRetrySelectedActionV3_);
+    if (elements.pdfManagementReason) elements.pdfManagementReason.addEventListener('input', updatePdfManagementActionRunStateV3_);
+    if (elements.pdfManagementConfirm) elements.pdfManagementConfirm.addEventListener('change', updatePdfManagementActionRunStateV3_);
+    if (elements.pdfManagementConfirmText) elements.pdfManagementConfirmText.addEventListener('input', updatePdfManagementActionRunStateV3_);
+    if (elements.pdfManagementCancelButton) elements.pdfManagementCancelButton.addEventListener('click', closePdfManagementActionPanelV3_);
+    if (elements.pdfManagementRunButton) elements.pdfManagementRunButton.addEventListener('click', runPdfManagementActionV3_);
     elements.refreshPendingButton.addEventListener('click', loadPending);
     elements.refreshProgressButton.addEventListener('click', loadProgress);
     elements.progressFilterForm.addEventListener('submit', function (event) {
@@ -2062,6 +2129,7 @@
   async function refreshAllAccessibleLists() {
     var jobs = [loadPending({ quiet: true }), loadProgress({ quiet: true })];
     if (!elements.historyPanel.hidden || state.history.length) jobs.push(loadHistory({ quiet: true }));
+    if (state.pdfManagement && elements.pdfManagementCard) jobs.push(loadPdfManagementCenter({ quiet: true }));
     await Promise.allSettled(jobs);
   }
 
@@ -2210,6 +2278,327 @@
     }
     return '';
   }
+  async function loadPdfManagementCenter(options) {
+    var settings = options || {};
+    if (state.pdfManagementLoading) return;
+    state.pdfManagementLoading = true;
+    if (!settings.quiet) {
+      setPdfManagementMessageV3_('info', '正在載入PDF處理狀態…');
+      if (elements.pdfManagementList) elements.pdfManagementList.innerHTML = '<div class="loading-list">正在查詢PDF資料…</div>';
+    }
+    if (elements.pdfManagementRefreshButton) elements.pdfManagementRefreshButton.disabled = true;
+    if (elements.pdfManagementSearchButton) setButtonLoading(elements.pdfManagementSearchButton, true, '查詢中');
+    try {
+      var result = await window.V3WorkflowService.pdfManagementCenter({
+        month: String(elements.pdfManagementMonth && elements.pdfManagementMonth.value || '').trim(),
+        keyword: String(elements.pdfManagementKeyword && elements.pdfManagementKeyword.value || '').trim(),
+        status: String(elements.pdfManagementStatus && elements.pdfManagementStatus.value || 'ALL').trim()
+      });
+      state.pdfManagement = result.data || {};
+      reconcilePdfManagementSelectionV3_();
+      renderPdfManagementCenterV3_(state.pdfManagement);
+      setPdfManagementMessageV3_('success', 'PDF處理資料已更新。');
+    } catch (error) {
+      if (!settings.quiet) setPdfManagementMessageV3_('error', friendlyError(error));
+      if (elements.pdfManagementList) elements.pdfManagementList.innerHTML = emptyStateHtml('PDF處理資料載入失敗', friendlyError(error));
+    } finally {
+      state.pdfManagementLoading = false;
+      if (elements.pdfManagementRefreshButton) elements.pdfManagementRefreshButton.disabled = false;
+      if (elements.pdfManagementSearchButton) setButtonLoading(elements.pdfManagementSearchButton, false, '查詢PDF');
+    }
+  }
+
+  function renderPdfManagementCenterV3_(data) {
+    var source = data || {};
+    var summary = source.summary || {};
+    if (elements.pdfManagementSummary) {
+      elements.pdfManagementSummary.innerHTML = [
+        ['全部PDF', summary.total || 0],
+        ['產生失敗', summary.generationFailed || 0],
+        ['公開失敗', summary.publicFailed || 0],
+        ['檢視失敗', summary.viewFailed || 0],
+        ['待處理', summary.pending || 0],
+        ['處理中', summary.processing || 0],
+        ['已完成', summary.complete || 0],
+        ['已作廢', summary.voided || 0]
+      ].map(function(pair) {
+        return '<div><span>' + escapeHtml(pair[0]) + '</span><strong>' + escapeHtml(pair[1]) + '</strong></div>';
+      }).join('');
+    }
+
+    var rows = Array.isArray(source.items) ? source.items : [];
+    if (!rows.length) {
+      elements.pdfManagementList.innerHTML = emptyStateHtml('目前沒有符合條件的PDF', '請調整月份、關鍵字或PDF狀態後重新查詢。');
+      updatePdfManagementSelectionUiV3_();
+      return;
+    }
+    elements.pdfManagementList.innerHTML = '<div class="route-list">' + rows.map(renderPdfManagementRowV3_).join('') + '</div>' +
+      (source.truncated ? '<p class="section-help">結果超過顯示上限，請增加月份或關鍵字條件。</p>' : '');
+
+    Array.prototype.slice.call(elements.pdfManagementList.querySelectorAll('[data-pdf-retry-select]')).forEach(function(input) {
+      input.addEventListener('change', function() {
+        var evaluationNo = String(input.getAttribute('data-pdf-retry-select') || '').trim();
+        if (!evaluationNo) return;
+        if (input.checked) {
+          var selectedCount = Object.keys(state.pdfManagementSelected || {}).filter(function(key) { return state.pdfManagementSelected[key]; }).length;
+          var max = Number(source.limits && source.limits.maxBatchRetry || 5);
+          if (selectedCount >= max) {
+            input.checked = false;
+            setPdfManagementMessageV3_('error', '一次最多選擇' + max + '張PDF，請分批處理。');
+            return;
+          }
+          state.pdfManagementSelected[evaluationNo] = true;
+        } else {
+          delete state.pdfManagementSelected[evaluationNo];
+        }
+        updatePdfManagementSelectionUiV3_();
+      });
+    });
+    Array.prototype.slice.call(elements.pdfManagementList.querySelectorAll('[data-pdf-inspect]')).forEach(function(button) {
+      button.addEventListener('click', function() {
+        inspectPdfHealthFromCenterV3_(button.getAttribute('data-pdf-inspect'), button);
+      });
+    });
+    Array.prototype.slice.call(elements.pdfManagementList.querySelectorAll('[data-pdf-republish]')).forEach(function(button) {
+      button.addEventListener('click', function() {
+        openPdfManagementActionV3_('PUBLISH', [button.getAttribute('data-pdf-republish')]);
+      });
+    });
+    Array.prototype.slice.call(elements.pdfManagementList.querySelectorAll('[data-pdf-view-center]')).forEach(function(button) {
+      button.addEventListener('click', function() {
+        prepareAndViewPdfFromCard(button.getAttribute('data-pdf-view-center'), button);
+      });
+    });
+    updatePdfManagementSelectionUiV3_();
+  }
+
+  function renderPdfManagementRowV3_(item) {
+    var issueClass = pdfIssueClassV3_(item.issueType);
+    var checked = Boolean(state.pdfManagementSelected && state.pdfManagementSelected[item.evaluationNo]);
+    var selection = item.canRegenerate
+      ? '<label class="pdf-retry-checkbox"><input type="checkbox" data-pdf-retry-select="' + escapeHtml(item.evaluationNo) + '"' + (checked ? ' checked' : '') + '><span>選取重試</span></label>'
+      : '<span class="pdf-retry-unavailable">目前不可重試</span>';
+    var actions = '';
+    if (item.canInspect) actions += '<button type="button" class="secondary-button secondary-button--small" data-pdf-inspect="' + escapeHtml(item.evaluationNo) + '">檢查檔案</button>';
+    if (item.canRepublish && item.issueType === 'PUBLIC_FAILED') actions += '<button type="button" class="secondary-button secondary-button--small" data-pdf-republish="' + escapeHtml(item.evaluationNo) + '">重新設定公開</button>';
+    if (item.pdfStatus === '完成' && item.pdfFileIndexed) actions += '<button type="button" class="secondary-button secondary-button--small" data-pdf-view-center="' + escapeHtml(item.evaluationNo) + '">查看PDF</button>';
+    var errors = [];
+    if (item.lastError) errors.push('<div><span>產生／佇列錯誤</span><strong>' + escapeHtml(item.lastError) + '</strong></div>');
+    if (item.publicError) errors.push('<div><span>公開設定錯誤</span><strong>' + escapeHtml(item.publicError) + '</strong></div>');
+    if (item.processingStale) errors.push('<div><span>處理警示</span><strong>處理中狀態已超過安全時間，可重新產生。</strong></div>');
+
+    return '<article class="evaluation-card pdf-management-row">' +
+      '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3>' +
+        '<p>' + escapeHtml(item.evaluationNo || '') + '｜' + escapeHtml(item.employeeId || '') + '</p></div>' +
+        '<div class="pdf-management-tags"><span class="tag ' + issueClass + '">' + escapeHtml(item.issueLabel || '其他狀態') + '</span>' + selection + '</div></div>' +
+      '<div class="evaluation-card__meta">' +
+        metaItem('考核月份', item.evaluationMonth) +
+        metaItem('店別', joinStore(item.storeCode, item.storeName)) +
+        metaItem('流程狀態', item.workflowStatus) +
+        metaItem('PDF狀態', item.pdfStatus) +
+        metaItem('公開狀態', item.publicStatus || '未設定') +
+        metaItem('重試次數', item.pdfRetryCount) +
+        metaItem('PDF版本', item.pdfVersion || '—') +
+        metaItem('產生時間', formatDateTimeDisplay(item.pdfGeneratedAt)) +
+        metaItem('佇列狀態', item.queueStatus || '無佇列紀錄') +
+        metaItem('佇列來源', item.queueSource || '—') +
+      '</div>' +
+      (errors.length ? '<div class="pdf-error-grid">' + errors.join('') + '</div>' : '') +
+      '<div class="evaluation-card__actions">' + actions + '</div>' +
+    '</article>';
+  }
+
+  function pdfIssueClassV3_(issueType) {
+    if (issueType === 'COMPLETE') return 'tag--success';
+    if (issueType === 'PROCESSING' || issueType === 'PENDING') return 'tag--warning';
+    if (issueType === 'VOID') return 'tag--danger';
+    return 'tag--danger';
+  }
+
+  function reconcilePdfManagementSelectionV3_() {
+    var allowed = {};
+    var rows = state.pdfManagement && Array.isArray(state.pdfManagement.items) ? state.pdfManagement.items : [];
+    rows.forEach(function(item) { if (item.canRegenerate) allowed[item.evaluationNo] = true; });
+    Object.keys(state.pdfManagementSelected || {}).forEach(function(key) {
+      if (!allowed[key]) delete state.pdfManagementSelected[key];
+    });
+  }
+
+  function selectVisiblePdfRetriesV3_() {
+    var data = state.pdfManagement || {};
+    var rows = Array.isArray(data.items) ? data.items : [];
+    var max = Number(data.limits && data.limits.maxBatchRetry || 5);
+    state.pdfManagementSelected = {};
+    var retryRows = rows.filter(function(item) { return item.canRegenerate && item.issueType !== 'COMPLETE'; });
+    retryRows.slice(0, max).forEach(function(item) {
+      state.pdfManagementSelected[item.evaluationNo] = true;
+    });
+    renderPdfManagementCenterV3_(data);
+    if (!retryRows.length) {
+      setPdfManagementMessageV3_('info', '目前清單沒有失敗或待處理PDF；完成PDF仍可由個別核取方塊手動選取重新產生。');
+    } else if (retryRows.length > max) {
+      setPdfManagementMessageV3_('info', '一次最多選取' + max + '張，已先勾選目前清單前' + max + '張異常PDF。');
+    }
+  }
+
+  function clearPdfManagementSelectionV3_() {
+    state.pdfManagementSelected = {};
+    if (state.pdfManagement) renderPdfManagementCenterV3_(state.pdfManagement);
+    updatePdfManagementSelectionUiV3_();
+  }
+
+  function updatePdfManagementSelectionUiV3_() {
+    var selected = Object.keys(state.pdfManagementSelected || {}).filter(function(key) { return state.pdfManagementSelected[key]; });
+    if (elements.pdfManagementSelectedCount) elements.pdfManagementSelectedCount.textContent = '已選' + selected.length + '張';
+    if (elements.pdfManagementRetrySelectedButton) elements.pdfManagementRetrySelectedButton.disabled = selected.length === 0;
+  }
+
+  function openPdfRetrySelectedActionV3_() {
+    var selected = Object.keys(state.pdfManagementSelected || {}).filter(function(key) { return state.pdfManagementSelected[key]; });
+    if (!selected.length) {
+      setPdfManagementMessageV3_('error', '請先勾選要重新產生的PDF。');
+      return;
+    }
+    openPdfManagementActionV3_('RETRY', selected);
+  }
+
+  function openPdfManagementActionV3_(type, evaluationNos) {
+    var list = (evaluationNos || []).filter(Boolean);
+    if (!list.length) return;
+    state.pdfManagementAction = { type: type, evaluationNos: list };
+    var isPublish = type === 'PUBLISH';
+    var confirmText = isPublish ? '確認公開' : '確認重試';
+    elements.pdfManagementActionContent.innerHTML = '<h4>' + (isPublish ? '重新設定PDF公開檢視' : '重新產生選取PDF') + '</h4>' +
+      '<p class="section-help">' + (isPublish
+        ? '只會重新設定個別PDF的公開檢視，不會重新產生PDF。'
+        : '系統會逐張重新驗證並產生新PDF；舊PDF不刪除，失敗項目不影響其他項目。') + '</p>' +
+      '<div class="pdf-action-list">' + list.map(function(evaluationNo) { return '<span>' + escapeHtml(evaluationNo) + '</span>'; }).join('') + '</div>';
+    elements.pdfManagementReason.value = '';
+    elements.pdfManagementConfirm.checked = false;
+    elements.pdfManagementConfirmText.value = '';
+    elements.pdfManagementConfirmText.placeholder = '請輸入：' + confirmText;
+    elements.pdfManagementConfirmHint.textContent = '請輸入「' + confirmText + '」';
+    elements.pdfManagementActionResult.hidden = true;
+    elements.pdfManagementActionResult.innerHTML = '';
+    elements.pdfManagementActionPanel.hidden = false;
+    updatePdfManagementActionRunStateV3_();
+    elements.pdfManagementActionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closePdfManagementActionPanelV3_() {
+    state.pdfManagementAction = null;
+    if (!elements.pdfManagementActionPanel) return;
+    elements.pdfManagementActionPanel.hidden = true;
+    elements.pdfManagementReason.value = '';
+    elements.pdfManagementConfirm.checked = false;
+    elements.pdfManagementConfirmText.value = '';
+    elements.pdfManagementActionResult.hidden = true;
+    elements.pdfManagementActionResult.innerHTML = '';
+    updatePdfManagementActionRunStateV3_();
+  }
+
+  function updatePdfManagementActionRunStateV3_() {
+    if (!elements.pdfManagementRunButton) return;
+    var action = state.pdfManagementAction;
+    var reason = String(elements.pdfManagementReason && elements.pdfManagementReason.value || '').trim();
+    var confirmed = Boolean(elements.pdfManagementConfirm && elements.pdfManagementConfirm.checked);
+    var expected = action && action.type === 'PUBLISH' ? '確認公開' : '確認重試';
+    var actual = String(elements.pdfManagementConfirmText && elements.pdfManagementConfirmText.value || '').trim();
+    elements.pdfManagementRunButton.disabled = !(action && reason.length >= 4 && confirmed && actual === expected);
+    var label = action && action.type === 'PUBLISH' ? '重新設定公開' : '執行PDF重試';
+    var labelNode = elements.pdfManagementRunButton.querySelector('.button-label');
+    if (labelNode) labelNode.textContent = label;
+  }
+
+  async function runPdfManagementActionV3_() {
+    var action = state.pdfManagementAction;
+    if (!action || elements.pdfManagementRunButton.disabled) return;
+    var reason = String(elements.pdfManagementReason.value || '').trim();
+    var confirmationText = String(elements.pdfManagementConfirmText.value || '').trim();
+    setButtonLoading(elements.pdfManagementRunButton, true, '處理中');
+    elements.pdfManagementCancelButton.disabled = true;
+    try {
+      var result;
+      if (action.type === 'PUBLISH') {
+        result = await window.V3WorkflowService.pdfRetryPublication({
+          evaluationNo: action.evaluationNos[0],
+          reason: reason,
+          secondConfirmed: true,
+          confirmationText: confirmationText
+        }, window.V3ApiClient.createRequestId());
+        elements.pdfManagementActionResult.innerHTML = '<h4>公開檢視設定完成</h4><p>' + escapeHtml(action.evaluationNos[0]) + ' 已重新設定公開檢視。</p>';
+      } else {
+        result = await window.V3WorkflowService.pdfRetryBatch({
+          evaluationNos: action.evaluationNos,
+          reason: reason,
+          secondConfirmed: true,
+          confirmationText: confirmationText
+        }, window.V3ApiClient.createRequestId());
+        var data = result.data || {};
+        var rows = Array.isArray(data.results) ? data.results : [];
+        elements.pdfManagementActionResult.innerHTML = '<h4>PDF重試完成</h4>' +
+          '<p>成功' + escapeHtml(data.successCount || 0) + '張；失敗' + escapeHtml(data.failedCount || 0) + '張。</p>' +
+          '<div class="pdf-retry-result-list">' + rows.map(function(item) {
+            return '<div class="' + (item.success ? 'is-success' : 'is-error') + '"><strong>' + escapeHtml(item.evaluationNo) + '</strong><span>' + escapeHtml(item.message || (item.success ? '完成' : '失敗')) + '</span></div>';
+          }).join('') + '</div>';
+        state.pdfManagementSelected = {};
+      }
+      elements.pdfManagementActionResult.hidden = false;
+      elements.pdfManagementConfirm.checked = false;
+      elements.pdfManagementConfirmText.value = '';
+      showGlobalNotice('success', 'PDF處理完成', action.type === 'PUBLISH' ? '公開檢視已重新設定。' : '選取PDF已逐張完成處理。');
+      await loadPdfManagementCenter({ quiet: true });
+      await refreshAllAccessibleLists();
+    } catch (error) {
+      elements.pdfManagementActionResult.innerHTML = '<h4>PDF處理失敗</h4><p>' + escapeHtml(friendlyError(error)) + '</p>';
+      elements.pdfManagementActionResult.hidden = false;
+      showGlobalNotice('error', 'PDF處理失敗', friendlyError(error));
+    } finally {
+      setButtonLoading(elements.pdfManagementRunButton, false, action && action.type === 'PUBLISH' ? '重新設定公開' : '執行PDF重試');
+      elements.pdfManagementCancelButton.disabled = false;
+      updatePdfManagementActionRunStateV3_();
+    }
+  }
+
+  async function inspectPdfHealthFromCenterV3_(evaluationNo, button) {
+    var safeNo = String(evaluationNo || '').trim();
+    if (!safeNo || !button || button.disabled) return;
+    var originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = '檢查中…';
+    try {
+      var result = await window.V3WorkflowService.pdfInspectHealth(safeNo);
+      var data = result.data || {};
+      var details = [
+        data.message || '',
+        '檔案：' + (data.fileAvailable ? '可讀取' : '不可讀取'),
+        data.fileSizeBytes ? '大小：' + formatBytesV3_(data.fileSizeBytes) : '',
+        '公開狀態：' + (data.publicStatus || '未設定')
+      ].filter(Boolean).join('\n');
+      showGlobalNotice(data.viewReady ? 'success' : 'warning', data.viewReady ? 'PDF檢查正常' : 'PDF需要處理', details);
+    } catch (error) {
+      showGlobalNotice('error', 'PDF檢查失敗', friendlyError(error));
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
+  function setPdfManagementMessageV3_(type, message) {
+    if (!elements.pdfManagementMessage) return;
+    elements.pdfManagementMessage.hidden = !message;
+    elements.pdfManagementMessage.className = 'form-message' + (message ? ' form-message--' + type : '');
+    elements.pdfManagementMessage.textContent = String(message || '');
+  }
+
+  function formatBytesV3_(bytes) {
+    var value = Number(bytes || 0);
+    if (!value || value < 0) return '0 B';
+    if (value < 1024) return Math.round(value) + ' B';
+    if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB';
+    return (value / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
   async function loadAccountManagementCenter(options) {
     var settings = options || {};
     if (!elements.accountManagementCard || state.accountManagementLoading) return;
@@ -2955,12 +3344,16 @@
       state.accountManagement = null;
       state.accountManagementPage = 1;
       state.accountAction = null;
+      state.pdfManagement = null;
+      state.pdfManagementSelected = {};
+      state.pdfManagementAction = null;
       state.batchDispatchRepairPreview = null;
       state.batchDispatchSelectedEmployees = {};
       state.dispatchManagementSelectionMonth = '';
       resetContinuousReviewState(false);
       closeBatchDispatchRepairPanel();
       closeAccountActionPanel();
+      closePdfManagementActionPanelV3_();
       if (elements.dispatchMonthAnalysisResult) elements.dispatchMonthAnalysisResult.hidden = true;
       closePdfViewerModal();
       closeEvaluation({ saveDraft: false });
@@ -3122,6 +3515,7 @@
     }
     if (tab === 'system' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
     if (tab === 'system' && !state.accountManagement) loadAccountManagementCenter({ quiet: true });
+    if (tab === 'system' && !state.pdfManagement) loadPdfManagementCenter({ quiet: true });
   }
 
   function togglePasswordVisibility() {
@@ -3226,6 +3620,10 @@
       DUPLICATE_EVALUATION: '同一位受評人員在相同月份已存在 R0。重複建立不會自動變成 R1。',
       FUTURE_EVALUATION_MONTH: '手動建立不可選擇未來月份。',
       DUPLICATE_REQUEST: '這次操作已經完成，請重新整理清單確認最新狀態。',
+      PDF_ALREADY_PROCESSING: '此PDF目前正在處理中，請稍後重新整理狀態。',
+      PDF_RETRY_SELECTION_LIMIT: '一次選取的PDF數量超過上限，請分批處理。',
+      PDF_RETRY_CONFIRMATION_REQUIRED: '請輸入指定確認文字後再執行PDF重試。',
+      PDF_PUBLIC_CONFIRMATION_REQUIRED: '請輸入指定確認文字後再重新設定公開檢視。',
       PDF_PUBLIC_SHARE_FAILED: 'PDF已產生，但Google Drive公開檢視設定失敗，請由教育中心重試。',
       PDF_DOWNLOAD_DISABLED: '本系統不提供PDF下載，請使用查看月考核表PDF。',
       PDF_VIEW_NOT_FOUND: '此PDF查看連結不存在或尚未公開。',
