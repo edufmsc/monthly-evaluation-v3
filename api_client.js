@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.4.0A-pdf-retry-center */
+/* 月考核系統 V3｜版本：7.4.0C-mobile-session-security */
 (function () {
   'use strict';
 
@@ -35,6 +35,38 @@
   }
 
   var activeRequests = {};
+  var SESSION_INVALID_CODES = {
+    SESSION_REQUIRED: true,
+    SESSION_EXPIRED: true,
+    SESSION_INVALID: true,
+    SESSION_REVOKED: true,
+    SESSION_REPLACED: true,
+    ACCOUNT_DISABLED: true
+  };
+
+  function notifySessionInvalid(error, action, sessionToken) {
+    var code = String(error && error.code || '');
+    if (!sessionToken || action === 'login' || action === 'logout' || !SESSION_INVALID_CODES[code]) return;
+    window.setTimeout(function () {
+      try {
+        window.dispatchEvent(new CustomEvent('v3-session-invalid', {
+          detail: {
+            code: code,
+            message: String(error && error.message || ''),
+            action: String(action || '')
+          }
+        }));
+      } catch (eventError) {
+        var legacyEvent = document.createEvent('CustomEvent');
+        legacyEvent.initCustomEvent('v3-session-invalid', false, false, {
+          code: code,
+          message: String(error && error.message || ''),
+          action: String(action || '')
+        });
+        window.dispatchEvent(legacyEvent);
+      }
+    }, 0);
+  }
 
   function textByteLength(text) {
     // JSON與Base64主要為ASCII；使用字串長度避免為大型PDF回應再建立一份Blob。
@@ -144,6 +176,7 @@
         var source = result && result.error ? result.error : {};
         var apiError = new ApiError(source.code, source.message, source.httpStatus || response.status, source.details);
         apiError.clientPerformance = clientPerformance;
+        notifySessionInvalid(apiError, String(action || ''), sessionToken);
         throw apiError;
       }
       result.clientPerformance = clientPerformance;
