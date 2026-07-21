@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.3.1A-account-security-fix';
+  var APP_BUILD = '7.3.1B-lookup-search-fix';
   var elements = {};
   var state = {
     session: null,
@@ -172,7 +172,7 @@
         '<div class="test-dispatch-heading"><div><h4>協助查詢登入帳密</h4>' +
         '<p class="section-help">僅教育中心可使用。輸入姓名或工號；同名時會先要求選擇正確人員。查詢紀錄不保存密碼內容。</p></div></div>' +
         '<form id="accountCredentialLookupForm" class="account-credential-form">' +
-          '<label class="field-group"><span>員工姓名／工號</span><input id="accountCredentialLookupQuery" type="text" maxlength="80" autocomplete="off" placeholder="例如：王小明或 FMSC0000123"></label>' +
+          '<label class="field-group"><span>員工完整姓名／完整工號</span><input id="accountCredentialLookupQuery" type="text" maxlength="80" autocomplete="off" placeholder="例如：王小明或完整工號 FMSC0000123"></label>' +
           '<div class="test-dispatch-actions"><button id="accountCredentialLookupButton" class="primary-button primary-button--small" type="submit"><span class="button-label">查詢帳密</span><span class="button-spinner" aria-hidden="true"></span></button>' +
           '<button id="accountCredentialClearButton" class="secondary-button secondary-button--small" type="button">清除結果</button></div>' +
         '</form>' +
@@ -180,7 +180,7 @@
         '<div id="accountCredentialLookupResult" hidden></div>' +
       '</section>' +
       '<form id="accountManagementFilterForm" class="filter-grid">' +
-        '<label class="field-group"><span>工號／姓名／店別</span><input id="accountManagementKeyword" type="text" maxlength="80" autocomplete="off"></label>' +
+        '<label class="field-group"><span>工號（完整）／姓名／店號或店別</span><input id="accountManagementKeyword" type="text" maxlength="80" autocomplete="off" placeholder="工號與店號需完整輸入"></label>' +
         '<label class="field-group"><span>系統角色</span><select id="accountManagementRole"><option value="">全部角色</option></select></label>' +
         '<label class="field-group"><span>在職狀態</span><select id="accountManagementEmployment"><option value="">全部狀態</option></select></label>' +
         '<label class="field-group"><span>帳號狀態</span><select id="accountManagementStatus"><option value="">全部狀態</option><option value="啟用">啟用</option><option value="停用">停用</option><option value="鎖定">鎖定</option><option value="未設定">未設定</option></select></label>' +
@@ -3261,6 +3261,13 @@
       ACCOUNT_REASON_REQUIRED: '請填寫至少4個字的帳號處理原因。',
       CONFIRM_TEXT_MISMATCH: '最終確認文字不正確。'
     };
+    if (code === 'UNKNOWN_ACTION') {
+      var rawMessage = String(error && error.message || '');
+      if (rawMessage.indexOf('accountCredentialLookup') !== -1) {
+        return '帳密查詢的Apps Script後端尚未更新。請確認已替換05_ApiRouter與26_AccountManagementService，並在「管理部署作業」建立新版本後重新部署。';
+      }
+      return 'GitHub前端與Apps Script後端版本不一致，請重新部署最新Apps Script版本。';
+    }
     return messages[code] || String(error && error.message || '系統處理失敗。');
   }
 
