@@ -1472,3 +1472,31 @@ body.idle-warning-open {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* 7.5.0A 年度封存中心 */
+.annual-archive-card { min-width: 0; }
+.archive-year-row { display: grid; grid-template-columns: minmax(180px, 280px) auto; gap: 12px; align-items: end; }
+.archive-year-row .field-group { margin: 0; }
+.archive-issue-items { display: grid; gap: 10px; margin-top: 12px; }
+.archive-issue-items article { border: 1px solid var(--border-color, #e2d4ca); border-radius: 12px; padding: 12px; background: #fffaf7; }
+.archive-issue-items article strong, .archive-issue-items article span { display: block; }
+.archive-issue-items article p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.archive-batch-list { display: grid; gap: 12px; }
+.archive-batch-card { border: 1px solid var(--border-color, #e2d4ca); border-left: 5px solid #c88d68; border-radius: 14px; padding: 16px; background: #fff; min-width: 0; }
+.archive-batch-card.is-finalized { border-left-color: #3e8f70; }
+.archive-batch-card.is-cleaned { border-left-color: #69727a; background: #f8f8f8; }
+.archive-batch-heading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.archive-batch-heading strong, .archive-batch-heading span, .archive-batch-heading small { display: block; overflow-wrap: anywhere; }
+.archive-batch-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; }
+.archive-batch-stats span { padding: 7px 10px; border-radius: 999px; background: #f7eee8; }
+.archive-batch-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.archive-batch-actions a { text-decoration: none; }
+
+@media (max-width: 720px) {
+  .archive-year-row { grid-template-columns: minmax(0, 1fr); }
+  .archive-year-row button { width: 100%; }
+  .archive-batch-heading { flex-direction: column; gap: 6px; }
+  .archive-batch-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .archive-batch-actions > * { width: 100%; min-width: 0; white-space: normal; }
+}
