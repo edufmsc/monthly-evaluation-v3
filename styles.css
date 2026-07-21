@@ -1198,3 +1198,72 @@ html.public-pdf-page body {
   .pdf-retry-result-list > div { flex-direction: column; }
   .pdf-retry-result-list span { text-align: left; }
 }
+
+
+/* 7.4.0B: system management workspace and account pagination */
+body.system-management-active .app-shell { width: min(100%, 1180px); }
+.system-management-workspace { margin-top: 12px; }
+.system-management-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+.system-management-nav {
+  position: sticky; top: 74px; display: grid; gap: 8px; border: 1px solid var(--line);
+  border-radius: 18px; padding: 10px; background: rgba(255,255,255,0.96); box-shadow: 0 8px 22px rgba(72,42,26,0.06);
+}
+.system-management-nav-button {
+  display: grid; gap: 3px; width: 100%; min-height: 62px; border: 1px solid transparent;
+  border-radius: 13px; padding: 10px 12px; text-align: left; color: var(--ink); background: transparent; cursor: pointer;
+}
+.system-management-nav-button strong { font-size: 0.94rem; }
+.system-management-nav-button span { color: var(--muted); font-size: 0.74rem; line-height: 1.4; }
+.system-management-nav-button:hover { border-color: var(--line); background: var(--surface-soft); }
+.system-management-nav-button.is-active { border-color: rgba(143,59,18,0.22); color: var(--brand-dark); background: var(--brand-soft); }
+.system-management-pages { min-width: 0; }
+.system-management-page { min-width: 0; }
+.system-management-page > .card:first-child { margin-top: 0; }
+.system-management-mobile-select { display: none; margin-bottom: 12px; }
+.system-management-mobile-select label { display: block; margin-bottom: 6px; }
+.system-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.system-page-heading p:last-child { margin-bottom: 0; }
+.system-home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.system-home-card {
+  display: flex; flex-direction: column; justify-content: space-between; min-height: 220px;
+  border: 1px solid var(--line); border-radius: 18px; padding: 20px; background: var(--surface); box-shadow: 0 8px 22px rgba(72,42,26,0.06);
+}
+.system-home-card h4 { font-size: 1.08rem; }
+.system-home-card p { margin-bottom: 8px; }
+.system-home-card small { display: block; color: var(--muted); line-height: 1.55; }
+.system-home-card .secondary-button { width: 100%; margin-top: 18px; }
+.account-management-search-actions { gap: 8px; flex-wrap: wrap; }
+.account-management-search-actions button { min-width: 130px; }
+.account-management-list { min-height: 150px; }
+.account-management-pagination { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px; }
+.account-management-pagination strong { min-width: 180px; text-align: center; }
+.account-management-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.account-management-table { width: 100%; min-width: 760px; border-collapse: collapse; }
+.account-management-table th, .account-management-table td { border-bottom: 1px solid var(--line); padding: 12px 10px; text-align: left; vertical-align: top; }
+.account-management-table th { color: var(--muted); background: var(--surface-soft); font-size: 0.78rem; white-space: nowrap; }
+.account-management-table tr:last-child td { border-bottom: 0; }
+.account-management-table td > strong, .account-management-table td > small { display: block; }
+.account-management-table td > small { margin-top: 4px; color: var(--muted); line-height: 1.4; }
+.account-table-actions { display: flex; flex-wrap: wrap; gap: 5px; min-width: 160px; }
+.account-table-actions .secondary-button { min-height: 34px; padding: 6px 9px; font-size: 0.76rem; }
+.account-management-mobile-cards { display: none; }
+.table-muted { color: var(--muted); font-size: 0.82rem; }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+
+@media (max-width: 860px) {
+  body.system-management-active .app-shell { width: min(100%, 920px); }
+  .system-management-layout { display: block; }
+  .system-management-nav { display: none; }
+  .system-management-mobile-select { display: block; }
+  .system-home-grid { grid-template-columns: 1fr; }
+  .system-home-card { min-height: 0; }
+}
+
+@media (max-width: 720px) {
+  .account-management-desktop-table { display: none; }
+  .account-management-mobile-cards { display: grid; gap: 10px; }
+  .account-management-pagination { display: grid; grid-template-columns: 1fr; text-align: center; }
+  .account-management-pagination strong { order: -1; min-width: 0; }
+  .account-management-pagination button { width: 100%; }
+}
