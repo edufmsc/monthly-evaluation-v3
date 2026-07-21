@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.4.0A-pdf-retry-center';
+  var APP_BUILD = '7.4.0B-admin-workspace';
   var elements = {};
   var state = {
     session: null,
@@ -25,6 +25,9 @@
     accountManagement: null,
     accountManagementLoading: false,
     accountManagementPage: 1,
+    accountManagementPageSize: 10,
+    accountManagementHasSearched: false,
+    activeSystemPage: 'home',
     accountAction: null,
     accountCredentialLookup: null,
     pdfManagement: null,
@@ -75,6 +78,7 @@
     ensureDispatchManagementPanel();
     ensureAccountManagementPanel();
     ensurePdfManagementPanel();
+    ensureSystemManagementWorkspaceV3_();
     ensureContinuousReviewToolbar();
     cacheElements();
     ensurePdfViewerModal();
@@ -170,7 +174,7 @@
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading"><div>' +
-      '<p class="step-label">帳號與登入管理｜7.3.1A</p><h3>帳號管理中心</h3>' +
+      '<p class="step-label">帳號與登入管理｜7.4.0B</p><h3>帳號管理中心</h3>' +
       '<p>教育中心成員與主管權限一致。密碼由教育中心在員工主檔統一維護；本頁可查詢帳密、解除暫時鎖定、啟停帳號及強制登出，但不提供網頁修改密碼。</p></div>' +
       '<button id="accountManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
       '<section class="detail-section account-credential-section">' +
@@ -189,12 +193,15 @@
         '<label class="field-group"><span>系統角色</span><select id="accountManagementRole"><option value="">全部角色</option></select></label>' +
         '<label class="field-group"><span>在職狀態</span><select id="accountManagementEmployment"><option value="">全部狀態</option></select></label>' +
         '<label class="field-group"><span>帳號狀態</span><select id="accountManagementStatus"><option value="">全部狀態</option><option value="啟用">啟用</option><option value="停用">停用</option><option value="鎖定">鎖定</option><option value="未設定">未設定</option></select></label>' +
-        '<div class="test-dispatch-actions"><button id="accountManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢帳號</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<label class="field-group"><span>每頁顯示</span><select id="accountManagementPageSize"><option value="10">10人</option><option value="15">15人</option></select></label>' +
+        '<div class="test-dispatch-actions account-management-search-actions"><button id="accountManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢帳號</span><span class="button-spinner" aria-hidden="true"></span></button>' +
+          '<button id="accountManagementClearButton" class="secondary-button" type="button">清除條件</button></div>' +
       '</form>' +
-      '<div id="accountManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
-      '<div id="accountManagementSummary"></div>' +
-      '<section id="accountManagementList" class="test-dispatch-preview"></section>' +
-      '<div class="test-dispatch-actions"><button id="accountManagementPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button>' +
+      '<div id="accountManagementMessage" class="form-message form-message--info" role="status" aria-live="polite">請輸入完整工號、姓名、完整店號，或選擇角色／狀態後再查詢；系統不會自動載入全部人員。</div>' +
+      '<div id="accountManagementSummary" hidden></div>' +
+      '<section id="accountManagementList" class="test-dispatch-preview account-management-list">' +
+        '<div class="empty-state"><h3>尚未查詢帳號</h3><p>設定查詢條件後按「查詢帳號」，每頁預設顯示10人。</p></div></section>' +
+      '<div id="accountManagementPagination" class="account-management-pagination" hidden><button id="accountManagementPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button>' +
         '<strong id="accountManagementPageText">第1頁</strong><button id="accountManagementNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div>' +
       '<section id="accountActionPanel" class="test-dispatch-preview" hidden>' +
         '<div id="accountActionContent"></div>' +
@@ -205,7 +212,7 @@
           '<button id="accountActionRunButton" class="primary-button" type="button" disabled><span class="button-label">執行</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
         '<article id="accountActionResult" class="card admin-result-card" hidden></article>' +
       '</section>' +
-      '<details id="accountAuditPanel" class="detail-section"><summary>查看最近帳號操作紀錄</summary><div id="accountAuditList"></div></details>';
+      '<details id="accountAuditPanel" class="detail-section" hidden><summary>查看最近帳號操作紀錄</summary><div id="accountAuditList"></div></details>';
     systemPanel.appendChild(article);
   }
 
@@ -254,6 +261,100 @@
     systemPanel.appendChild(article);
   }
 
+
+  function ensureSystemManagementWorkspaceV3_() {
+    if (document.getElementById('systemManagementWorkspace')) return;
+    var systemPanel = document.getElementById('systemPanel');
+    if (!systemPanel) return;
+
+    var heading = systemPanel.querySelector('.panel-heading');
+    if (heading) {
+      var title = heading.querySelector('h2');
+      var description = heading.querySelector('p');
+      if (title) title.textContent = '系統管理工作區';
+      if (description) description.textContent = '各項管理功能已分頁整理；只有開啟指定功能時才載入資料。';
+    }
+
+    var workspace = document.createElement('div');
+    workspace.id = 'systemManagementWorkspace';
+    workspace.className = 'system-management-workspace';
+    workspace.innerHTML =
+      '<div class="system-management-mobile-select"><label for="systemManagementPageSelect">管理功能</label>' +
+        '<select id="systemManagementPageSelect">' +
+          '<option value="home">管理首頁</option><option value="accounts">帳號與登入</option>' +
+          '<option value="dispatch">月考核派發</option><option value="pdf">PDF處理中心</option>' +
+          '<option value="health">系統健檢</option></select></div>' +
+      '<div class="system-management-layout">' +
+        '<nav id="systemManagementNav" class="system-management-nav" aria-label="系統管理功能">' +
+          systemManagementNavButtonV3_('home', '管理首頁', '功能總覽與入口') +
+          systemManagementNavButtonV3_('accounts', '帳號與登入', '帳密、解鎖與啟停') +
+          systemManagementNavButtonV3_('dispatch', '月考核派發', '人工派發與補派') +
+          systemManagementNavButtonV3_('pdf', 'PDF處理中心', '失敗重試與檔案檢查') +
+          systemManagementNavButtonV3_('health', '系統健檢', '連線、Session與異常檢查') +
+        '</nav>' +
+        '<main id="systemManagementPages" class="system-management-pages"></main>' +
+      '</div>';
+    systemPanel.appendChild(workspace);
+
+    var pages = workspace.querySelector('#systemManagementPages');
+    var homePage = createSystemManagementPageV3_('home');
+    var accountsPage = createSystemManagementPageV3_('accounts');
+    var dispatchPage = createSystemManagementPageV3_('dispatch');
+    var pdfPage = createSystemManagementPageV3_('pdf');
+    var healthPage = createSystemManagementPageV3_('health');
+    pages.appendChild(homePage);
+    pages.appendChild(accountsPage);
+    pages.appendChild(dispatchPage);
+    pages.appendChild(pdfPage);
+    pages.appendChild(healthPage);
+
+    homePage.innerHTML = '<section class="system-management-home">' +
+      '<div class="system-page-heading"><div><p class="step-label">管理首頁</p><h3>請選擇要處理的功能</h3>' +
+      '<p>管理功能互相獨立，不會在進入系統管理時一次載入帳號、派發與PDF資料。</p></div></div>' +
+      '<div class="system-home-grid">' +
+        systemHomeCardV3_('accounts', '帳號與登入', '查詢單一或特定範圍人員；每頁10人，可切換15人。', '帳密查詢、解除鎖定、啟停帳號、強制登出') +
+        systemHomeCardV3_('dispatch', '月考核派發', '只在進入本頁時載入當月派發狀態。', '人工派發、補派、路線異常、月份分析') +
+        systemHomeCardV3_('pdf', 'PDF處理中心', '集中處理PDF失敗、公開失敗與檔案檢查。', '單筆或逐筆重試，不刪除舊PDF') +
+        systemHomeCardV3_('health', '系統健檢', '手動執行連線、登入狀態及系統異常檢查。', '不會進入頁面就自動執行') +
+      '</div></section>';
+
+    var accountCard = document.getElementById('accountManagementCard');
+    var dispatchCard = document.getElementById('dispatchManagementCard');
+    var pdfCard = document.getElementById('pdfManagementCard');
+    if (accountCard) accountsPage.appendChild(accountCard);
+    if (dispatchCard) dispatchPage.appendChild(dispatchCard);
+    if (pdfCard) pdfPage.appendChild(pdfCard);
+
+    var adminGrid = systemPanel.querySelector('.admin-tool-grid');
+    var adminMessage = document.getElementById('adminSystemMessage');
+    var adminResult = document.getElementById('adminSystemResult');
+    healthPage.innerHTML = '<div class="system-page-heading"><div><p class="step-label">系統健檢</p><h3>連線與維護工具</h3>' +
+      '<p>所有檢查都由管理者手動執行，不會在開啟頁面時自動增加後端負擔。</p></div></div>';
+    if (adminGrid) healthPage.appendChild(adminGrid);
+    if (adminMessage) healthPage.appendChild(adminMessage);
+    if (adminResult) healthPage.appendChild(adminResult);
+
+    switchSystemManagementPageV3_('home', { skipLoad: true, skipHash: true });
+  }
+
+  function systemManagementNavButtonV3_(page, label, description) {
+    return '<button class="system-management-nav-button" type="button" data-system-page="' + page + '">' +
+      '<strong>' + label + '</strong><span>' + description + '</span></button>';
+  }
+
+  function systemHomeCardV3_(page, title, description, detail) {
+    return '<article class="system-home-card"><div><h4>' + title + '</h4><p>' + description + '</p>' +
+      '<small>' + detail + '</small></div><button class="secondary-button" type="button" data-system-page-target="' + page + '">進入管理</button></article>';
+  }
+
+  function createSystemManagementPageV3_(page) {
+    var section = document.createElement('section');
+    section.className = 'system-management-page';
+    section.setAttribute('data-system-page-panel', page);
+    section.hidden = page !== 'home';
+    return section;
+  }
+
   function ensureContinuousReviewToolbar() {
     if (document.getElementById('continuousReviewBar')) return;
     var summary = document.getElementById('evaluationSummary');
@@ -299,7 +400,8 @@
       'batchDispatchRepairCancelButton', 'batchDispatchRepairRunButton', 'batchDispatchRepairResult',
       'accountManagementCard', 'accountManagementRefreshButton', 'accountManagementFilterForm',
       'accountManagementKeyword', 'accountManagementRole', 'accountManagementEmployment', 'accountManagementStatus',
-      'accountManagementSearchButton', 'accountManagementMessage', 'accountManagementSummary', 'accountManagementList',
+      'accountManagementPageSize', 'accountManagementSearchButton', 'accountManagementClearButton', 'accountManagementMessage',
+      'accountManagementSummary', 'accountManagementList', 'accountManagementPagination',
       'accountManagementPreviousButton', 'accountManagementNextButton', 'accountManagementPageText',
       'accountCredentialLookupForm', 'accountCredentialLookupQuery', 'accountCredentialLookupButton',
       'accountCredentialClearButton', 'accountCredentialLookupMessage', 'accountCredentialLookupResult',
@@ -319,10 +421,14 @@
       'draftStatus', 'saveDraftButton', 'submitEvaluationButton', 'evaluationDialogTitle',
       'continuousReviewBar', 'continuousReviewProgress', 'continuousReviewSummary',
       'continuousReviewPreviousButton', 'continuousReviewSkipButton', 'continuousReviewNextButton', 'continuousReviewEndButton',
+      'systemManagementWorkspace', 'systemManagementPageSelect', 'systemManagementNav', 'systemManagementPages',
       'globalNoticeOverlay', 'globalNoticeIcon', 'globalNoticeTitle', 'globalNoticeText', 'globalNoticeClose'
     ];
     ids.forEach(function (id) { elements[id] = document.getElementById(id); });
     elements.tabButtons = Array.prototype.slice.call(document.querySelectorAll('[data-tab]'));
+    elements.systemPageButtons = Array.prototype.slice.call(document.querySelectorAll('[data-system-page]'));
+    elements.systemPageTargetButtons = Array.prototype.slice.call(document.querySelectorAll('[data-system-page-target]'));
+    elements.systemPagePanels = Array.prototype.slice.call(document.querySelectorAll('[data-system-page-panel]'));
   }
 
   function bindEvents() {
@@ -345,10 +451,19 @@
     if (elements.batchDispatchRepairConfirmText) elements.batchDispatchRepairConfirmText.addEventListener('input', updateBatchDispatchRunState);
     if (elements.batchDispatchRepairCancelButton) elements.batchDispatchRepairCancelButton.addEventListener('click', closeBatchDispatchRepairPanel);
     if (elements.batchDispatchRepairRunButton) elements.batchDispatchRepairRunButton.addEventListener('click', runBatchDispatchRepair);
-    if (elements.accountManagementFilterForm) elements.accountManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); state.accountManagementPage = 1; loadAccountManagementCenter(); });
-    if (elements.accountManagementRefreshButton) elements.accountManagementRefreshButton.addEventListener('click', function () { loadAccountManagementCenter(); });
-    if (elements.accountManagementPreviousButton) elements.accountManagementPreviousButton.addEventListener('click', function () { if (state.accountManagementPage > 1) { state.accountManagementPage -= 1; loadAccountManagementCenter(); } });
-    if (elements.accountManagementNextButton) elements.accountManagementNextButton.addEventListener('click', function () { var totalPages = Number(state.accountManagement && state.accountManagement.totalPages || 1); if (state.accountManagementPage < totalPages) { state.accountManagementPage += 1; loadAccountManagementCenter(); } });
+    if (elements.accountManagementFilterForm) elements.accountManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); state.accountManagementPage = 1; loadAccountManagementCenter({ requireCriteria: true }); });
+    if (elements.accountManagementRefreshButton) elements.accountManagementRefreshButton.addEventListener('click', function () {
+      if (!state.accountManagementHasSearched) { showAccountManagementMessage('info', '請先設定查詢條件並按「查詢帳號」。'); return; }
+      loadAccountManagementCenter({ requireCriteria: true });
+    });
+    if (elements.accountManagementClearButton) elements.accountManagementClearButton.addEventListener('click', resetAccountManagementSearchV3_);
+    if (elements.accountManagementPageSize) elements.accountManagementPageSize.addEventListener('change', function () {
+      state.accountManagementPageSize = Number(this.value) === 15 ? 15 : 10;
+      state.accountManagementPage = 1;
+      if (state.accountManagementHasSearched) loadAccountManagementCenter({ requireCriteria: true });
+    });
+    if (elements.accountManagementPreviousButton) elements.accountManagementPreviousButton.addEventListener('click', function () { if (state.accountManagementPage > 1) { state.accountManagementPage -= 1; loadAccountManagementCenter({ requireCriteria: true }); } });
+    if (elements.accountManagementNextButton) elements.accountManagementNextButton.addEventListener('click', function () { var totalPages = Number(state.accountManagement && state.accountManagement.totalPages || 1); if (state.accountManagementPage < totalPages) { state.accountManagementPage += 1; loadAccountManagementCenter({ requireCriteria: true }); } });
     if (elements.accountCredentialLookupForm) elements.accountCredentialLookupForm.addEventListener('submit', function (event) { event.preventDefault(); lookupAccountCredentialV3_(''); });
     if (elements.accountCredentialClearButton) elements.accountCredentialClearButton.addEventListener('click', clearAccountCredentialLookupV3_);
     if (elements.accountActionReason) elements.accountActionReason.addEventListener('input', updateAccountActionRunState);
@@ -379,6 +494,13 @@
     elements.tabButtons.forEach(function (button) {
       button.addEventListener('click', function () { switchTab(button.getAttribute('data-tab')); });
     });
+    (elements.systemPageButtons || []).forEach(function (button) {
+      button.addEventListener('click', function () { switchSystemManagementPageV3_(button.getAttribute('data-system-page')); });
+    });
+    (elements.systemPageTargetButtons || []).forEach(function (button) {
+      button.addEventListener('click', function () { switchSystemManagementPageV3_(button.getAttribute('data-system-page-target')); });
+    });
+    if (elements.systemManagementPageSelect) elements.systemManagementPageSelect.addEventListener('change', function () { switchSystemManagementPageV3_(this.value); });
     elements.closeEvaluationButton.addEventListener('click', requestCloseEvaluationUi);
     elements.evaluationOverlay.addEventListener('click', function (event) {
       if (event.target === elements.evaluationOverlay) requestCloseEvaluationUi();
@@ -2599,10 +2721,46 @@
     return (value / 1024 / 1024).toFixed(1) + ' MB';
   }
 
+  function hasAccountManagementSearchCriteriaV3_() {
+    return Boolean(
+      String(elements.accountManagementKeyword && elements.accountManagementKeyword.value || '').trim() ||
+      String(elements.accountManagementRole && elements.accountManagementRole.value || '').trim() ||
+      String(elements.accountManagementEmployment && elements.accountManagementEmployment.value || '').trim() ||
+      String(elements.accountManagementStatus && elements.accountManagementStatus.value || '').trim()
+    );
+  }
+
+  function resetAccountManagementSearchV3_() {
+    if (elements.accountManagementKeyword) elements.accountManagementKeyword.value = '';
+    if (elements.accountManagementRole) elements.accountManagementRole.value = '';
+    if (elements.accountManagementEmployment) elements.accountManagementEmployment.value = '';
+    if (elements.accountManagementStatus) elements.accountManagementStatus.value = '';
+    if (elements.accountManagementPageSize) elements.accountManagementPageSize.value = '10';
+    state.accountManagement = null;
+    state.accountManagementPage = 1;
+    state.accountManagementPageSize = 10;
+    state.accountManagementHasSearched = false;
+    if (elements.accountManagementSummary) { elements.accountManagementSummary.hidden = true; elements.accountManagementSummary.innerHTML = ''; }
+    if (elements.accountManagementPagination) elements.accountManagementPagination.hidden = true;
+    if (elements.accountAuditPanel) elements.accountAuditPanel.hidden = true;
+    if (elements.accountManagementList) elements.accountManagementList.innerHTML = emptyStateHtml('尚未查詢帳號', '設定查詢條件後按「查詢帳號」，每頁預設顯示10人。');
+    showAccountManagementMessage('info', '查詢條件已清除。系統不會自動載入全部人員。');
+  }
+
   async function loadAccountManagementCenter(options) {
     var settings = options || {};
     if (!elements.accountManagementCard || state.accountManagementLoading) return;
+    if (settings.requireCriteria !== false && !hasAccountManagementSearchCriteriaV3_()) {
+      state.accountManagementHasSearched = false;
+      if (elements.accountManagementSummary) elements.accountManagementSummary.hidden = true;
+      if (elements.accountManagementPagination) elements.accountManagementPagination.hidden = true;
+      if (elements.accountAuditPanel) elements.accountAuditPanel.hidden = true;
+      elements.accountManagementList.innerHTML = emptyStateHtml('請先設定查詢條件', '可輸入完整工號、姓名、完整店號，或選擇角色／在職狀態／帳號狀態。');
+      showAccountManagementMessage('info', '為避免一次載入全公司帳號，請至少設定一項查詢條件。');
+      return;
+    }
     state.accountManagementLoading = true;
+    state.accountManagementPageSize = Number(elements.accountManagementPageSize && elements.accountManagementPageSize.value) === 15 ? 15 : 10;
     setButtonLoading(elements.accountManagementSearchButton, true, '查詢中');
     elements.accountManagementRefreshButton.disabled = true;
     try {
@@ -2612,12 +2770,14 @@
         employmentStatus: String(elements.accountManagementEmployment.value || ''),
         accountStatus: String(elements.accountManagementStatus.value || ''),
         page: state.accountManagementPage,
-        pageSize: 50
+        pageSize: state.accountManagementPageSize,
+        requireCriteria: true
       });
       state.accountManagement = result.data || {};
       state.accountManagementPage = Number(state.accountManagement.page || 1);
+      state.accountManagementHasSearched = true;
       renderAccountManagementCenter(state.accountManagement);
-      if (!settings.quiet) showAccountManagementMessage('success', '帳號資料已更新。');
+      if (!settings.quiet) showAccountManagementMessage('success', '帳號資料已更新；本頁顯示' + state.accountManagementPageSize + '人。');
     } catch (error) {
       showAccountManagementMessage('error', friendlyError(error));
       if (!settings.quiet) elements.accountManagementList.innerHTML = emptyStateHtml('帳號資料讀取失敗', friendlyError(error));
@@ -2631,6 +2791,9 @@
   function renderAccountManagementCenter(data) {
     var summary = data.summary || {};
     var filtered = data.filteredSummary || {};
+    elements.accountManagementSummary.hidden = false;
+    elements.accountManagementPagination.hidden = false;
+    elements.accountAuditPanel.hidden = false;
     elements.accountManagementSummary.innerHTML = '<div class="admin-result-grid">' +
       metaItem('全部帳號', summary.total || 0) +
       metaItem('目前可登入', summary.loginReady || 0) +
@@ -2647,7 +2810,10 @@
     if (!rows.length) {
       elements.accountManagementList.innerHTML = emptyStateHtml('查無符合條件的帳號', '請調整查詢條件後重試。');
     } else {
-      elements.accountManagementList.innerHTML = '<div class="route-list">' + rows.map(renderAccountManagementRowV3).join('') + '</div>';
+      elements.accountManagementList.innerHTML = '<div class="account-management-desktop-table"><div class="account-management-table-wrap"><table class="account-management-table">' +
+        '<thead><tr><th>人員</th><th>角色／店別</th><th>帳號狀態</th><th>登入狀況</th><th>操作</th></tr></thead><tbody>' +
+        rows.map(renderAccountManagementTableRowV3_).join('') + '</tbody></table></div></div>' +
+        '<div class="account-management-mobile-cards">' + rows.map(renderAccountManagementRowV3).join('') + '</div>';
       Array.prototype.slice.call(elements.accountManagementList.querySelectorAll('[data-account-action]')).forEach(function (button) {
         button.addEventListener('click', function () {
           openAccountActionPanel(button.getAttribute('data-account-action'), button.getAttribute('data-account-employee'));
@@ -2661,6 +2827,25 @@
     elements.accountManagementPreviousButton.disabled = page <= 1;
     elements.accountManagementNextButton.disabled = page >= totalPages;
     renderAccountAuditListV3(data.recentAudit || []);
+  }
+
+
+  function renderAccountManagementTableRowV3_(item) {
+    var actions = item.actions || {};
+    var buttons = [];
+    if (actions.canUnlock) buttons.push(accountActionButtonHtmlV3('unlock', item.employeeId, '解鎖'));
+    if (actions.canEnable) buttons.push(accountActionButtonHtmlV3('enable', item.employeeId, '啟用'));
+    if (actions.canDisable) buttons.push(accountActionButtonHtmlV3('disable', item.employeeId, '停用'));
+    if (actions.canForceLogout) buttons.push(accountActionButtonHtmlV3('forceLogout', item.employeeId, '登出'));
+    if (!buttons.length) buttons.push('<span class="table-muted">無可用操作</span>');
+    var statusClass = item.accountStatus === '啟用' ? ' tag--success' : item.accountStatus === '鎖定' ? ' tag--danger' : ' tag--warning';
+    return '<tr><td><strong>' + escapeHtml(item.employeeName || '未命名') + '</strong><small>' + escapeHtml(item.employeeId || '') + '</small></td>' +
+      '<td><strong>' + escapeHtml(item.role || '未設定') + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '</small></td>' +
+      '<td><span class="tag' + statusClass + '">' + escapeHtml(item.accountStatus || '未設定') + '</span><small>' + escapeHtml(item.employmentStatus || '未設定') + '</small></td>' +
+      '<td><strong class="' + (item.canLogin ? 'text-success' : 'text-danger') + '">' + (item.canLogin ? '可登入' : '不可登入') + '</strong>' +
+        '<small>錯誤' + escapeHtml(item.failedAttempts || 0) + '次' + (item.temporaryLockActive ? '｜剩餘約' + escapeHtml(item.lockRemainingMinutes || 1) + '分鐘' : '') + '</small>' +
+        '<small>' + escapeHtml(item.issueReason || '無異常') + '</small></td>' +
+      '<td><div class="account-table-actions">' + buttons.join('') + '</div></td></tr>';
   }
 
   function renderAccountManagementRowV3(item) {
@@ -3489,6 +3674,7 @@
   }
 
   function showLogin() {
+    document.body.classList.remove('system-management-active');
     elements.dashboardView.hidden = true;
     elements.loginView.hidden = false;
     clearDashboardMessage();
@@ -3513,9 +3699,39 @@
       switchTab('pending');
       return;
     }
-    if (tab === 'system' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
-    if (tab === 'system' && !state.accountManagement) loadAccountManagementCenter({ quiet: true });
-    if (tab === 'system' && !state.pdfManagement) loadPdfManagementCenter({ quiet: true });
+    document.body.classList.toggle('system-management-active', tab === 'system');
+    if (tab === 'system') {
+      switchSystemManagementPageV3_(resolveSystemManagementPageFromHashV3_(), { skipHash: true });
+    }
+  }
+
+  function resolveSystemManagementPageFromHashV3_() {
+    var match = String(window.location.hash || '').match(/^#system\/(home|accounts|dispatch|pdf|health)$/);
+    return match ? match[1] : (state.activeSystemPage || 'home');
+  }
+
+  function switchSystemManagementPageV3_(page, options) {
+    var settings = options || {};
+    var allowed = ['home', 'accounts', 'dispatch', 'pdf', 'health'];
+    var target = allowed.indexOf(String(page || '')) !== -1 ? String(page) : 'home';
+    state.activeSystemPage = target;
+    (elements.systemPagePanels || Array.prototype.slice.call(document.querySelectorAll('[data-system-page-panel]'))).forEach(function (panel) {
+      panel.hidden = panel.getAttribute('data-system-page-panel') !== target;
+    });
+    (elements.systemPageButtons || Array.prototype.slice.call(document.querySelectorAll('[data-system-page]'))).forEach(function (button) {
+      button.classList.toggle('is-active', button.getAttribute('data-system-page') === target);
+      button.setAttribute('aria-current', button.getAttribute('data-system-page') === target ? 'page' : 'false');
+    });
+    if (elements.systemManagementPageSelect) elements.systemManagementPageSelect.value = target;
+    if (!settings.skipHash && window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search + '#system/' + target);
+    }
+    if (!settings.skipLoad && target === 'dispatch' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
+    if (!settings.skipLoad && target === 'pdf' && !state.pdfManagement) loadPdfManagementCenter({ quiet: true });
+    // 帳號頁刻意不自動載入，必須由管理者設定條件後查詢。
+    if (target === 'accounts' && !state.accountManagementHasSearched) {
+      showAccountManagementMessage('info', '請設定查詢條件後按「查詢帳號」；不會自動載入全公司名單。');
+    }
   }
 
   function togglePasswordVisibility() {
