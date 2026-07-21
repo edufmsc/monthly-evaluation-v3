@@ -1,11 +1,12 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.4.0C-mobile-session-security';
+  var APP_BUILD = '7.4.0D-session-notice-fix';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
   var IDLE_STORAGE_KEY = 'monthlyEvaluationV3IdleActivity';
+  var SESSION_NOTICE_STORAGE_KEY = 'monthlyEvaluationV3SessionNotice';
   var elements = {};
   var state = {
     session: null,
@@ -582,6 +583,7 @@
     var session = window.V3AuthService.readSession();
     if (!session) {
       showLogin();
+      displayStoredSessionInvalidNoticeV3_();
       return;
     }
     try {
@@ -612,6 +614,7 @@
     setButtonLoading(elements.loginButton, true, '登入中');
     try {
       state.session = await window.V3AuthService.login(employeeId, password);
+      clearStoredSessionInvalidNoticeV3_();
       elements.password.value = '';
       showDashboardShell(state.session);
       startIdleSessionGuardV3_({ reset: true });
@@ -3731,15 +3734,54 @@
     state.sessionInvalidHandling = true;
     var detail = event && event.detail || {};
     var code = String(detail.code || 'SESSION_REVOKED');
+    var message = code === 'SESSION_REPLACED'
+      ? '此帳號已在其他裝置重新登入，您目前的登入已失效。未送出的內容已保留在本機草稿。'
+      : friendlyError({ code: code, message: detail.message || '' });
+    storeSessionInvalidNoticeV3_(code, message);
     saveLocalDraft();
     await performLogoutV3_({
       skipServer: true,
-      messageType: 'info',
-      message: code === 'SESSION_REPLACED'
-        ? '此帳號已在其他裝置重新登入，您目前的登入已失效。未送出的內容已保留在本機草稿。'
-        : friendlyError({ code: code, message: detail.message || '' })
+      messageType: 'warning',
+      message: message
     });
+    displayStoredSessionInvalidNoticeV3_();
     state.sessionInvalidHandling = false;
+  }
+
+  function storeSessionInvalidNoticeV3_(code, message) {
+    try {
+      window.sessionStorage.setItem(SESSION_NOTICE_STORAGE_KEY, JSON.stringify({
+        code: String(code || 'SESSION_REVOKED'),
+        message: String(message || '登入狀態已失效，請重新登入。'),
+        createdAt: Date.now()
+      }));
+    } catch (ignore) {}
+  }
+
+  function readStoredSessionInvalidNoticeV3_() {
+    try {
+      var raw = window.sessionStorage.getItem(SESSION_NOTICE_STORAGE_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (!data || !data.message) return null;
+      return data;
+    } catch (ignore) {
+      return null;
+    }
+  }
+
+  function clearStoredSessionInvalidNoticeV3_() {
+    try { window.sessionStorage.removeItem(SESSION_NOTICE_STORAGE_KEY); } catch (ignore) {}
+    if (elements.globalNoticeOverlay) delete elements.globalNoticeOverlay.dataset.sessionInvalidNotice;
+  }
+
+  function displayStoredSessionInvalidNoticeV3_() {
+    var notice = readStoredSessionInvalidNoticeV3_();
+    if (!notice) return false;
+    showLoginMessage('warning', String(notice.message));
+    showGlobalNotice('warning', '登入狀態已失效', String(notice.message), true);
+    if (elements.globalNoticeOverlay) elements.globalNoticeOverlay.dataset.sessionInvalidNotice = 'true';
+    return true;
   }
 
   async function handleLogout() {
@@ -4167,8 +4209,10 @@
   }
 
   function closeGlobalNotice() {
+    var isSessionInvalidNotice = elements.globalNoticeOverlay && elements.globalNoticeOverlay.dataset.sessionInvalidNotice === 'true';
     elements.globalNoticeOverlay.hidden = true;
     elements.globalNoticeClose.hidden = false;
+    if (isSessionInvalidNotice) clearStoredSessionInvalidNoticeV3_();
   }
 
   function valueOrDash(value) {
