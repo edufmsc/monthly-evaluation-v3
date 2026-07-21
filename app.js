@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.4.0D-session-notice-fix';
+  var APP_BUILD = '7.5.0A-performance-archive';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -39,6 +39,10 @@
     pdfManagementLoading: false,
     pdfManagementSelected: {},
     pdfManagementAction: null,
+    archiveManagement: null,
+    archiveManagementLoading: false,
+    archivePreview: null,
+    archiveAction: null,
     forceClosePreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
@@ -91,6 +95,7 @@
     ensureDispatchManagementPanel();
     ensureAccountManagementPanel();
     ensurePdfManagementPanel();
+    ensureAnnualArchivePanelV3_();
     ensureSystemManagementWorkspaceV3_();
     ensureContinuousReviewToolbar();
     ensureIdleWarningDialogV3_();
@@ -301,6 +306,46 @@
   }
 
 
+
+  function ensureAnnualArchivePanelV3_() {
+    if (document.getElementById('annualArchiveCard')) return;
+    var systemPanel = document.getElementById('systemPanel');
+    if (!systemPanel) return;
+    var article = document.createElement('article');
+    article.id = 'annualArchiveCard';
+    article.className = 'card test-dispatch-card annual-archive-card';
+    article.innerHTML = '<div class="test-dispatch-heading"><div>' +
+      '<p class="step-label">安全兩階段封存｜7.5.0A</p><h3>年度封存中心</h3>' +
+      '<p>先建立年度封存包並核對，不會刪除主系統資料；人工確認完成後仍保留30天，之後才可另行清理。</p></div>' +
+      '<button id="annualArchiveRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
+      '<section class="detail-section"><div class="archive-year-row">' +
+        '<label class="field-group"><span>封存年度（民國）</span><input id="annualArchiveYear" type="number" min="100" max="999" inputmode="numeric" placeholder="例如115"></label>' +
+        '<button id="annualArchivePreviewButton" class="secondary-button" type="button"><span class="button-label">檢查封存資格</span><span class="button-spinner" aria-hidden="true"></span></button>' +
+      '</div><p class="section-help">只處理該年度已結案且PDF、簽核資料完整的案件；作廢紀錄會一併保存。</p></section>' +
+      '<div id="annualArchiveMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
+      '<div id="annualArchiveSummary" class="admin-result-grid"></div>' +
+      '<section id="annualArchiveIssues" class="detail-section archive-issue-list" hidden></section>' +
+      '<section id="annualArchiveBuildPanel" class="detail-section" hidden>' +
+        '<h4>第一階段：建立封存包</h4>' +
+        '<p class="section-help">系統會建立獨立封存試算表、PDF清冊與核對報告。PDF原檔仍保留在Google Drive。</p>' +
+        '<label class="field-group"><span>建立原因</span><textarea id="annualArchiveBuildReason" rows="3" maxlength="300" placeholder="例如：完成115年度月考核資料封存"></textarea></label>' +
+        '<label class="confirm-row"><input id="annualArchiveBuildConfirm" type="checkbox"><span>我確認本階段只建立封存包，不會刪除主系統資料或雲端PDF。</span></label>' +
+        '<div class="test-dispatch-actions"><button id="annualArchiveBuildButton" class="primary-button" type="button" disabled><span class="button-label">建立年度封存包</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+      '</section>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>最近封存批次</h4><p class="section-help">完成封存前可先開啟封存試算表與資料夾核對；清理主系統需等待30天並再次確認。</p></div></div>' +
+        '<div id="annualArchiveBatchList" class="archive-batch-list"><div class="empty-state"><h3>尚無封存批次</h3><p>先選擇年度並檢查封存資格。</p></div></div>' +
+      '</section>' +
+      '<section id="annualArchiveActionPanel" class="test-dispatch-preview" hidden>' +
+        '<div id="annualArchiveActionContent"></div>' +
+        '<label id="annualArchiveActionReasonGroup" class="field-group" hidden><span>清理原因</span><textarea id="annualArchiveActionReason" rows="3" maxlength="300"></textarea></label>' +
+        '<label class="field-group"><span>最終確認文字</span><input id="annualArchiveActionConfirmText" type="text" maxlength="20" autocomplete="off"><small id="annualArchiveActionConfirmHint"></small></label>' +
+        '<div class="test-dispatch-actions"><button id="annualArchiveActionCancelButton" class="secondary-button" type="button">取消</button>' +
+          '<button id="annualArchiveActionRunButton" class="primary-button" type="button" disabled><span class="button-label">執行</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<article id="annualArchiveActionResult" class="card admin-result-card" hidden></article>' +
+      '</section>';
+    systemPanel.appendChild(article);
+  }
+
   function ensureSystemManagementWorkspaceV3_() {
     if (document.getElementById('systemManagementWorkspace')) return;
     var systemPanel = document.getElementById('systemPanel');
@@ -322,13 +367,14 @@
         '<select id="systemManagementPageSelect">' +
           '<option value="home">管理首頁</option><option value="accounts">帳號與登入</option>' +
           '<option value="dispatch">月考核派發</option><option value="pdf">PDF處理中心</option>' +
-          '<option value="health">系統健檢</option></select></div>' +
+          '<option value="archive">年度封存中心</option><option value="health">系統健檢</option></select></div>' +
       '<div class="system-management-layout">' +
         '<nav id="systemManagementNav" class="system-management-nav" aria-label="系統管理功能">' +
           systemManagementNavButtonV3_('home', '管理首頁', '功能總覽與入口') +
           systemManagementNavButtonV3_('accounts', '帳號與登入', '帳密、解鎖與啟停') +
           systemManagementNavButtonV3_('dispatch', '月考核派發', '人工派發與補派') +
           systemManagementNavButtonV3_('pdf', 'PDF處理中心', '失敗重試與檔案檢查') +
+          systemManagementNavButtonV3_('archive', '年度封存中心', '年度打包、核對與安全清理') +
           systemManagementNavButtonV3_('health', '系統健檢', '連線、Session與異常檢查') +
         '</nav>' +
         '<main id="systemManagementPages" class="system-management-pages"></main>' +
@@ -340,11 +386,13 @@
     var accountsPage = createSystemManagementPageV3_('accounts');
     var dispatchPage = createSystemManagementPageV3_('dispatch');
     var pdfPage = createSystemManagementPageV3_('pdf');
+    var archivePage = createSystemManagementPageV3_('archive');
     var healthPage = createSystemManagementPageV3_('health');
     pages.appendChild(homePage);
     pages.appendChild(accountsPage);
     pages.appendChild(dispatchPage);
     pages.appendChild(pdfPage);
+    pages.appendChild(archivePage);
     pages.appendChild(healthPage);
 
     homePage.innerHTML = '<section class="system-management-home">' +
@@ -354,15 +402,18 @@
         systemHomeCardV3_('accounts', '帳號與登入', '查詢單一或特定範圍人員；每頁10人，可切換15人。', '帳密查詢、解除鎖定、啟停帳號、強制登出') +
         systemHomeCardV3_('dispatch', '月考核派發', '只在進入本頁時載入當月派發狀態。', '人工派發、補派、路線異常、月份分析') +
         systemHomeCardV3_('pdf', 'PDF處理中心', '集中處理PDF失敗、公開失敗與檔案檢查。', '單筆或逐筆重試，不刪除舊PDF') +
+        systemHomeCardV3_('archive', '年度封存中心', '一鍵建立封存包，人工核對後完成封存。', '主系統清理需等待30天並再次確認') +
         systemHomeCardV3_('health', '系統健檢', '手動執行連線、登入狀態及系統異常檢查。', '不會進入頁面就自動執行') +
       '</div></section>';
 
     var accountCard = document.getElementById('accountManagementCard');
     var dispatchCard = document.getElementById('dispatchManagementCard');
     var pdfCard = document.getElementById('pdfManagementCard');
+    var archiveCard = document.getElementById('annualArchiveCard');
     if (accountCard) accountsPage.appendChild(accountCard);
     if (dispatchCard) dispatchPage.appendChild(dispatchCard);
     if (pdfCard) pdfPage.appendChild(pdfCard);
+    if (archiveCard) archivePage.appendChild(archiveCard);
 
     var adminGrid = systemPanel.querySelector('.admin-tool-grid');
     var adminMessage = document.getElementById('adminSystemMessage');
@@ -454,6 +505,12 @@
       'pdfManagementActionPanel', 'pdfManagementActionContent', 'pdfManagementReason', 'pdfManagementConfirm',
       'pdfManagementConfirmText', 'pdfManagementConfirmHint', 'pdfManagementCancelButton',
       'pdfManagementRunButton', 'pdfManagementActionResult',
+      'annualArchiveCard', 'annualArchiveRefreshButton', 'annualArchiveYear', 'annualArchivePreviewButton',
+      'annualArchiveMessage', 'annualArchiveSummary', 'annualArchiveIssues', 'annualArchiveBuildPanel',
+      'annualArchiveBuildReason', 'annualArchiveBuildConfirm', 'annualArchiveBuildButton', 'annualArchiveBatchList',
+      'annualArchiveActionPanel', 'annualArchiveActionContent', 'annualArchiveActionReasonGroup', 'annualArchiveActionReason',
+      'annualArchiveActionConfirmText', 'annualArchiveActionConfirmHint', 'annualArchiveActionCancelButton',
+      'annualArchiveActionRunButton', 'annualArchiveActionResult',
       'evaluationOverlay', 'closeEvaluationButton', 'evaluationLoading',
       'evaluationMessage', 'evaluationContent', 'evaluationSummary', 'evaluationReadOnly', 'claimPanel',
       'claimMessage', 'claimButton', 'releaseButton', 'actionPanel', 'actionSelector', 'evaluationActionForm',
@@ -530,6 +587,15 @@
     if (elements.pdfManagementConfirmText) elements.pdfManagementConfirmText.addEventListener('input', updatePdfManagementActionRunStateV3_);
     if (elements.pdfManagementCancelButton) elements.pdfManagementCancelButton.addEventListener('click', closePdfManagementActionPanelV3_);
     if (elements.pdfManagementRunButton) elements.pdfManagementRunButton.addEventListener('click', runPdfManagementActionV3_);
+    if (elements.annualArchiveRefreshButton) elements.annualArchiveRefreshButton.addEventListener('click', function () { loadAnnualArchiveCenterV3_(); });
+    if (elements.annualArchivePreviewButton) elements.annualArchivePreviewButton.addEventListener('click', previewAnnualArchiveV3_);
+    if (elements.annualArchiveBuildReason) elements.annualArchiveBuildReason.addEventListener('input', updateAnnualArchiveBuildStateV3_);
+    if (elements.annualArchiveBuildConfirm) elements.annualArchiveBuildConfirm.addEventListener('change', updateAnnualArchiveBuildStateV3_);
+    if (elements.annualArchiveBuildButton) elements.annualArchiveBuildButton.addEventListener('click', buildAnnualArchiveV3_);
+    if (elements.annualArchiveActionConfirmText) elements.annualArchiveActionConfirmText.addEventListener('input', updateAnnualArchiveActionStateV3_);
+    if (elements.annualArchiveActionReason) elements.annualArchiveActionReason.addEventListener('input', updateAnnualArchiveActionStateV3_);
+    if (elements.annualArchiveActionCancelButton) elements.annualArchiveActionCancelButton.addEventListener('click', closeAnnualArchiveActionV3_);
+    if (elements.annualArchiveActionRunButton) elements.annualArchiveActionRunButton.addEventListener('click', runAnnualArchiveActionV3_);
     elements.refreshPendingButton.addEventListener('click', loadPending);
     elements.refreshProgressButton.addEventListener('click', loadProgress);
     elements.progressFilterForm.addEventListener('submit', function (event) {
@@ -3954,6 +4020,224 @@
     }
   }
 
+
+  function getAnnualArchiveYearV3_() {
+    return String(elements.annualArchiveYear && elements.annualArchiveYear.value || '').trim();
+  }
+
+  function showAnnualArchiveMessageV3_(type, message) {
+    if (!elements.annualArchiveMessage) return;
+    elements.annualArchiveMessage.hidden = !message;
+    elements.annualArchiveMessage.className = 'form-message' + (message ? ' form-message--' + (type || 'info') : '');
+    elements.annualArchiveMessage.textContent = String(message || '');
+  }
+
+  async function loadAnnualArchiveCenterV3_(options) {
+    var settings = options || {};
+    if (state.archiveManagementLoading) return;
+    state.archiveManagementLoading = true;
+    if (!settings.quiet) showAnnualArchiveMessageV3_('info', '正在載入年度封存資料…');
+    try {
+      var result = await window.V3WorkflowService.archiveManagementCenter({ year: getAnnualArchiveYearV3_() });
+      var data = result.data || {};
+      state.archiveManagement = data;
+      state.archivePreview = data.preview || null;
+      if (elements.annualArchiveYear && !elements.annualArchiveYear.value) {
+        var recommended = Array.isArray(data.recommendedYears) ? data.recommendedYears : [];
+        elements.annualArchiveYear.value = recommended[0] || String(Number(data.currentRocYear || 0) - 1 || '');
+      }
+      renderAnnualArchiveCenterV3_();
+      showAnnualArchiveMessageV3_('', '');
+    } catch (error) {
+      showAnnualArchiveMessageV3_('error', friendlyError(error));
+    } finally {
+      state.archiveManagementLoading = false;
+    }
+  }
+
+  async function previewAnnualArchiveV3_() {
+    var year = getAnnualArchiveYearV3_();
+    if (!/^\d{3}$/.test(year)) {
+      showAnnualArchiveMessageV3_('error', '請輸入3碼民國年度，例如115。');
+      if (elements.annualArchiveYear) elements.annualArchiveYear.focus();
+      return;
+    }
+    setButtonLoading(elements.annualArchivePreviewButton, true, '檢查中');
+    showAnnualArchiveMessageV3_('info', '正在核對結案、簽名與PDF狀態…');
+    try {
+      var result = await window.V3WorkflowService.archivePreview(year);
+      state.archivePreview = result.data || null;
+      if (!state.archiveManagement) state.archiveManagement = { batches: [], rules: {} };
+      renderAnnualArchivePreviewV3_();
+      showAnnualArchiveMessageV3_('', '');
+    } catch (error) {
+      showAnnualArchiveMessageV3_('error', friendlyError(error));
+    } finally {
+      setButtonLoading(elements.annualArchivePreviewButton, false, '檢查封存資格');
+    }
+  }
+
+  function renderAnnualArchiveCenterV3_() {
+    renderAnnualArchivePreviewV3_();
+    renderAnnualArchiveBatchesV3_();
+  }
+
+  function renderAnnualArchivePreviewV3_() {
+    var preview = state.archivePreview;
+    if (!elements.annualArchiveSummary) return;
+    if (!preview) {
+      elements.annualArchiveSummary.innerHTML = '';
+      elements.annualArchiveIssues.hidden = true;
+      elements.annualArchiveBuildPanel.hidden = true;
+      return;
+    }
+    elements.annualArchiveSummary.innerHTML =
+      archiveSummaryCardV3_('年度總件數', preview.totalCount, '此年度所有考核紀錄') +
+      archiveSummaryCardV3_('可封存', preview.eligibleCount, '結案、簽核與PDF完整') +
+      archiveSummaryCardV3_('異常案件', preview.issueCount, preview.issueCount ? '需先修正才能建立封存包' : '目前無阻擋問題') +
+      archiveSummaryCardV3_('PDF完成', preview.pdfCompleteCount, '已完成的雲端PDF');
+    var issues = Array.isArray(preview.issues) ? preview.issues : [];
+    elements.annualArchiveIssues.hidden = !issues.length;
+    elements.annualArchiveIssues.innerHTML = issues.length ? '<h4>封存異常清單</h4><p class="section-help">以下案件不會被直接忽略，需先完成後才能建立封存包。</p>' +
+      '<div class="archive-issue-items">' + issues.map(function (item) {
+        return '<article><strong>' + escapeHtml(item.evaluationNo || '') + '</strong><span>' + escapeHtml(item.employeeName || '') + '</span><p>' + escapeHtml((item.reasons || []).join('、')) + '</p></article>';
+      }).join('') + '</div>' : '';
+    elements.annualArchiveBuildPanel.hidden = !(Number(preview.eligibleCount || 0) > 0 && Number(preview.issueCount || 0) === 0);
+    updateAnnualArchiveBuildStateV3_();
+  }
+
+  function archiveSummaryCardV3_(label, value, note) {
+    return '<article class="admin-result-card"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value || 0)) + '</strong><small>' + escapeHtml(note || '') + '</small></article>';
+  }
+
+  function updateAnnualArchiveBuildStateV3_() {
+    if (!elements.annualArchiveBuildButton) return;
+    var preview = state.archivePreview || {};
+    var reason = String(elements.annualArchiveBuildReason && elements.annualArchiveBuildReason.value || '').trim();
+    var confirmed = Boolean(elements.annualArchiveBuildConfirm && elements.annualArchiveBuildConfirm.checked);
+    elements.annualArchiveBuildButton.disabled = !(Number(preview.eligibleCount || 0) > 0 && Number(preview.issueCount || 0) === 0 && reason.length >= 4 && confirmed);
+  }
+
+  async function buildAnnualArchiveV3_() {
+    if (!elements.annualArchiveBuildButton || elements.annualArchiveBuildButton.disabled) return;
+    var year = getAnnualArchiveYearV3_();
+    setButtonLoading(elements.annualArchiveBuildButton, true, '建立中');
+    showAnnualArchiveMessageV3_('info', '正在建立年度封存試算表與核對清冊，請勿關閉頁面…');
+    try {
+      var result = await window.V3WorkflowService.archiveBuild({
+        year: year,
+        reason: String(elements.annualArchiveBuildReason.value || '').trim(),
+        secondConfirmed: true
+      }, window.V3ApiClient.createRequestId());
+      showAnnualArchiveMessageV3_('success', '封存包已建立。原始資料與雲端PDF尚未刪除，請先開啟封存試算表核對。');
+      elements.annualArchiveBuildReason.value = '';
+      elements.annualArchiveBuildConfirm.checked = false;
+      state.archivePreview = null;
+      await loadAnnualArchiveCenterV3_({ quiet: true });
+    } catch (error) {
+      showAnnualArchiveMessageV3_('error', friendlyError(error));
+    } finally {
+      setButtonLoading(elements.annualArchiveBuildButton, false, '建立年度封存包');
+      updateAnnualArchiveBuildStateV3_();
+    }
+  }
+
+  function renderAnnualArchiveBatchesV3_() {
+    if (!elements.annualArchiveBatchList) return;
+    var batches = state.archiveManagement && Array.isArray(state.archiveManagement.batches) ? state.archiveManagement.batches : [];
+    if (!batches.length) {
+      elements.annualArchiveBatchList.innerHTML = '<div class="empty-state"><h3>尚無封存批次</h3><p>完成資格檢查後即可建立第一個封存包。</p></div>';
+      return;
+    }
+    elements.annualArchiveBatchList.innerHTML = batches.map(function (batch) {
+      var statusClass = batch.status === '主系統已清理' ? 'is-cleaned' : (batch.status === '已封存' ? 'is-finalized' : 'is-prepared');
+      var links = '';
+      if (batch.spreadsheetUrl) links += '<a class="secondary-button secondary-button--small" href="' + escapeHtml(batch.spreadsheetUrl) + '" target="_blank" rel="noopener">開啟封存試算表</a>';
+      if (batch.folderUrl) links += '<a class="secondary-button secondary-button--small" href="' + escapeHtml(batch.folderUrl) + '" target="_blank" rel="noopener">開啟雲端資料夾</a>';
+      var action = '';
+      if (batch.status === '待確認') action = '<button class="primary-button primary-button--small" type="button" data-archive-finalize="' + escapeHtml(batch.batchId) + '">確認完成封存</button>';
+      else if (batch.status === '已封存') action = '<button class="secondary-button secondary-button--small" type="button" data-archive-cleanup="' + escapeHtml(batch.batchId) + '"' + (batch.canCleanup ? '' : ' disabled') + '>' + (batch.canCleanup ? '清理主系統舊資料' : '等待30天後可清理') + '</button>';
+      return '<article class="archive-batch-card ' + statusClass + '"><div class="archive-batch-heading"><div><strong>' + escapeHtml(batch.batchId || '') + '</strong>' +
+        '<span>' + escapeHtml(String(batch.year || '')) + '年度・' + escapeHtml(batch.status || '') + '</span></div><small>建立：' + escapeHtml(batch.createdAt || '') + ' ' + escapeHtml(batch.createdBy || '') + '</small></div>' +
+        '<div class="archive-batch-stats"><span>年度總件數 <strong>' + escapeHtml(String(batch.totalCount || 0)) + '</strong></span><span>封存件數 <strong>' + escapeHtml(String(batch.eligibleCount || 0)) + '</strong></span><span>異常 <strong>' + escapeHtml(String(batch.issueCount || 0)) + '</strong></span></div>' +
+        '<p class="section-help">' + (batch.status === '待確認' ? '請先核對封存包，確認後才會建立主系統封存索引。' : '可清理日期：' + escapeHtml(batch.cleanupAt || '尚未設定')) + '</p>' +
+        '<div class="archive-batch-actions">' + links + action + '</div></article>';
+    }).join('');
+    Array.prototype.slice.call(elements.annualArchiveBatchList.querySelectorAll('[data-archive-finalize]')).forEach(function (button) {
+      button.addEventListener('click', function () { openAnnualArchiveActionV3_('FINALIZE', button.getAttribute('data-archive-finalize')); });
+    });
+    Array.prototype.slice.call(elements.annualArchiveBatchList.querySelectorAll('[data-archive-cleanup]')).forEach(function (button) {
+      button.addEventListener('click', function () { if (!button.disabled) openAnnualArchiveActionV3_('CLEANUP', button.getAttribute('data-archive-cleanup')); });
+    });
+  }
+
+  function findAnnualArchiveBatchV3_(batchId) {
+    var batches = state.archiveManagement && Array.isArray(state.archiveManagement.batches) ? state.archiveManagement.batches : [];
+    return batches.filter(function (item) { return String(item.batchId || '') === String(batchId || ''); })[0] || null;
+  }
+
+  function openAnnualArchiveActionV3_(type, batchId) {
+    var batch = findAnnualArchiveBatchV3_(batchId);
+    if (!batch) return;
+    var rules = state.archiveManagement && state.archiveManagement.rules || {};
+    var confirmation = type === 'CLEANUP' ? (rules.cleanupConfirmation || '確認清理主系統') : (rules.finalizeConfirmation || '確認完成封存');
+    state.archiveAction = { type: type, batchId: batchId, confirmation: confirmation };
+    elements.annualArchiveActionPanel.hidden = false;
+    elements.annualArchiveActionContent.innerHTML = '<h4>' + (type === 'CLEANUP' ? '清理主系統舊資料' : '確認完成封存') + '</h4>' +
+      '<p><strong>' + escapeHtml(batchId) + '</strong></p><p class="section-help">' +
+      (type === 'CLEANUP' ? '只清理已完整封存在年度封存包內的主系統舊資料；封存試算表與雲端PDF不會刪除。' : '確認後建立封存索引，但主系統原資料仍保留30天。') + '</p>';
+    elements.annualArchiveActionReasonGroup.hidden = type !== 'CLEANUP';
+    elements.annualArchiveActionReason.value = '';
+    elements.annualArchiveActionConfirmText.value = '';
+    elements.annualArchiveActionConfirmHint.textContent = '請輸入「' + confirmation + '」';
+    elements.annualArchiveActionResult.hidden = true;
+    updateAnnualArchiveActionStateV3_();
+    elements.annualArchiveActionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function updateAnnualArchiveActionStateV3_() {
+    if (!elements.annualArchiveActionRunButton) return;
+    var action = state.archiveAction;
+    if (!action) { elements.annualArchiveActionRunButton.disabled = true; return; }
+    var textOk = String(elements.annualArchiveActionConfirmText.value || '').trim() === action.confirmation;
+    var reasonOk = action.type !== 'CLEANUP' || String(elements.annualArchiveActionReason.value || '').trim().length >= 4;
+    elements.annualArchiveActionRunButton.disabled = !(textOk && reasonOk);
+    var label = elements.annualArchiveActionRunButton.querySelector('.button-label');
+    if (label) label.textContent = action.type === 'CLEANUP' ? '確認清理主系統' : '確認完成封存';
+  }
+
+  function closeAnnualArchiveActionV3_() {
+    state.archiveAction = null;
+    if (elements.annualArchiveActionPanel) elements.annualArchiveActionPanel.hidden = true;
+  }
+
+  async function runAnnualArchiveActionV3_() {
+    var action = state.archiveAction;
+    if (!action || elements.annualArchiveActionRunButton.disabled) return;
+    setButtonLoading(elements.annualArchiveActionRunButton, true, '處理中');
+    try {
+      var payload = { batchId: action.batchId, confirmationText: String(elements.annualArchiveActionConfirmText.value || '').trim() };
+      var result;
+      if (action.type === 'CLEANUP') {
+        payload.reason = String(elements.annualArchiveActionReason.value || '').trim();
+        result = await window.V3WorkflowService.archiveCleanup(payload, window.V3ApiClient.createRequestId());
+      } else {
+        result = await window.V3WorkflowService.archiveFinalize(payload, window.V3ApiClient.createRequestId());
+      }
+      elements.annualArchiveActionResult.hidden = false;
+      elements.annualArchiveActionResult.innerHTML = '<strong>處理完成</strong><p>' + (action.type === 'CLEANUP' ? '主系統舊資料已清理，年度封存包與雲端PDF仍保留。' : '封存已確認完成；主系統資料將繼續保留30天。') + '</p>';
+      state.archiveAction = null;
+      await loadAnnualArchiveCenterV3_({ quiet: true });
+      window.setTimeout(closeAnnualArchiveActionV3_, 1200);
+    } catch (error) {
+      elements.annualArchiveActionResult.hidden = false;
+      elements.annualArchiveActionResult.innerHTML = '<strong>處理失敗</strong><p>' + escapeHtml(friendlyError(error)) + '</p>';
+    } finally {
+      setButtonLoading(elements.annualArchiveActionRunButton, false, '執行');
+      updateAnnualArchiveActionStateV3_();
+    }
+  }
+
   function showLogin() {
     document.body.classList.remove('system-management-active');
     elements.dashboardView.hidden = true;
@@ -3987,13 +4271,13 @@
   }
 
   function resolveSystemManagementPageFromHashV3_() {
-    var match = String(window.location.hash || '').match(/^#system\/(home|accounts|dispatch|pdf|health)$/);
+    var match = String(window.location.hash || '').match(/^#system\/(home|accounts|dispatch|pdf|archive|health)$/);
     return match ? match[1] : (state.activeSystemPage || 'home');
   }
 
   function switchSystemManagementPageV3_(page, options) {
     var settings = options || {};
-    var allowed = ['home', 'accounts', 'dispatch', 'pdf', 'health'];
+    var allowed = ['home', 'accounts', 'dispatch', 'pdf', 'archive', 'health'];
     var target = allowed.indexOf(String(page || '')) !== -1 ? String(page) : 'home';
     state.activeSystemPage = target;
     (elements.systemPagePanels || Array.prototype.slice.call(document.querySelectorAll('[data-system-page-panel]'))).forEach(function (panel) {
@@ -4009,6 +4293,7 @@
     }
     if (!settings.skipLoad && target === 'dispatch' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
     if (!settings.skipLoad && target === 'pdf' && !state.pdfManagement) loadPdfManagementCenter({ quiet: true });
+    if (!settings.skipLoad && target === 'archive' && !state.archiveManagement) loadAnnualArchiveCenterV3_({ quiet: true });
     if (target === 'dispatch' && window.matchMedia && window.matchMedia('(max-width: 860px)').matches) {
       window.setTimeout(function () {
         var pagePanel = document.querySelector('[data-system-page-panel="dispatch"]');
