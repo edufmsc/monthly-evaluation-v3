@@ -1,7 +1,11 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.4.0B-admin-workspace';
+  var APP_BUILD = '7.4.0C-mobile-session-security';
+  var IDLE_WARNING_MS = 4 * 60 * 1000;
+  var IDLE_LOGOUT_MS = 5 * 60 * 1000;
+  var IDLE_DRAFT_WAIT_MS = 8000;
+  var IDLE_STORAGE_KEY = 'monthlyEvaluationV3IdleActivity';
   var elements = {};
   var state = {
     session: null,
@@ -54,6 +58,14 @@
     pdfPreloadScheduled: false,
     pdfPreloadStarted: false,
     backgroundSyncTimer: null,
+    idleWarningTimer: null,
+    idleLogoutTimer: null,
+    idleCountdownTimer: null,
+    idleDeadlineAt: 0,
+    lastActivityAt: 0,
+    idleWarningOpen: false,
+    idleLogoutInProgress: false,
+    sessionInvalidHandling: false,
     continuousReview: {
       active: false,
       queue: [],
@@ -80,6 +92,7 @@
     ensurePdfManagementPanel();
     ensureSystemManagementWorkspaceV3_();
     ensureContinuousReviewToolbar();
+    ensureIdleWarningDialogV3_();
     cacheElements();
     ensurePdfViewerModal();
     bindEvents();
@@ -99,6 +112,29 @@
 
 
   
+  function ensureIdleWarningDialogV3_() {
+    if (document.getElementById('idleWarningOverlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'idleWarningOverlay';
+    overlay.className = 'idle-warning-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'idleWarningTitle');
+    overlay.innerHTML = '<section class="idle-warning-dialog">' +
+      '<p class="step-label">登入安全提醒</p>' +
+      '<h2 id="idleWarningTitle">即將自動登出</h2>' +
+      '<p>您已接近5分鐘沒有操作。系統將先保存可保存的草稿，再自動登出。</p>' +
+      '<div class="idle-warning-countdown"><span>剩餘時間</span><strong id="idleWarningCountdown">60</strong><span>秒</span></div>' +
+      '<p class="idle-warning-note">草稿不包含手寫簽名；重新登入後如需送出，請重新確認簽名。</p>' +
+      '<div class="idle-warning-actions">' +
+        '<button id="idleLogoutNowButton" class="secondary-button" type="button">立即登出</button>' +
+        '<button id="idleContinueButton" class="primary-button" type="button">繼續使用</button>' +
+      '</div>' +
+    '</section>';
+    document.body.appendChild(overlay);
+  }
+
   function retireLegacyDispatchUi() {
     var legacyTestForm = document.getElementById('testDispatchForm');
     if (legacyTestForm) {
@@ -174,7 +210,7 @@
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading"><div>' +
-      '<p class="step-label">帳號與登入管理｜7.4.0B</p><h3>帳號管理中心</h3>' +
+      '<p class="step-label">帳號與登入管理｜7.4.0C</p><h3>帳號管理中心</h3>' +
       '<p>教育中心成員與主管權限一致。密碼由教育中心在員工主檔統一維護；本頁可查詢帳密、解除暫時鎖定、啟停帳號及強制登出，但不提供網頁修改密碼。</p></div>' +
       '<button id="accountManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
       '<section class="detail-section account-credential-section">' +
@@ -193,10 +229,12 @@
         '<label class="field-group"><span>系統角色</span><select id="accountManagementRole"><option value="">全部角色</option></select></label>' +
         '<label class="field-group"><span>在職狀態</span><select id="accountManagementEmployment"><option value="">全部狀態</option></select></label>' +
         '<label class="field-group"><span>帳號狀態</span><select id="accountManagementStatus"><option value="">全部狀態</option><option value="啟用">啟用</option><option value="停用">停用</option><option value="鎖定">鎖定</option><option value="未設定">未設定</option></select></label>' +
+        '<label class="field-group"><span>登入狀況</span><select id="accountManagementLoginIssue"><option value="">全部登入狀況</option><option value="unlockable">需解鎖／清除錯誤次數</option><option value="locked">目前鎖定</option><option value="password_invalid">密碼格式異常</option><option value="not_login_ready">目前不可登入</option></select></label>' +
         '<label class="field-group"><span>每頁顯示</span><select id="accountManagementPageSize"><option value="10">10人</option><option value="15">15人</option></select></label>' +
         '<div class="test-dispatch-actions account-management-search-actions"><button id="accountManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢帳號</span><span class="button-spinner" aria-hidden="true"></span></button>' +
           '<button id="accountManagementClearButton" class="secondary-button" type="button">清除條件</button></div>' +
       '</form>' +
+      '<div class="account-quick-filter-bar"><span>快速處理</span><button id="accountUnlockQuickFilterButton" class="secondary-button secondary-button--small" type="button">查看需解鎖／清除錯誤次數</button></div>' +
       '<div id="accountManagementMessage" class="form-message form-message--info" role="status" aria-live="polite">請輸入完整工號、姓名、完整店號，或選擇角色／狀態後再查詢；系統不會自動載入全部人員。</div>' +
       '<div id="accountManagementSummary" hidden></div>' +
       '<section id="accountManagementList" class="test-dispatch-preview account-management-list">' +
@@ -399,8 +437,8 @@
       'batchDispatchRepairReason', 'batchDispatchRepairConfirm', 'batchDispatchRepairConfirmText',
       'batchDispatchRepairCancelButton', 'batchDispatchRepairRunButton', 'batchDispatchRepairResult',
       'accountManagementCard', 'accountManagementRefreshButton', 'accountManagementFilterForm',
-      'accountManagementKeyword', 'accountManagementRole', 'accountManagementEmployment', 'accountManagementStatus',
-      'accountManagementPageSize', 'accountManagementSearchButton', 'accountManagementClearButton', 'accountManagementMessage',
+      'accountManagementKeyword', 'accountManagementRole', 'accountManagementEmployment', 'accountManagementStatus', 'accountManagementLoginIssue',
+      'accountManagementPageSize', 'accountManagementSearchButton', 'accountManagementClearButton', 'accountUnlockQuickFilterButton', 'accountManagementMessage',
       'accountManagementSummary', 'accountManagementList', 'accountManagementPagination',
       'accountManagementPreviousButton', 'accountManagementNextButton', 'accountManagementPageText',
       'accountCredentialLookupForm', 'accountCredentialLookupQuery', 'accountCredentialLookupButton',
@@ -422,7 +460,8 @@
       'continuousReviewBar', 'continuousReviewProgress', 'continuousReviewSummary',
       'continuousReviewPreviousButton', 'continuousReviewSkipButton', 'continuousReviewNextButton', 'continuousReviewEndButton',
       'systemManagementWorkspace', 'systemManagementPageSelect', 'systemManagementNav', 'systemManagementPages',
-      'globalNoticeOverlay', 'globalNoticeIcon', 'globalNoticeTitle', 'globalNoticeText', 'globalNoticeClose'
+      'globalNoticeOverlay', 'globalNoticeIcon', 'globalNoticeTitle', 'globalNoticeText', 'globalNoticeClose',
+      'idleWarningOverlay', 'idleWarningCountdown', 'idleContinueButton', 'idleLogoutNowButton'
     ];
     ids.forEach(function (id) { elements[id] = document.getElementById(id); });
     elements.tabButtons = Array.prototype.slice.call(document.querySelectorAll('[data-tab]'));
@@ -457,6 +496,15 @@
       loadAccountManagementCenter({ requireCriteria: true });
     });
     if (elements.accountManagementClearButton) elements.accountManagementClearButton.addEventListener('click', resetAccountManagementSearchV3_);
+    if (elements.accountUnlockQuickFilterButton) elements.accountUnlockQuickFilterButton.addEventListener('click', function () {
+      if (elements.accountManagementKeyword) elements.accountManagementKeyword.value = '';
+      if (elements.accountManagementRole) elements.accountManagementRole.value = '';
+      if (elements.accountManagementEmployment) elements.accountManagementEmployment.value = '';
+      if (elements.accountManagementStatus) elements.accountManagementStatus.value = '';
+      if (elements.accountManagementLoginIssue) elements.accountManagementLoginIssue.value = 'unlockable';
+      state.accountManagementPage = 1;
+      loadAccountManagementCenter({ requireCriteria: true });
+    });
     if (elements.accountManagementPageSize) elements.accountManagementPageSize.addEventListener('change', function () {
       state.accountManagementPageSize = Number(this.value) === 15 ? 15 : 10;
       state.accountManagementPage = 1;
@@ -518,8 +566,16 @@
     elements.evaluationActionForm.addEventListener('change', scheduleDraftSave);
     window.addEventListener('beforeunload', function () { if (!state.isSubmitting) saveLocalDraft(); });
     elements.globalNoticeClose.addEventListener('click', closeGlobalNotice);
-    window.addEventListener('focus', handleAutomaticRefresh);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) handleAutomaticRefresh(); });
+    if (elements.idleContinueButton) elements.idleContinueButton.addEventListener('click', function () { noteUserActivityV3_(true); });
+    if (elements.idleLogoutNowButton) elements.idleLogoutNowButton.addEventListener('click', function () { handleIdleTimeoutV3_('manual'); });
+    window.addEventListener('v3-session-invalid', handleSessionInvalidEventV3_);
+    installIdleActivityListenersV3_();
+    window.addEventListener('focus', function () {
+      if (checkIdleStateOnResumeV3_()) handleAutomaticRefresh();
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && checkIdleStateOnResumeV3_()) handleAutomaticRefresh();
+    });
   }
 
   async function restoreSession() {
@@ -529,13 +585,17 @@
       return;
     }
     try {
+      state.session = session;
       showDashboardShell(session);
       setDashboardMessage('info', '正在確認登入狀態…');
       state.session = await window.V3AuthService.validateSession();
       showDashboardShell(state.session);
+      startIdleSessionGuardV3_({ preserveLastActivity: true });
       await loadBootstrap();
       clearDashboardMessage();
     } catch (error) {
+      state.session = null;
+      stopIdleSessionGuardV3_(true);
       showLogin();
       showLoginMessage('info', friendlyError(error));
     }
@@ -554,6 +614,7 @@
       state.session = await window.V3AuthService.login(employeeId, password);
       elements.password.value = '';
       showDashboardShell(state.session);
+      startIdleSessionGuardV3_({ reset: true });
       await loadBootstrap();
       await checkHealth(false);
     } catch (error) {
@@ -2726,7 +2787,8 @@
       String(elements.accountManagementKeyword && elements.accountManagementKeyword.value || '').trim() ||
       String(elements.accountManagementRole && elements.accountManagementRole.value || '').trim() ||
       String(elements.accountManagementEmployment && elements.accountManagementEmployment.value || '').trim() ||
-      String(elements.accountManagementStatus && elements.accountManagementStatus.value || '').trim()
+      String(elements.accountManagementStatus && elements.accountManagementStatus.value || '').trim() ||
+      String(elements.accountManagementLoginIssue && elements.accountManagementLoginIssue.value || '').trim()
     );
   }
 
@@ -2735,6 +2797,7 @@
     if (elements.accountManagementRole) elements.accountManagementRole.value = '';
     if (elements.accountManagementEmployment) elements.accountManagementEmployment.value = '';
     if (elements.accountManagementStatus) elements.accountManagementStatus.value = '';
+    if (elements.accountManagementLoginIssue) elements.accountManagementLoginIssue.value = '';
     if (elements.accountManagementPageSize) elements.accountManagementPageSize.value = '10';
     state.accountManagement = null;
     state.accountManagementPage = 1;
@@ -2769,6 +2832,7 @@
         role: String(elements.accountManagementRole.value || ''),
         employmentStatus: String(elements.accountManagementEmployment.value || ''),
         accountStatus: String(elements.accountManagementStatus.value || ''),
+        loginIssue: String(elements.accountManagementLoginIssue && elements.accountManagementLoginIssue.value || ''),
         page: state.accountManagementPage,
         pageSize: state.accountManagementPageSize,
         requireCriteria: true
@@ -3515,14 +3579,188 @@
   }
 
     
-  async function handleLogout() {
-    elements.logoutButton.disabled = true;
+  function installIdleActivityListenersV3_() {
+    ['pointerdown', 'keydown', 'input', 'change', 'touchstart'].forEach(function (eventName) {
+      document.addEventListener(eventName, function () { noteUserActivityV3_(false); }, { capture: true, passive: eventName === 'touchstart' });
+    });
+    window.addEventListener('scroll', function () { noteUserActivityV3_(false); }, { passive: true });
+  }
+
+  function readIdleActivityV3_() {
     try {
-      await window.V3AuthService.logout();
+      var raw = window.sessionStorage.getItem(IDLE_STORAGE_KEY);
+      var parsed = raw ? JSON.parse(raw) : null;
+      var employeeId = state.session && state.session.user && state.session.user.employeeId || '';
+      if (!parsed || String(parsed.employeeId || '') !== String(employeeId || '')) return 0;
+      return Math.max(0, Number(parsed.lastActivityAt || 0) || 0);
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  function writeIdleActivityV3_(timestamp) {
+    try {
+      var employeeId = state.session && state.session.user && state.session.user.employeeId || '';
+      window.sessionStorage.setItem(IDLE_STORAGE_KEY, JSON.stringify({
+        employeeId: employeeId,
+        lastActivityAt: Number(timestamp || Date.now())
+      }));
+    } catch (ignore) {}
+  }
+
+  function startIdleSessionGuardV3_(options) {
+    var settings = options || {};
+    if (!state.session || !state.session.sessionToken) return;
+    stopIdleSessionGuardV3_(false);
+    var restored = settings.reset ? 0 : readIdleActivityV3_();
+    state.lastActivityAt = restored || Date.now();
+    writeIdleActivityV3_(state.lastActivityAt);
+    scheduleIdleSessionTimersV3_();
+  }
+
+  function scheduleIdleSessionTimersV3_() {
+    window.clearTimeout(state.idleWarningTimer);
+    window.clearTimeout(state.idleLogoutTimer);
+    state.idleWarningTimer = null;
+    state.idleLogoutTimer = null;
+    if (!state.session || state.idleLogoutInProgress) return;
+
+    var elapsed = Math.max(0, Date.now() - Number(state.lastActivityAt || Date.now()));
+    if (elapsed >= IDLE_LOGOUT_MS) {
+      handleIdleTimeoutV3_('timeout');
+      return;
+    }
+    state.idleDeadlineAt = Number(state.lastActivityAt || Date.now()) + IDLE_LOGOUT_MS;
+    state.idleWarningTimer = window.setTimeout(showIdleWarningV3_, Math.max(0, IDLE_WARNING_MS - elapsed));
+    state.idleLogoutTimer = window.setTimeout(function () { handleIdleTimeoutV3_('timeout'); }, Math.max(0, IDLE_LOGOUT_MS - elapsed));
+  }
+
+  function noteUserActivityV3_(forceContinue) {
+    if (!state.session || state.idleLogoutInProgress || state.sessionInvalidHandling) return;
+    var now = Date.now();
+    var previous = Number(state.lastActivityAt || readIdleActivityV3_() || now);
+    if (!forceContinue && now - previous >= IDLE_LOGOUT_MS) {
+      handleIdleTimeoutV3_('timeout');
+      return;
+    }
+    state.lastActivityAt = now;
+    writeIdleActivityV3_(now);
+    closeIdleWarningV3_();
+    scheduleIdleSessionTimersV3_();
+  }
+
+  function showIdleWarningV3_() {
+    if (!state.session || state.idleLogoutInProgress) return;
+    state.idleWarningOpen = true;
+    state.idleDeadlineAt = Number(state.lastActivityAt || Date.now()) + IDLE_LOGOUT_MS;
+    if (elements.idleWarningOverlay) elements.idleWarningOverlay.hidden = false;
+    document.body.classList.add('idle-warning-open');
+    updateIdleCountdownV3_();
+    window.clearInterval(state.idleCountdownTimer);
+    state.idleCountdownTimer = window.setInterval(updateIdleCountdownV3_, 1000);
+    if (elements.idleContinueButton) elements.idleContinueButton.focus();
+  }
+
+  function updateIdleCountdownV3_() {
+    var remaining = Math.max(0, Math.ceil((Number(state.idleDeadlineAt || Date.now()) - Date.now()) / 1000));
+    if (elements.idleWarningCountdown) elements.idleWarningCountdown.textContent = String(remaining);
+    if (remaining <= 0) handleIdleTimeoutV3_('timeout');
+  }
+
+  function closeIdleWarningV3_() {
+    state.idleWarningOpen = false;
+    window.clearInterval(state.idleCountdownTimer);
+    state.idleCountdownTimer = null;
+    if (elements.idleWarningOverlay) elements.idleWarningOverlay.hidden = true;
+    document.body.classList.remove('idle-warning-open');
+  }
+
+  function stopIdleSessionGuardV3_(clearStorage) {
+    window.clearTimeout(state.idleWarningTimer);
+    window.clearTimeout(state.idleLogoutTimer);
+    window.clearInterval(state.idleCountdownTimer);
+    state.idleWarningTimer = null;
+    state.idleLogoutTimer = null;
+    state.idleCountdownTimer = null;
+    state.idleDeadlineAt = 0;
+    state.lastActivityAt = 0;
+    closeIdleWarningV3_();
+    if (clearStorage) {
+      try { window.sessionStorage.removeItem(IDLE_STORAGE_KEY); } catch (ignore) {}
+    }
+  }
+
+  function checkIdleStateOnResumeV3_() {
+    if (!state.session || state.idleLogoutInProgress) return true;
+    var lastActivity = Number(state.lastActivityAt || readIdleActivityV3_() || Date.now());
+    if (Date.now() - lastActivity >= IDLE_LOGOUT_MS) {
+      handleIdleTimeoutV3_('timeout');
+      return false;
+    }
+    scheduleIdleSessionTimersV3_();
+    return true;
+  }
+
+  async function handleIdleTimeoutV3_(source) {
+    if (!state.session || state.idleLogoutInProgress) return;
+    state.idleLogoutInProgress = true;
+    closeIdleWarningV3_();
+    saveLocalDraft();
+
+    if (state.currentDetail && state.currentAction && state.currentAction !== 'force_close') {
+      try {
+        await Promise.race([
+          saveCurrentDraft(false),
+          new Promise(function (resolve) { window.setTimeout(resolve, IDLE_DRAFT_WAIT_MS); })
+        ]);
+      } catch (ignore) {}
+    }
+
+    await performLogoutV3_({
+      messageType: 'info',
+      message: source === 'manual'
+        ? '已登出；目前可保存的內容已先保留為草稿。'
+        : '已閒置5分鐘，系統已保存可保存的草稿並自動登出。',
+      skipServer: false
+    });
+    state.idleLogoutInProgress = false;
+  }
+
+  async function handleSessionInvalidEventV3_(event) {
+    if (!state.session || state.sessionInvalidHandling || state.idleLogoutInProgress) return;
+    state.sessionInvalidHandling = true;
+    var detail = event && event.detail || {};
+    var code = String(detail.code || 'SESSION_REVOKED');
+    saveLocalDraft();
+    await performLogoutV3_({
+      skipServer: true,
+      messageType: 'info',
+      message: code === 'SESSION_REPLACED'
+        ? '此帳號已在其他裝置重新登入，您目前的登入已失效。未送出的內容已保留在本機草稿。'
+        : friendlyError({ code: code, message: detail.message || '' })
+    });
+    state.sessionInvalidHandling = false;
+  }
+
+  async function handleLogout() {
+    await performLogoutV3_({ messageType: 'success', message: '已登出。', skipServer: false });
+  }
+
+  async function performLogoutV3_(options) {
+    var settings = options || {};
+    if (elements.logoutButton) elements.logoutButton.disabled = true;
+    try {
+      if (settings.skipServer) {
+        window.V3AuthService.clearSession();
+      } else {
+        await window.V3AuthService.logout();
+      }
     } catch (error) {
       window.V3AuthService.clearSession();
     } finally {
-      elements.logoutButton.disabled = false;
+      stopIdleSessionGuardV3_(true);
+      if (elements.logoutButton) elements.logoutButton.disabled = false;
+      state.session = null;
       state.pdfFallbackCache = {};
       state.dispatchManagement = null;
       state.dispatchMonthAnalysis = null;
@@ -3541,10 +3779,11 @@
       closePdfManagementActionPanelV3_();
       if (elements.dispatchMonthAnalysisResult) elements.dispatchMonthAnalysisResult.hidden = true;
       closePdfViewerModal();
+      state.deferredAutoRefresh = false;
       closeEvaluation({ saveDraft: false });
       showLogin();
-      showLoginMessage('success', '已登出。');
-      elements.employeeId.focus();
+      showLoginMessage(settings.messageType || 'success', settings.message || '已登出。');
+      if (elements.employeeId) elements.employeeId.focus();
     }
   }
 
@@ -3728,6 +3967,12 @@
     }
     if (!settings.skipLoad && target === 'dispatch' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
     if (!settings.skipLoad && target === 'pdf' && !state.pdfManagement) loadPdfManagementCenter({ quiet: true });
+    if (target === 'dispatch' && window.matchMedia && window.matchMedia('(max-width: 860px)').matches) {
+      window.setTimeout(function () {
+        var pagePanel = document.querySelector('[data-system-page-panel="dispatch"]');
+        if (pagePanel && pagePanel.scrollIntoView) pagePanel.scrollIntoView({ block: 'start', behavior: 'auto' });
+      }, 0);
+    }
     // 帳號頁刻意不自動載入，必須由管理者設定條件後查詢。
     if (target === 'accounts' && !state.accountManagementHasSearched) {
       showAccountManagementMessage('info', '請設定查詢條件後按「查詢帳號」；不會自動載入全公司名單。');
@@ -3817,7 +4062,8 @@
       SESSION_REQUIRED: '登入狀態不存在，請重新登入。',
       SESSION_EXPIRED: '登入已逾時，請重新登入。',
       SESSION_INVALID: '登入狀態無效，請重新登入。',
-      SESSION_REVOKED: '帳號資料已更新，請重新登入。',
+      SESSION_REPLACED: '此帳號已在其他裝置重新登入，您目前的登入已失效。',
+      SESSION_REVOKED: '帳號資料已更新或已被管理者登出，請重新登入。',
       REQUEST_TIMEOUT: '連線逾時，請確認網路後重試。',
       REQUEST_CANCELLED: '已切換PDF檢視方式。',
       NETWORK_ERROR: '無法連線到後端，請確認網路與Apps Script部署。',
