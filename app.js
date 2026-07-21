@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.5.0A-performance-archive';
+  var APP_BUILD = '7.5.0B-scale-performance';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -14,6 +14,10 @@
     progress: [],
     progressSummary: null,
     history: [],
+    historyPage: 1,
+    historyPageSize: 15,
+    historyTotal: 0,
+    historyTotalPages: 1,
     currentDetail: null,
     currentAction: '',
     signatureController: null,
@@ -23,6 +27,9 @@
     isSubmitting: false,
     dispatchManagement: null,
     dispatchManagementLoading: false,
+    dispatchPersonPage: 1,
+    dispatchAttemptPage: 1,
+    dispatchPageSize: 15,
     batchDispatchRepairPreview: null,
     batchDispatchSelectedEmployees: {},
     dispatchManagementSelectionMonth: '',
@@ -37,6 +44,8 @@
     accountCredentialLookup: null,
     pdfManagement: null,
     pdfManagementLoading: false,
+    pdfManagementPage: 1,
+    pdfManagementPageSize: 15,
     pdfManagementSelected: {},
     pdfManagementAction: null,
     archiveManagement: null,
@@ -537,7 +546,7 @@
     elements.adminRefreshSessionButton.addEventListener('click', runAdminSessionCheck);
     elements.adminHealthCheckButton.addEventListener('click', runAdminConnectionCheck);
     elements.adminSystemHealthButton.addEventListener('click', runAdminSystemHealth);
-    if (elements.dispatchManagementFilterForm) elements.dispatchManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); loadDispatchManagementCenter(); });
+    if (elements.dispatchManagementFilterForm) elements.dispatchManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); state.dispatchPersonPage = 1; state.dispatchAttemptPage = 1; loadDispatchManagementCenter(); });
     if (elements.dispatchManagementRefreshButton) elements.dispatchManagementRefreshButton.addEventListener('click', function () { loadDispatchManagementCenter(); });
     if (elements.dispatchMonthAnalysisButton) elements.dispatchMonthAnalysisButton.addEventListener('click', loadDispatchMonthAnalysis);
     if (elements.batchDispatchSelectVisibleButton) elements.batchDispatchSelectVisibleButton.addEventListener('click', selectVisibleBatchDispatchEmployees);
@@ -577,7 +586,7 @@
     if (elements.accountActionConfirmText) elements.accountActionConfirmText.addEventListener('input', updateAccountActionRunState);
     if (elements.accountActionCancelButton) elements.accountActionCancelButton.addEventListener('click', closeAccountActionPanel);
     if (elements.accountActionRunButton) elements.accountActionRunButton.addEventListener('click', runAccountManagementAction);
-    if (elements.pdfManagementFilterForm) elements.pdfManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); loadPdfManagementCenter(); });
+    if (elements.pdfManagementFilterForm) elements.pdfManagementFilterForm.addEventListener('submit', function (event) { event.preventDefault(); state.pdfManagementPage = 1; loadPdfManagementCenter(); });
     if (elements.pdfManagementRefreshButton) elements.pdfManagementRefreshButton.addEventListener('click', function () { loadPdfManagementCenter(); });
     if (elements.pdfManagementSelectVisibleButton) elements.pdfManagementSelectVisibleButton.addEventListener('click', selectVisiblePdfRetriesV3_);
     if (elements.pdfManagementClearButton) elements.pdfManagementClearButton.addEventListener('click', clearPdfManagementSelectionV3_);
@@ -604,6 +613,7 @@
     });
     elements.historyFilterForm.addEventListener('submit', function (event) {
       event.preventDefault();
+      state.historyPage = 1;
       loadHistory();
     });
     elements.tabButtons.forEach(function (button) {
@@ -763,7 +773,8 @@
     if (!settings.quiet) elements.historyList.innerHTML = '<div class="loading-list">正在查詢歷史紀錄…</div>';
     try {
       var result = await window.V3WorkflowService.listHistory({
-        limit: 200,
+        page: Number(state.historyPage || 1),
+        pageSize: Number(state.historyPageSize || 15),
         month: String(elements.historyMonth.value || '').trim(),
         employeeId: String(elements.historyEmployeeId.value || '').trim().toUpperCase(),
         department: String(elements.historyDepartment.value || '').trim(),
@@ -773,6 +784,10 @@
       var nextItems = result.data && Array.isArray(result.data.items) ? result.data.items : [];
       var nextSignature = createListRenderSignature(nextItems, { total: result.data && result.data.total || nextItems.length });
       state.history = nextItems;
+      state.historyTotal = Number(result.data && result.data.total || nextItems.length);
+      state.historyPage = Number(result.data && result.data.page || state.historyPage || 1);
+      state.historyPageSize = Number(result.data && result.data.pageSize || state.historyPageSize || 15);
+      state.historyTotalPages = Number(result.data && result.data.totalPages || 1);
       if (!settings.quiet || nextSignature !== state.historyRenderSignature) renderHistory();
       state.historyRenderSignature = nextSignature;
       schedulePdfJsPreloadV3();
@@ -838,8 +853,22 @@
       elements.historyList.innerHTML = emptyStateHtml('查無歷史紀錄', '請調整月份、人員或狀態條件後重新查詢。');
       return;
     }
-    elements.historyList.innerHTML = state.history.map(function (item) { return evaluationCardHtml(item, 'history'); }).join('');
+    var cards = state.history.map(function (item) { return evaluationCardHtml(item, 'history'); }).join('');
+    var pager = '<div class="history-pager">' +
+      '<button type="button" class="secondary-button" data-history-page="prev"' + (state.historyPage <= 1 ? ' disabled' : '') + '>上一頁</button>' +
+      '<strong>第' + escapeHtml(state.historyPage) + '頁／共' + escapeHtml(state.historyTotalPages) + '頁（' + escapeHtml(state.historyTotal) + '筆）</strong>' +
+      '<button type="button" class="secondary-button" data-history-page="next"' + (state.historyPage >= state.historyTotalPages ? ' disabled' : '') + '>下一頁</button>' +
+      '</div>';
+    elements.historyList.innerHTML = cards + pager;
     bindEvaluationCards(elements.historyList);
+    Array.prototype.slice.call(elements.historyList.querySelectorAll('[data-history-page]')).forEach(function(button) {
+      button.addEventListener('click', function() {
+        var direction = button.getAttribute('data-history-page');
+        if (direction === 'prev' && state.historyPage > 1) state.historyPage -= 1;
+        if (direction === 'next' && state.historyPage < state.historyTotalPages) state.historyPage += 1;
+        loadHistory();
+      });
+    });
   }
 
   function evaluationCardHtml(item, mode) {
@@ -2544,9 +2573,13 @@
       var result = await window.V3WorkflowService.pdfManagementCenter({
         month: String(elements.pdfManagementMonth && elements.pdfManagementMonth.value || '').trim(),
         keyword: String(elements.pdfManagementKeyword && elements.pdfManagementKeyword.value || '').trim(),
-        status: String(elements.pdfManagementStatus && elements.pdfManagementStatus.value || 'ALL').trim()
+        status: String(elements.pdfManagementStatus && elements.pdfManagementStatus.value || 'ALL').trim(),
+        page: Number(state.pdfManagementPage || 1),
+        pageSize: Number(state.pdfManagementPageSize || 15)
       });
       state.pdfManagement = result.data || {};
+      state.pdfManagementPage = Number(state.pdfManagement.page || 1);
+      state.pdfManagementPageSize = Number(state.pdfManagement.pageSize || 15);
       reconcilePdfManagementSelectionV3_();
       renderPdfManagementCenterV3_(state.pdfManagement);
       setPdfManagementMessageV3_('success', 'PDF處理資料已更新。');
@@ -2585,7 +2618,7 @@
       return;
     }
     elements.pdfManagementList.innerHTML = '<div class="route-list">' + rows.map(renderPdfManagementRowV3_).join('') + '</div>' +
-      (source.truncated ? '<p class="section-help">結果超過顯示上限，請增加月份或關鍵字條件。</p>' : '');
+      managementPagerHtmlV3_('pdf', Number(source.page || 1), Number(source.totalPages || 1), Number(source.filteredCount || rows.length));
 
     Array.prototype.slice.call(elements.pdfManagementList.querySelectorAll('[data-pdf-retry-select]')).forEach(function(input) {
       input.addEventListener('change', function() {
@@ -2620,6 +2653,11 @@
       button.addEventListener('click', function() {
         prepareAndViewPdfFromCard(button.getAttribute('data-pdf-view-center'), button);
       });
+    });
+    bindManagementPagerV3_(elements.pdfManagementList, 'pdf', function(direction) {
+      if (direction === 'prev' && state.pdfManagementPage > 1) state.pdfManagementPage -= 1;
+      if (direction === 'next' && state.pdfManagementPage < Number(source.totalPages || 1)) state.pdfManagementPage += 1;
+      loadPdfManagementCenter();
     });
     updatePdfManagementSelectionUiV3_();
   }
@@ -3202,9 +3240,15 @@
         resultCategory: String(elements.dispatchManagementCategory.value || 'ALL'),
         storeCode: String(elements.dispatchManagementStore.value || ''),
         area: String(elements.dispatchManagementArea.value || ''),
-        source: String(elements.dispatchManagementSource.value || '')
+        source: String(elements.dispatchManagementSource.value || ''),
+        personPage: Number(state.dispatchPersonPage || 1),
+        personPageSize: Number(state.dispatchPageSize || 15),
+        attemptPage: Number(state.dispatchAttemptPage || 1),
+        attemptPageSize: Number(state.dispatchPageSize || 15)
       });
       state.dispatchManagement = result.data || {};
+      state.dispatchPersonPage = Number(state.dispatchManagement.personPagination && state.dispatchManagement.personPagination.page || 1);
+      state.dispatchAttemptPage = Number(state.dispatchManagement.attemptPagination && state.dispatchManagement.attemptPagination.page || 1);
       var loadedMonth = state.dispatchManagement.evaluationMonth || currentRocMonthFirstDay();
       if (state.dispatchManagementSelectionMonth && state.dispatchManagementSelectionMonth !== loadedMonth) {
         state.batchDispatchSelectedEmployees = {};
@@ -3243,9 +3287,9 @@
       '</div><p class="section-help">' + escapeHtml(data.scopeNote || '') +
       (filtered.candidateCount !== summary.candidateCount ? '｜目前篩選顯示 ' + escapeHtml(filtered.candidateCount) + ' 人。' : '') + '</p>';
     updateDispatchManagementFilterOptions(data.filterOptions || {});
-    renderDispatchManagementPersons(data.persons || [], Boolean(data.isCurrentMonth));
+    renderDispatchManagementPersons(data.persons || [], Boolean(data.isCurrentMonth), data.personPagination || {});
     updateBatchDispatchSelectionState(Boolean(data.isCurrentMonth));
-    renderDispatchManagementAttempts(data.attempts || []);
+    renderDispatchManagementAttempts(data.attempts || [], data.attemptPagination || {});
   }
 
   function updateDispatchManagementFilterOptions(options) {
@@ -3269,7 +3313,7 @@
     if (options.some(function (item) { return String(item.value) === current; })) select.value = current;
   }
 
-  function renderDispatchManagementPersons(rows, isCurrentMonth) {
+  function renderDispatchManagementPersons(rows, isCurrentMonth, pagination) {
     if (!rows.length) {
       elements.dispatchManagementPersons.innerHTML = emptyStateHtml('查無符合條件的人員', '請調整月份或篩選條件後重新查詢。');
       updateBatchDispatchSelectionState(isCurrentMonth);
@@ -3293,8 +3337,13 @@
         '</strong><small>' + escapeHtml(row.reason || row.workflowStatus || '目前無異常') +
         (row.executionSource ? '<br>最近來源：' + escapeHtml(row.executionSource) + '｜' + escapeHtml(row.completedAt || '') : '') +
         '</small>' + batchControl + (actions ? '<div class="evaluation-card__actions">' + actions + '</div>' : '') + '</div>';
-    }).join('') + '</div>';
+    }).join('') + '</div>' + managementPagerHtmlV3_('dispatch-person', Number(pagination.page || 1), Number(pagination.totalPages || 1), Number(pagination.total || rows.length));
     bindEvaluationCards(elements.dispatchManagementPersons);
+    bindManagementPagerV3_(elements.dispatchManagementPersons, 'dispatch-person', function(direction) {
+      if (direction === 'prev' && state.dispatchPersonPage > 1) state.dispatchPersonPage -= 1;
+      if (direction === 'next' && state.dispatchPersonPage < Number(pagination.totalPages || 1)) state.dispatchPersonPage += 1;
+      loadDispatchManagementCenter();
+    });
     Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
       checkbox.addEventListener('change', function () {
         var employeeId = checkbox.getAttribute('data-batch-dispatch');
@@ -3305,7 +3354,7 @@
     });
   }
 
-  function renderDispatchManagementAttempts(rows) {
+  function renderDispatchManagementAttempts(rows, pagination) {
     if (!rows.length) {
       elements.dispatchManagementAttempts.innerHTML = '<p class="section-help">本月份尚無派發嘗試紀錄。</p>';
       return;
@@ -3317,7 +3366,29 @@
         (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') + '</strong><small>' +
         escapeHtml(row.completedAt || '') + (row.batchId ? '｜批次 ' + escapeHtml(row.batchId) : '') +
         (row.reason ? '<br>' + escapeHtml(row.reason) : '') + '</small></div>';
-    }).join('') + '</div>';
+    }).join('') + '</div>' + managementPagerHtmlV3_('dispatch-attempt', Number(pagination.page || 1), Number(pagination.totalPages || 1), Number(pagination.total || rows.length));
+    bindManagementPagerV3_(elements.dispatchManagementAttempts, 'dispatch-attempt', function(direction) {
+      if (direction === 'prev' && state.dispatchAttemptPage > 1) state.dispatchAttemptPage -= 1;
+      if (direction === 'next' && state.dispatchAttemptPage < Number(pagination.totalPages || 1)) state.dispatchAttemptPage += 1;
+      loadDispatchManagementCenter();
+    });
+  }
+
+  function managementPagerHtmlV3_(scope, page, totalPages, total) {
+    if (totalPages <= 1 && total <= 15) return '';
+    return '<div class="history-pager management-pager" data-management-pager="' + escapeHtml(scope) + '">' +
+      '<button type="button" class="secondary-button" data-management-page="prev"' + (page <= 1 ? ' disabled' : '') + '>上一頁</button>' +
+      '<strong>第' + escapeHtml(page) + '頁／共' + escapeHtml(totalPages) + '頁（' + escapeHtml(total) + '筆）</strong>' +
+      '<button type="button" class="secondary-button" data-management-page="next"' + (page >= totalPages ? ' disabled' : '') + '>下一頁</button></div>';
+  }
+
+  function bindManagementPagerV3_(container, scope, handler) {
+    if (!container) return;
+    var pager = container.querySelector('[data-management-pager="' + scope + '"]');
+    if (!pager) return;
+    Array.prototype.slice.call(pager.querySelectorAll('[data-management-page]')).forEach(function(button) {
+      button.addEventListener('click', function() { handler(button.getAttribute('data-management-page')); });
+    });
   }
 
   function rocMonthDisplayLabelV3(value) {
