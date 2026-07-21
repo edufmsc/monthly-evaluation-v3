@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.4.0A-pdf-retry-center */
+/* 月考核系統 V3｜版本：7.5.0A-performance-archive */
 (function () {
   'use strict';
 
@@ -105,6 +105,11 @@
     verifyPdfTemplate: function () {
       return call('verifyPdfTemplate', {});
     },
+    archiveManagementCenter: function (filters) { return call('archiveManagementCenter', filters || {}); },
+    archivePreview: function (year) { return call('archivePreview', { year: String(year || '') }); },
+    archiveBuild: function (payload, requestId) { return call('archiveBuild', payload || {}, requestId); },
+    archiveFinalize: function (payload, requestId) { return call('archiveFinalize', payload || {}, requestId); },
+    archiveCleanup: function (payload, requestId) { return call('archiveCleanup', payload || {}, requestId); },
     recordClientPerformance: function (payload, requestId) {
       return call('recordClientPerformance', payload || {}, requestId);
     }
