@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.3.0AB-account-management */
+/* 月考核系統 V3｜版本：7.3.1A-account-security-fix */
 (function () {
   'use strict';
 
@@ -48,7 +48,9 @@
     accountUnlock: function (payload, requestId) { return call('accountUnlock', payload || {}, requestId); },
     accountSetStatus: function (payload, requestId) { return call('accountSetStatus', payload || {}, requestId); },
     accountForceLogout: function (payload, requestId) { return call('accountForceLogout', payload || {}, requestId); },
-    accountResetPassword: function (payload, requestId) { return call('accountResetPassword', payload || {}, requestId); },
+    accountCredentialLookup: function (query, employeeId, requestId) {
+      return call('accountCredentialLookup', { query: String(query || ''), employeeId: String(employeeId || '') }, requestId);
+    },
     dispatchManagementCenter: function (filters) {
       return call('dispatchManagementCenter', filters || {});
     },
