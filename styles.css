@@ -1874,3 +1874,90 @@ body.idle-warning-open {
 .b-manager-review-competency h4 { margin-bottom: 8px; }
 .evaluation-card__top .tag--version-a,
 .evaluation-card__top .tag--version-b { font-weight: 800; }
+
+/* 7.7.0B｜A/B版PDF正式環境與階段小計 */
+.tag--version-a,
+.tag--version-b {
+  border-color: #9bb7cf;
+  background: #eef7ff;
+  color: #25577d;
+}
+
+.detail-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.detail-section-heading h3 { margin: 0; }
+.stage-subtotal-badge {
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: #fff1df;
+  color: #8b3b13;
+  font-size: .96rem;
+  white-space: nowrap;
+}
+
+.evaluation-card__actions .pdf-action-slot {
+  flex: 1 1 320px;
+  min-width: min(100%, 280px);
+}
+.pdf-status-action {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: left;
+}
+.pdf-status-action > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pdf-status-action strong { font-size: .98rem; }
+.pdf-status-action small { color: var(--muted); line-height: 1.45; }
+.pdf-status-action--processing {
+  border-color: #a9c4dc;
+  background: #f0f8ff;
+  color: #25577d;
+}
+.pdf-status-action--failed {
+  border-color: #e5a49d;
+  background: #fff2f0;
+  color: #9c2d24;
+}
+.pdf-status-spinner {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 3px solid rgba(37, 87, 125, .22);
+  border-top-color: #25577d;
+  border-radius: 50%;
+  animation: v3PdfStatusSpin .85s linear infinite;
+}
+.pdf-status-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f8d5d0;
+  font-weight: 900;
+}
+@keyframes v3PdfStatusSpin { to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+  .detail-section-heading { align-items: flex-start; }
+  .stage-subtotal-badge { padding: 8px 11px; font-size: .9rem; }
+  .evaluation-card__actions .pdf-action-slot { flex-basis: 100%; min-width: 100%; }
+  .pdf-status-action { justify-content: flex-start; }
+}
