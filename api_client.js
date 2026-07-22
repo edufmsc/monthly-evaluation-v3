@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.4.0C-mobile-session-security */
+/* 月考核系統 V3｜版本：7.7.0A-HF2-connection-retry */
 (function () {
   'use strict';
 
@@ -35,38 +35,6 @@
   }
 
   var activeRequests = {};
-  var SESSION_INVALID_CODES = {
-    SESSION_REQUIRED: true,
-    SESSION_EXPIRED: true,
-    SESSION_INVALID: true,
-    SESSION_REVOKED: true,
-    SESSION_REPLACED: true,
-    ACCOUNT_DISABLED: true
-  };
-
-  function notifySessionInvalid(error, action, sessionToken) {
-    var code = String(error && error.code || '');
-    if (!sessionToken || action === 'login' || action === 'logout' || !SESSION_INVALID_CODES[code]) return;
-    window.setTimeout(function () {
-      try {
-        window.dispatchEvent(new CustomEvent('v3-session-invalid', {
-          detail: {
-            code: code,
-            message: String(error && error.message || ''),
-            action: String(action || '')
-          }
-        }));
-      } catch (eventError) {
-        var legacyEvent = document.createEvent('CustomEvent');
-        legacyEvent.initCustomEvent('v3-session-invalid', false, false, {
-          code: code,
-          message: String(error && error.message || ''),
-          action: String(action || '')
-        });
-        window.dispatchEvent(legacyEvent);
-      }
-    }, 0);
-  }
 
   function textByteLength(text) {
     // JSON與Base64主要為ASCII；使用字串長度避免為大型PDF回應再建立一份Blob。
@@ -82,7 +50,7 @@
     return true;
   }
 
-  async function request(action, payload, sessionToken, requestId) {
+  async function requestOnce(action, payload, sessionToken, requestId) {
     var config = getConfig();
     if (!isConfigured()) {
       throw new ApiError('API_URL_NOT_CONFIGURED', '尚未設定 Apps Script /exec 網址。');
@@ -129,11 +97,7 @@
       runBatchDispatchRepair: 180000,
       dispatchMonthAnalysis: 90000,
       forceClosePreview: 60000,
-      forceCloseEvaluation: 90000,
-      pdfManagementCenter: 90000,
-      pdfRetryBatch: 300000,
-      pdfRetryPublication: 90000,
-      pdfInspectHealth: 60000
+      forceCloseEvaluation: 90000
     };
     var timeoutMs = Number(actionTimeouts[String(action || '')] || defaultTimeout);
     var timeoutId = window.setTimeout(function () {
@@ -176,7 +140,6 @@
         var source = result && result.error ? result.error : {};
         var apiError = new ApiError(source.code, source.message, source.httpStatus || response.status, source.details);
         apiError.clientPerformance = clientPerformance;
-        notifySessionInvalid(apiError, String(action || ''), sessionToken);
         throw apiError;
       }
       result.clientPerformance = clientPerformance;
@@ -209,6 +172,68 @@
       window.clearTimeout(timeoutId);
       if (activeRequests[body.requestId] === activeRecord) delete activeRequests[body.requestId];
     }
+  }
+
+
+  var RETRYABLE_ACTIONS = Object.freeze({
+    health: true,
+    login: true,
+    session: true,
+    bootstrap: true,
+    listPending: true,
+    listProgress: true,
+    listHistory: true,
+    getEvaluation: true,
+    getDraft: true,
+    systemHealth: true,
+    accountManagementCenter: true,
+    accountAuditPage: true,
+    accountCredentialLookup: true,
+    dispatchManagementCenter: true,
+    dispatchMonthAnalysis: true,
+    previewManualDispatch: true,
+    forceClosePreview: true,
+    notificationManagementCenter: true,
+    pdfManagementCenter: true,
+    pdfInspectHealth: true,
+    prepareDrivePdfView: true,
+    authenticatedPdfView: true,
+    preparePdfView: true,
+    publicPdfView: true,
+    verifyPdfTemplate: true,
+    archiveManagementCenter: true,
+    archivePreview: true,
+    getMySignaturePreview: true
+  });
+
+  function waitMilliseconds(milliseconds) {
+    return new Promise(function(resolve) { window.setTimeout(resolve, milliseconds); });
+  }
+
+  function shouldRetryRequest(action, error) {
+    if (!RETRYABLE_ACTIONS[String(action || '')]) return false;
+    var code = String(error && error.code || '');
+    if (['NETWORK_ERROR', 'REQUEST_TIMEOUT', 'INVALID_RESPONSE'].indexOf(code) !== -1) return true;
+    var status = Number(error && error.httpStatus || 0);
+    return status >= 500 && status <= 599;
+  }
+
+  async function request(action, payload, sessionToken, requestId) {
+    var stableRequestId = String(requestId || createRequestId());
+    var maxAttempts = RETRYABLE_ACTIONS[String(action || '')] ? 3 : 1;
+    var lastError = null;
+    for (var attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        var result = await requestOnce(action, payload, sessionToken, stableRequestId);
+        if (result && result.clientPerformance) result.clientPerformance.retryCount = attempt - 1;
+        return result;
+      } catch (error) {
+        lastError = error;
+        if (attempt >= maxAttempts || !shouldRetryRequest(action, error)) throw error;
+        await waitMilliseconds(attempt === 1 ? 800 : 1800);
+      }
+    }
+    throw lastError || new ApiError('NETWORK_ERROR', '無法連線到後端。');
   }
 
   window.V3ApiClient = Object.freeze({
