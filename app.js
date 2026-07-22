@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.7.0A-HF4R1-form-name';
+  var APP_BUILD = '7.7.0B-pdf-production-ready';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -82,6 +82,7 @@
     pdfPreloadScheduled: false,
     pdfPreloadStarted: false,
     backgroundSyncTimer: null,
+    pdfStatusPollTimer: null,
     idleWarningTimer: null,
     idleLogoutTimer: null,
     idleCountdownTimer: null,
@@ -839,6 +840,7 @@
     }
     elements.progressList.innerHTML = state.progress.map(function (item) { return evaluationCardHtml(item, 'progress'); }).join('');
     bindEvaluationCards(elements.progressList);
+    schedulePdfStatusPollingV3_();
   }
 
   function renderProgressSummary() {
@@ -899,6 +901,7 @@
         loadHistory();
       });
     });
+    schedulePdfStatusPollingV3_();
   }
 
   function evaluationCardHtml(item, mode) {
@@ -932,17 +935,16 @@
     var actions = '<button type="button" class="secondary-button" data-open-evaluation="' + escapeHtml(item.evaluationNo) + '">' +
       (mode === 'pending' ? '開啟處理' : mode === 'progress' ? '查看動態' : '查看內容') + '</button>';
 
-    if (isEducationPdfManagerUi() && effectiveClosed && (pdfStatus === '待處理' || pdfStatus === '失敗')) {
-      actions += '<button type="button" class="primary-button pdf-generate-button" data-generate-pdf="' + escapeHtml(item.evaluationNo) + '">' +
-        (pdfStatus === '失敗' ? '重新產生PDF' : '產生PDF') + '</button>';
-    } else if (isEducationPdfManagerUi() && effectiveClosed && pdfStatus === '處理中') {
-      actions += '<button type="button" class="secondary-button" disabled>PDF處理中</button>';
-    }
-
-    // 正式版：PDF完成且檔案存在時，所有有權查看該考核表的人都顯示同一顆查看按鈕。
-    // 點擊後由後端安全確認／補建公開查看碼，不再依清單同步欄位決定是否隱藏按鈕。
-    if (effectiveClosed && pdfStatus === '完成' && item.pdfHasFile) {
-      actions += '<button type="button" class="secondary-button pdf-view-button" data-prepare-pdf-view="' + escapeHtml(item.evaluationNo) + '">查看月考核表PDF</button>';
+    var effectivePdfStatus = pdfStatus || (effectiveClosed && !item.pdfHasFile ? '待處理' : '');
+    if (effectiveClosed && effectivePdfStatus === '完成' && item.pdfHasFile) {
+      actions += '<button type="button" class="secondary-button pdf-view-button pdf-action-slot" data-prepare-pdf-view="' + escapeHtml(item.evaluationNo) + '">查看月考核表PDF</button>';
+    } else if (effectiveClosed && effectivePdfStatus === '失敗') {
+      actions += '<div class="pdf-status-action pdf-status-action--failed pdf-action-slot"><span class="pdf-status-icon">!</span><span><strong>PDF產生失敗</strong><small>請聯絡教育中心或稍後重新處理。</small></span></div>';
+      if (isEducationPdfManagerUi()) {
+        actions += '<button type="button" class="primary-button pdf-generate-button" data-generate-pdf="' + escapeHtml(item.evaluationNo) + '">重新產生PDF</button>';
+      }
+    } else if (effectiveClosed && (effectivePdfStatus === '待處理' || effectivePdfStatus === '處理中')) {
+      actions += '<div class="pdf-status-action pdf-status-action--processing pdf-action-slot" data-pdf-processing="' + escapeHtml(item.evaluationNo) + '"><span class="pdf-status-spinner"></span><span><strong>PDF檔產生中</strong><small>完成後會在這個位置顯示查看PDF。</small></span></div>';
     }
 
     return '<article class="evaluation-card">' +
@@ -1921,51 +1923,119 @@
         ['加分項', 'B版加分項評等', 'B版加分項得分', 'B版加分項A級說明']
       ];
       customVersionHtml = renderBManagerReviewSectionHtml(record, bItems);
+      var bEducationSubtotal = scoreOrFallbackV3_(record['教育中心小計'],
+        numberScoreV3_(record['B版作業心得問卷得分']) + numberScoreV3_(record['B版培訓課程出勤得分']));
+      var bAreaScore = scoreOrFallbackV3_(record['B版區主管評分'], 0);
       sections = [
-        ['教育中心評核', [
-          ['作業／心得／問卷遲繳天數', record['作業遲繳天數']],
-          ['作業／心得／問卷得分', record['B版作業心得問卷得分']],
-          ['培訓課程遲到／異常次數', record['培訓出勤異常次數']],
-          ['培訓課程出勤得分', record['B版培訓課程出勤得分']],
-          ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
-        ]],
-        ['區主管與受評人員', [['區主管評分', record['B版區主管評分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員疑慮／備註', record['受評人員確認備註']]]],
-        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']]]]
+        {
+          title: '教育中心評核',
+          badge: '小計 ' + bEducationSubtotal + '／20',
+          pairs: [
+            ['作業／心得／問卷遲繳天數', record['作業遲繳天數']],
+            ['作業／心得／問卷得分', record['B版作業心得問卷得分']],
+            ['培訓課程遲到／異常次數', record['培訓出勤異常次數']],
+            ['培訓課程出勤得分', record['B版培訓課程出勤得分']],
+            ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
+          ]
+        },
+        {
+          title: '區主管評核',
+          badge: '小計 ' + bAreaScore + '／20',
+          pairs: [['區主管評語', record['區主管評語']]]
+        },
+        {
+          title: '受評人員確認',
+          pairs: [['確認結果', record['受評人員確認結果']], ['疑慮／備註', record['受評人員確認備註']]]
+        },
+        {
+          title: '後續簽核',
+          pairs: [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']]]
+        }
       ];
     } else {
       var managerKeys = ['責任感','協調性','表達能力','學習態度','解決問題能力','個人儀容'];
+      var aEducationSubtotal = scoreOrFallbackV3_(record['教育中心小計'],
+        numberScoreV3_(record['職能積分得分']) + numberScoreV3_(record['OJT得分']) +
+        numberScoreV3_(record['每週進度回報得分']) + numberScoreV3_(record['培訓課程狀況得分']));
+      var adjustment = numberScoreV3_(record['區主管增減分']);
       sections = [
-        ['門市店主管評核', managerKeys.map(function(key) {
-          var description = window.V3EvaluationForm && window.V3EvaluationForm.getManagerScoreDescription
-            ? window.V3EvaluationForm.getManagerScoreDescription(key, record[key]) : '';
-          return [key, record[key], description, 'manager-score'];
-        }).concat([['門市店主管小計', record['門市店主管小計']], ['門市店主管評語', record['門市店主管評語']]])],
-        ['教育中心評核', [
-          ['職能積分累計', record['職能積分累計']], ['職能積分得分', record['職能積分得分']],
-          ['OJT完成篇數', record['OJT完成篇數']], ['OJT得分', record['OJT得分']],
-          ['回報錯誤次數', record['每週回報錯誤次數']], ['未回報次數', record['每週未回報次數']],
-          ['每週進度回報得分', record['每週進度回報得分']], ['培訓出勤異常次數', record['培訓出勤異常次數']],
-          ['作業遲繳天數', record['作業遲繳天數']], ['培訓課程狀況得分', record['培訓課程狀況得分']],
-          ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
-        ]],
-        ['區主管與受評人員', [['區主管增減分', record['區主管增減分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員備註', record['受評人員確認備註']]]],
-        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']]]]
+        {
+          title: '門市店主管評核',
+          badge: '小計 ' + scoreOrFallbackV3_(record['門市店主管小計'], 0) + '／60',
+          pairs: managerKeys.map(function(key) {
+            var description = window.V3EvaluationForm && window.V3EvaluationForm.getManagerScoreDescription
+              ? window.V3EvaluationForm.getManagerScoreDescription(key, record[key]) : '';
+            return [key, record[key], description, 'manager-score'];
+          }).concat([['門市店主管評語', record['門市店主管評語']]])
+        },
+        {
+          title: '教育中心評核',
+          badge: '小計 ' + aEducationSubtotal + '／40',
+          pairs: [
+            ['職能積分累計', record['職能積分累計']], ['職能積分得分', record['職能積分得分']],
+            ['OJT完成篇數', record['OJT完成篇數']], ['OJT得分', record['OJT得分']],
+            ['回報錯誤次數', record['每週回報錯誤次數']], ['未回報次數', record['每週未回報次數']],
+            ['每週進度回報得分', record['每週進度回報得分']], ['培訓出勤異常次數', record['培訓出勤異常次數']],
+            ['作業遲繳天數', record['作業遲繳天數']], ['培訓課程狀況得分', record['培訓課程狀況得分']],
+            ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
+          ]
+        },
+        {
+          title: '區主管評核',
+          badge: '小計 ' + formatSignedScoreV3_(adjustment) + '分',
+          pairs: [['區主管評語', record['區主管評語']]]
+        },
+        {
+          title: '受評人員確認',
+          pairs: [['確認結果', record['受評人員確認結果']], ['備註', record['受評人員確認備註']]]
+        },
+        {
+          title: '後續簽核',
+          pairs: [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']]]
+        }
       ];
     }
     if (state.activeTab === 'history') {
-      sections.push(['PDF處理', [['PDF狀態', record['PDF狀態']], ['PDF檔名', record['PDF檔名']], ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])], ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''], ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']]]);
+      sections.push({
+        title: 'PDF處理',
+        badge: String(record['PDF狀態'] || '').trim() || '尚未產生',
+        pairs: [['PDF檔名', record['PDF檔名']], ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])], ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''], ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']]
+      });
     }
-    var html = currentScoreCardHtml(record) + customVersionHtml + sections.map(function(section) {
-      var visible = section[1].filter(function(pair) { return String(pair[1] === null || pair[1] === undefined ? '' : pair[1]).trim() !== ''; });
-      if (!visible.length) return '';
-      return '<article class="detail-section"><h3>' + escapeHtml(section[0]) + '</h3><div class="detail-grid">' + visible.map(function(pair) {
-        var isManagerScore = pair[3] === 'manager-score';
-        var labelHtml = '<span>' + escapeHtml(pair[0]) + (isManagerScore && pair[2] ? '<small class="score-description score-description--title">（' + escapeHtml(pair[2]) + '）</small>' : '') + '</span>';
-        return '<div class="detail-item' + (isManagerScore ? ' detail-item--manager-score' : '') + '">' + labelHtml + '<strong>' + escapeHtml(pair[1]) + '</strong>' + (!isManagerScore && pair[2] ? '<small class="score-description">' + escapeHtml(pair[2]) + '</small>' : '') + '</div>';
-      }).join('') + '</div></article>';
-    }).join('');
+    var html = currentScoreCardHtml(record) + customVersionHtml + sections.map(renderDetailSectionHtmlV3_).join('');
     html += signatureSummaryHtml(record.signatureSummary || {});
     return html || '<article class="detail-section"><p>目前尚無已填寫內容。</p></article>';
+  }
+
+  function renderDetailSectionHtmlV3_(section) {
+    var pairs = section && Array.isArray(section.pairs) ? section.pairs : [];
+    var visible = pairs.filter(function(pair) {
+      return String(pair[1] === null || pair[1] === undefined ? '' : pair[1]).trim() !== '';
+    });
+    if (!visible.length && !section.badge) return '';
+    var heading = '<div class="detail-section-heading"><h3>' + escapeHtml(section.title || '') + '</h3>' +
+      (section.badge ? '<strong class="stage-subtotal-badge">' + escapeHtml(section.badge) + '</strong>' : '') + '</div>';
+    var grid = visible.length ? '<div class="detail-grid">' + visible.map(function(pair) {
+      var isManagerScore = pair[3] === 'manager-score';
+      var labelHtml = '<span>' + escapeHtml(pair[0]) + (isManagerScore && pair[2] ? '<small class="score-description score-description--title">（' + escapeHtml(pair[2]) + '）</small>' : '') + '</span>';
+      return '<div class="detail-item' + (isManagerScore ? ' detail-item--manager-score' : '') + '">' + labelHtml + '<strong>' + escapeHtml(pair[1]) + '</strong>' + (!isManagerScore && pair[2] ? '<small class="score-description">' + escapeHtml(pair[2]) + '</small>' : '') + '</div>';
+    }).join('') + '</div>' : '';
+    return '<article class="detail-section">' + heading + grid + '</article>';
+  }
+
+  function numberScoreV3_(value) {
+    var number = Number(value);
+    return isFinite(number) ? number : 0;
+  }
+
+  function scoreOrFallbackV3_(value, fallback) {
+    var text = String(value === null || value === undefined ? '' : value).trim();
+    return text === '' ? numberScoreV3_(fallback) : numberScoreV3_(value);
+  }
+
+  function formatSignedScoreV3_(value) {
+    var number = numberScoreV3_(value);
+    return number > 0 ? '+' + number : String(number);
   }
 
 
@@ -2491,6 +2561,31 @@
     if (!elements.historyPanel.hidden || state.history.length) jobs.push(loadHistory({ quiet: true }));
     if (state.pdfManagement && elements.pdfManagementCard) jobs.push(loadPdfManagementCenter({ quiet: true }));
     await Promise.allSettled(jobs);
+  }
+
+  function schedulePdfStatusPollingV3_() {
+    if (state.pdfStatusPollTimer) {
+      window.clearTimeout(state.pdfStatusPollTimer);
+      state.pdfStatusPollTimer = null;
+    }
+    if (!state.session || elements.dashboardView.hidden) return;
+    var items = (state.history || []).concat(state.progress || []);
+    var needsPolling = items.some(function(item) {
+      var status = String(item.pdfStatus || '').trim();
+      var workflow = String(item.status || '').trim();
+      var closed = Boolean(item.isClosed) || workflow === '結案' || workflow.indexOf('PDF') !== -1;
+      return closed && (status === '' || status === '待處理' || status === '處理中');
+    });
+    if (!needsPolling) return;
+    state.pdfStatusPollTimer = window.setTimeout(async function() {
+      state.pdfStatusPollTimer = null;
+      if (!state.session || elements.dashboardView.hidden || state.isSubmitting) return;
+      var jobs = [];
+      if (!elements.historyPanel.hidden || state.history.length) jobs.push(loadHistory({ quiet: true }));
+      if (!elements.progressPanel.hidden || state.progress.length) jobs.push(loadProgress({ quiet: true }));
+      await Promise.allSettled(jobs);
+      schedulePdfStatusPollingV3_();
+    }, 12000);
   }
 
   function handleAutomaticRefresh() {
@@ -4425,6 +4520,10 @@
       stopIdleSessionGuardV3_(true);
       if (elements.logoutButton) elements.logoutButton.disabled = false;
       state.session = null;
+      if (state.pdfStatusPollTimer) {
+        window.clearTimeout(state.pdfStatusPollTimer);
+        state.pdfStatusPollTimer = null;
+      }
       state.pdfFallbackCache = {};
       state.dispatchManagement = null;
       state.dispatchMonthAnalysis = null;
