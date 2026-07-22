@@ -1760,6 +1760,13 @@ body.idle-warning-open {
   .b-grade-choice span { min-height: 0; }
 }
 
+
+.tag--version-a {
+  border-color: #9bb7cf;
+  background: #eef7ff;
+  color: #25577d;
+}
+
 .tag--version-b {
   border-color: #c9a86a;
   background: #fff8e8;
@@ -1861,3 +1868,9 @@ body.idle-warning-open {
   .b-education-evaluation-section .counter-button { width: 56px; min-width: 56px; height: 56px; min-height: 56px; }
   .signature-canvas { height: 300px; }
 }
+
+
+/* 7.7.0A-HF3｜A/B版本辨識與B版唯讀資訊精簡 */
+.b-manager-review-competency h4 { margin-bottom: 8px; }
+.evaluation-card__top .tag--version-a,
+.evaluation-card__top .tag--version-b { font-weight: 800; }
