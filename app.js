@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.7.0A-b-form-core';
+  var APP_BUILD = '7.7.0A-HF2-b-ui-score-connection';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -1630,7 +1630,7 @@
 
   function isContinuousReviewEligibleUi() {
     var role = String(state.session && state.session.user && state.session.user.role || '').trim();
-    return ['區主管', '營業處副總', '營業處協理', '總經理'].indexOf(role) !== -1;
+    return ['教育中心主管', '區主管', '營業處副總', '營業處協理', '總經理'].indexOf(role) !== -1;
   }
 
   function resetContinuousReviewState(renderList) {
@@ -1907,6 +1907,7 @@
 
   function detailSectionsHtml(record) {
     var isVersionB = String(record['考核版本'] || 'A').trim().toUpperCase() === 'B';
+    var customVersionHtml = '';
     var sections;
     if (isVersionB) {
       var bItems = [
@@ -1917,19 +1918,8 @@
         ['團隊領導', 'B版團隊領導評等', 'B版團隊領導得分', 'B版團隊領導A級說明'],
         ['加分項', 'B版加分項評等', 'B版加分項得分', 'B版加分項A級說明']
       ];
-      var managerRows = [];
-      bItems.forEach(function(item) {
-        var grade = record[item[1]];
-        var description = window.V3EvaluationForm && window.V3EvaluationForm.getBManagerRatingDescription
-          ? window.V3EvaluationForm.getBManagerRatingDescription(item[1], grade) : '';
-        managerRows.push([item[0] + '評等', grade, description, 'manager-score']);
-        managerRows.push([item[0] + '換算得分', record[item[2]]]);
-        if (String(record[item[3]] || '').trim()) managerRows.push([item[0] + 'A級得分說明', record[item[3]]]);
-      });
-      managerRows.push(['門市店主管小計', record['門市店主管小計']]);
-      managerRows.push(['門市店主管評語', record['門市店主管評語']]);
+      customVersionHtml = renderBManagerReviewSectionHtml(record, bItems);
       sections = [
-        ['B版｜門市店主管評核', managerRows],
         ['B版｜教育中心評核', [
           ['作業／心得／問卷遲繳天數', record['作業遲繳天數']],
           ['作業／心得／問卷得分', record['B版作業心得問卷得分']],
@@ -1938,7 +1928,7 @@
           ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
         ]],
         ['區主管與受評人員', [['區主管評分', record['B版區主管評分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員疑慮／備註', record['受評人員確認備註']]]],
-        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']], ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段說明']]]]
+        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']]]]
       ];
     } else {
       var managerKeys = ['責任感','協調性','表達能力','學習態度','解決問題能力','個人儀容'];
@@ -1957,13 +1947,13 @@
           ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
         ]],
         ['區主管與受評人員', [['區主管增減分', record['區主管增減分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員備註', record['受評人員確認備註']]]],
-        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']], ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段說明']]]]
+        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']]]]
       ];
     }
     if (state.activeTab === 'history') {
       sections.push(['PDF處理', [['PDF狀態', record['PDF狀態']], ['PDF檔名', record['PDF檔名']], ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])], ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''], ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']]]);
     }
-    var html = currentScoreCardHtml(record) + sections.map(function(section) {
+    var html = currentScoreCardHtml(record) + customVersionHtml + sections.map(function(section) {
       var visible = section[1].filter(function(pair) { return String(pair[1] === null || pair[1] === undefined ? '' : pair[1]).trim() !== ''; });
       if (!visible.length) return '';
       return '<article class="detail-section"><h3>' + escapeHtml(section[0]) + '</h3><div class="detail-grid">' + visible.map(function(pair) {
@@ -1974,6 +1964,37 @@
     }).join('');
     html += signatureSummaryHtml(record.signatureSummary || {});
     return html || '<article class="detail-section"><p>目前尚無已填寫內容。</p></article>';
+  }
+
+
+  function renderBManagerReviewSectionHtml(record, bItems) {
+    var rows = (bItems || []).map(function(item) {
+      var grade = String(record[item[1]] || '').trim().toUpperCase();
+      var detail = window.V3EvaluationForm && window.V3EvaluationForm.getBManagerReviewDetail
+        ? window.V3EvaluationForm.getBManagerReviewDetail(item[1], grade)
+        : null;
+      var label = detail && detail.label || item[0];
+      var definition = detail && detail.definition || '';
+      var standard = detail && detail.standard || '';
+      var score = detail && detail.score !== '' ? detail.score : '';
+      var explanation = String(record[item[3]] || '').trim();
+      var gradeText = grade ? grade + (score !== '' ? '｜' + score + '分' : '') : '尚未評分';
+      return '<section class="b-manager-review-item">' +
+        '<div class="b-manager-review-main">' +
+          '<div class="b-manager-review-competency"><span>考核項目</span><h4>' + escapeHtml(label) + '</h4>' +
+            '<b>職能定義</b><p>' + escapeHtml(definition || '—') + '</p></div>' +
+          '<div class="b-manager-review-rating"><span>店主管評核</span><strong>' + escapeHtml(gradeText) + '</strong>' +
+            '<p>' + escapeHtml(standard ? grade + '　' + standard : '—') + '</p></div>' +
+        '</div>' +
+        (explanation ? '<div class="b-manager-review-comment"><span>A級得分說明</span><p>' + escapeHtml(explanation) + '</p></div>' : '') +
+      '</section>';
+    }).join('');
+    var managerComment = String(record['門市店主管評語'] || '').trim();
+    return '<article class="detail-section b-manager-review-section"><div class="b-manager-review-heading"><div><p class="step-label">B版</p><h3>門市店主管評核</h3></div>' +
+      '<strong>小計 ' + escapeHtml(record['門市店主管小計'] === '' ? '—' : record['門市店主管小計']) + '／60</strong></div>' +
+      '<div class="b-manager-review-list">' + rows + '</div>' +
+      (managerComment ? '<div class="b-manager-overall-comment"><span>門市店主管評語</span><p>' + escapeHtml(managerComment) + '</p></div>' : '') +
+      '</article>';
   }
 
   function currentScoreCardHtml(record) {
