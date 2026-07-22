@@ -308,13 +308,22 @@
     };
     var pair = labels[action] || ['評語', ''];
     var commentRequired = action === 'area_approve';
-    var html = versionHiddenInput(record) + '<div class="form-section"><h3>' + escapeHtml(ACTION_LABELS[action] || '簽核') + '</h3>';
+    var html = versionHiddenInput(record) + '<div class="form-section">';
     if (action === 'area_approve') {
-      if (isVersionB(record)) {
-        html += plainNumberField('areaScore', '區主管評分（0～20）', value(record, 'B版區主管評分') === '' ? 0 : value(record, 'B版區主管評分'), 0, 20, true);
+      var areaIsVersionB = isVersionB(record);
+      var areaCurrent = areaIsVersionB
+        ? (value(record, 'B版區主管評分') === '' ? 0 : value(record, 'B版區主管評分'))
+        : (value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'));
+      html += '<div class="section-title-row"><div><h3>' + escapeHtml(ACTION_LABELS[action] || '區主管簽核') + '</h3></div>' +
+        '<div class="score-total-badge"><span>區主管小計</span><strong data-area-total data-area-mode="' + (areaIsVersionB ? 'score' : 'adjustment') + '">' +
+        (areaIsVersionB ? escapeHtml(areaCurrent) + '／20分' : formatSignedNumberText(areaCurrent) + '分') + '</strong></div></div>';
+      if (areaIsVersionB) {
+        html += plainNumberField('areaScore', '區主管評分（0～20）', areaCurrent, 0, 20, true);
       } else {
-        html += plainNumberField('adjustment', '區主管增減分（-10～10）', value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'), -10, 10, true);
+        html += plainNumberField('adjustment', '區主管增減分（-10～10）', areaCurrent, -10, 10, true);
       }
+    } else {
+      html += '<h3>' + escapeHtml(ACTION_LABELS[action] || '簽核') + '</h3>';
     }
     if (action === 'employee_confirm') {
       html += '<p class="section-help approval-only-note">確認時不需要填寫評語；只有選擇退回店主管時，系統才會要求輸入疑慮說明。</p>';
@@ -487,6 +496,7 @@
     refreshManagerTotal(form);
     refreshBManagerControls(form);
     refreshEducationScores(form);
+    refreshAreaApprovalScore(form);
   }
 
   function refreshBManagerControls(form) {
@@ -559,6 +569,24 @@
     if (totalNode) totalNode.textContent = (score1 + score2 + score3 + score4) + '／40分';
     var bTotalNode = form.querySelector('[data-b-education-total]');
     if (bTotalNode) bTotalNode.textContent = (numberFromForm(form, 'bAssignmentScore') + numberFromForm(form, 'bAttendanceScore')) + '／20分';
+  }
+
+  function refreshAreaApprovalScore(form) {
+    var node = form.querySelector('[data-area-total]');
+    if (!node) return;
+    var mode = String(node.getAttribute('data-area-mode') || 'score');
+    if (mode === 'score') {
+      var score = Math.max(0, Math.min(20, Math.round(numberFromForm(form, 'areaScore'))));
+      node.textContent = score + '／20分';
+    } else {
+      var adjustment = Math.max(-10, Math.min(10, Math.round(numberFromForm(form, 'adjustment'))));
+      node.textContent = formatSignedNumberText(adjustment) + '分';
+    }
+  }
+
+  function formatSignedNumberText(value) {
+    var number = Number(value) || 0;
+    return number > 0 ? '+' + number : String(number);
   }
 
   function checkedNumber(form, name) {
