@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.5.0B-scale-performance */
+/* 月考核系統 V3｜版本：7.5.0C-usability-admin-fixes */
 (function () {
   'use strict';
 
@@ -45,8 +45,11 @@
     deleteDraft: function (evaluationNo) { return call('deleteDraft', { evaluationNo: evaluationNo }); },
     systemHealth: function () { return call('systemHealth', {}); },
     accountManagementCenter: function (filters) { return call('accountManagementCenter', filters || {}); },
+    accountCreate: function (payload, requestId) { return call('accountCreate', payload || {}, requestId); },
+    accountAuditPage: function (filters) { return call('accountAuditPage', filters || {}); },
     accountUnlock: function (payload, requestId) { return call('accountUnlock', payload || {}, requestId); },
     accountSetStatus: function (payload, requestId) { return call('accountSetStatus', payload || {}, requestId); },
+    accountSetEvaluationRequirement: function (payload, requestId) { return call('accountSetEvaluationRequirement', payload || {}, requestId); },
     accountForceLogout: function (payload, requestId) { return call('accountForceLogout', payload || {}, requestId); },
     accountCredentialLookup: function (query, employeeId, requestId) {
       return call('accountCredentialLookup', { query: String(query || ''), employeeId: String(employeeId || '') }, requestId);
