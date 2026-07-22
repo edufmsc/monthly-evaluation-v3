@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.6.0B-selected-mail';
+  var APP_BUILD = '7.7.0A-b-form-core';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -183,7 +183,7 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">正式營運工具｜7.6.0B</p><h3>月考核派發管理中心</h3>' +
+      '<p class="step-label">正式營運工具｜7.7.0A</p><h3>月考核派發管理中心</h3>' +
       '<p>教育中心共用人工派發入口；可派發與需處理人員優先排列，已存在R0不重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<section class="detail-section dispatch-month-analysis-top"><div class="test-dispatch-heading"><div><h4>月份整體分析</h4>' +
@@ -201,7 +201,8 @@
         '<div class="test-dispatch-actions"><button id="dispatchManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢派發狀態</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
       '</form>' +
       '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div><div id="dispatchManagementSummary"></div>' +
-      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人後預覽；正式執行前逐筆重新驗證。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
+      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人，先選擇考核版本再預覽；建立後版本即鎖定。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
+        '<div class="batch-dispatch-version-row"><label class="field-group"><span>考核版本</span><select id="batchDispatchEvaluationVersion"><option value="A">A版｜一般月考核表</option><option value="B">B版｜店副理進階訓練月考核表</option></select></label><p class="section-help">B版沿用A版完整簽核流程，只更換考核內容、評分方式與PDF範本。</p></div>' +
         '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button><button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button><button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
       '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><p class="section-help">每頁固定顯示10筆，可使用上一頁／下一頁切換。</p><div id="dispatchManagementAttempts"></div></details>' +
@@ -222,7 +223,7 @@
     var article = document.createElement('article');
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.6.0B</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.7.0A</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<details id="accountCreatePanel" class="detail-section account-create-section"><summary>新增帳號／密碼</summary><form id="accountCreateForm" class="account-create-grid">' +
         '<label class="field-group"><span>員工工號</span><input id="accountCreateEmployeeId" required maxlength="40" autocomplete="off" placeholder="例如：0001"></label>' +
         '<label class="field-group"><span>4碼登入密碼</span><input id="accountCreatePassword" required inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="例如：0123"></label>' +
@@ -496,7 +497,7 @@
       'dispatchManagementSearchButton', 'dispatchManagementMessage', 'dispatchManagementSummary',
       'dispatchManagementPersons', 'dispatchManagementAttemptsPanel', 'dispatchManagementAttempts',
       'dispatchMonthAnalysisButton', 'dispatchMonthAnalysisResult', 'batchDispatchTools',
-      'batchDispatchSelectedCount', 'batchDispatchSelectVisibleButton', 'batchDispatchClearButton',
+      'batchDispatchSelectedCount', 'batchDispatchEvaluationVersion', 'batchDispatchSelectVisibleButton', 'batchDispatchClearButton',
       'batchDispatchPreviewButton', 'batchDispatchRepairPanel', 'batchDispatchRepairContent',
       'batchDispatchRepairReason', 'batchDispatchRepairConfirm', 'batchDispatchRepairConfirmText',
       'batchDispatchRepairCancelButton', 'batchDispatchRepairRunButton', 'batchDispatchRepairResult',
@@ -555,6 +556,7 @@
     if (elements.batchDispatchSelectVisibleButton) elements.batchDispatchSelectVisibleButton.addEventListener('click', selectVisibleBatchDispatchEmployees);
     if (elements.batchDispatchClearButton) elements.batchDispatchClearButton.addEventListener('click', clearBatchDispatchSelection);
     if (elements.batchDispatchPreviewButton) elements.batchDispatchPreviewButton.addEventListener('click', previewBatchDispatchRepair);
+    if (elements.batchDispatchEvaluationVersion) elements.batchDispatchEvaluationVersion.addEventListener('change', closeBatchDispatchRepairPanel);
     if (elements.batchDispatchRepairReason) elements.batchDispatchRepairReason.addEventListener('input', updateBatchDispatchRunState);
     if (elements.batchDispatchRepairConfirm) elements.batchDispatchRepairConfirm.addEventListener('change', updateBatchDispatchRunState);
     if (elements.batchDispatchRepairConfirmText) elements.batchDispatchRepairConfirmText.addEventListener('input', updateBatchDispatchRunState);
@@ -916,6 +918,7 @@
     }
 
     pushTag(effectiveClosed ? '結案' : status, '');
+    if (String(item.evaluationVersion || 'A').toUpperCase() === 'B') pushTag('B版｜店副理進階', ' tag--version-b');
     if (pdfStatus && pdfStatus !== '未排隊') {
       pushTag('PDF' + pdfStatus, pdfStatus === '完成' ? ' tag--success' : pdfStatus === '失敗' ? ' tag--danger' : ' tag--warning');
     }
@@ -1891,6 +1894,7 @@
   function summaryHtml(record) {
     return '<div class="summary-grid">' +
       metaItem('考核單號', record['考核單號']) +
+      metaItem('考核版本', String(record['考核版本'] || 'A').toUpperCase() === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核') +
       metaItem('考核月份', formatRocDateDisplay(record['考核月份'])) +
       metaItem('受評人員', joinText(record['受評人員工號'], record['受評人員姓名'])) +
       metaItem('轉任日', formatRocDateDisplay(record['受評人員轉任日'])) +
@@ -1902,24 +1906,60 @@
   }
 
   function detailSectionsHtml(record) {
-    var managerKeys = ['責任感','協調性','表達能力','學習態度','解決問題能力','個人儀容'];
-    var sections = [
-      ['門市店主管評核', managerKeys.map(function(key) {
-        var description = window.V3EvaluationForm && window.V3EvaluationForm.getManagerScoreDescription
-          ? window.V3EvaluationForm.getManagerScoreDescription(key, record[key]) : '';
-        return [key, record[key], description, 'manager-score'];
-      }).concat([['門市店主管小計', record['門市店主管小計']], ['門市店主管評語', record['門市店主管評語']]])],
-      ['教育中心評核', [
-        ['職能積分累計', record['職能積分累計']], ['職能積分得分', record['職能積分得分']],
-        ['OJT完成篇數', record['OJT完成篇數']], ['OJT得分', record['OJT得分']],
-        ['回報錯誤次數', record['每週回報錯誤次數']], ['未回報次數', record['每週未回報次數']],
-        ['每週進度回報得分', record['每週進度回報得分']], ['培訓出勤異常次數', record['培訓出勤異常次數']],
-        ['作業遲繳天數', record['作業遲繳天數']], ['培訓課程狀況得分', record['培訓課程狀況得分']],
-        ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
-      ]],
-      ['區主管與受評人員', [['區主管增減分', record['區主管增減分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員備註', record['受評人員確認備註']]]],
-      ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']], ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段']]]]
-    ];
+    var isVersionB = String(record['考核版本'] || 'A').trim().toUpperCase() === 'B';
+    var sections;
+    if (isVersionB) {
+      var bItems = [
+        ['政令執行', 'B版政令執行評等', 'B版政令執行得分', 'B版政令執行A級說明'],
+        ['追求卓越', 'B版追求卓越評等', 'B版追求卓越得分', 'B版追求卓越A級說明'],
+        ['顧客滿意', 'B版顧客滿意評等', 'B版顧客滿意得分', 'B版顧客滿意A級說明'],
+        ['問題解決', 'B版問題解決評等', 'B版問題解決得分', 'B版問題解決A級說明'],
+        ['團隊領導', 'B版團隊領導評等', 'B版團隊領導得分', 'B版團隊領導A級說明'],
+        ['加分項', 'B版加分項評等', 'B版加分項得分', 'B版加分項A級說明']
+      ];
+      var managerRows = [];
+      bItems.forEach(function(item) {
+        var grade = record[item[1]];
+        var description = window.V3EvaluationForm && window.V3EvaluationForm.getBManagerRatingDescription
+          ? window.V3EvaluationForm.getBManagerRatingDescription(item[1], grade) : '';
+        managerRows.push([item[0] + '評等', grade, description, 'manager-score']);
+        managerRows.push([item[0] + '換算得分', record[item[2]]]);
+        if (String(record[item[3]] || '').trim()) managerRows.push([item[0] + 'A級得分說明', record[item[3]]]);
+      });
+      managerRows.push(['門市店主管小計', record['門市店主管小計']]);
+      managerRows.push(['門市店主管評語', record['門市店主管評語']]);
+      sections = [
+        ['B版｜門市店主管評核', managerRows],
+        ['B版｜教育中心評核', [
+          ['作業／心得／問卷遲繳天數', record['作業遲繳天數']],
+          ['作業／心得／問卷得分', record['B版作業心得問卷得分']],
+          ['培訓課程遲到／異常次數', record['培訓出勤異常次數']],
+          ['培訓課程出勤得分', record['B版培訓課程出勤得分']],
+          ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
+        ]],
+        ['區主管與受評人員', [['區主管評分', record['B版區主管評分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員疑慮／備註', record['受評人員確認備註']]]],
+        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']], ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段說明']]]]
+      ];
+    } else {
+      var managerKeys = ['責任感','協調性','表達能力','學習態度','解決問題能力','個人儀容'];
+      sections = [
+        ['門市店主管評核', managerKeys.map(function(key) {
+          var description = window.V3EvaluationForm && window.V3EvaluationForm.getManagerScoreDescription
+            ? window.V3EvaluationForm.getManagerScoreDescription(key, record[key]) : '';
+          return [key, record[key], description, 'manager-score'];
+        }).concat([['門市店主管小計', record['門市店主管小計']], ['門市店主管評語', record['門市店主管評語']]])],
+        ['教育中心評核', [
+          ['職能積分累計', record['職能積分累計']], ['職能積分得分', record['職能積分得分']],
+          ['OJT完成篇數', record['OJT完成篇數']], ['OJT得分', record['OJT得分']],
+          ['回報錯誤次數', record['每週回報錯誤次數']], ['未回報次數', record['每週未回報次數']],
+          ['每週進度回報得分', record['每週進度回報得分']], ['培訓出勤異常次數', record['培訓出勤異常次數']],
+          ['作業遲繳天數', record['作業遲繳天數']], ['培訓課程狀況得分', record['培訓課程狀況得分']],
+          ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
+        ]],
+        ['區主管與受評人員', [['區主管增減分', record['區主管增減分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員備註', record['受評人員確認備註']]]],
+        ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']], ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段說明']]]]
+      ];
+    }
     if (state.activeTab === 'history') {
       sections.push(['PDF處理', [['PDF狀態', record['PDF狀態']], ['PDF檔名', record['PDF檔名']], ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])], ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''], ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']]]);
     }
@@ -2936,8 +2976,11 @@
     return '<article class="evaluation-card pdf-management-row">' +
       '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3>' +
         '<p>' + escapeHtml(item.evaluationNo || '') + '｜' + escapeHtml(item.employeeId || '') + '</p></div>' +
-        '<div class="pdf-management-tags"><span class="tag ' + issueClass + '">' + escapeHtml(item.issueLabel || '其他狀態') + '</span>' + selection + '</div></div>' +
+        '<div class="pdf-management-tags">' +
+          (String(item.evaluationVersion || 'A').toUpperCase() === 'B' ? '<span class="tag tag--version-b">B版｜店副理進階</span>' : '') +
+          '<span class="tag ' + issueClass + '">' + escapeHtml(item.issueLabel || '其他狀態') + '</span>' + selection + '</div></div>' +
       '<div class="evaluation-card__meta">' +
+        metaItem('考核版本', String(item.evaluationVersion || 'A').toUpperCase() === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核') +
         metaItem('考核月份', item.evaluationMonth) +
         metaItem('店別', joinStore(item.storeCode, item.storeName)) +
         metaItem('流程狀態', item.workflowStatus) +
@@ -3737,6 +3780,7 @@
       return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' +
         escapeHtml(joinStore(row.storeCode, row.storeName)) + '</span><strong>' +
         escapeHtml(joinText(row.employeeId, row.employeeName)) + (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') +
+        (String(row.evaluationVersion || '').toUpperCase() === 'B' ? '｜B版' : '') +
         '</strong><small>' + escapeHtml(row.reason || row.workflowStatus || '目前無異常') +
         (row.executionSource ? '<br>最近來源：' + escapeHtml(row.executionSource) + '｜' + escapeHtml(row.completedAt || '') : '') +
         '</small>' + batchControl + (actions ? '<div class="evaluation-card__actions">' + actions + '</div>' : '') + '</div>';
@@ -3766,7 +3810,8 @@
       return '<div class="route-row"><span><span class="tag ' + dispatchCategoryTone(row.category) + '">' +
         escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' + escapeHtml(row.executionSource || '未標示來源') +
         '</span><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) +
-        (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') + '</strong><small>' +
+        (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') +
+        (String(row.evaluationVersion || '').toUpperCase() === 'B' ? '｜B版' : '') + '</strong><small>' +
         escapeHtml(row.completedAt || '') + (row.batchId ? '｜批次 ' + escapeHtml(row.batchId) : '') +
         (row.reason ? '<br>' + escapeHtml(row.reason) : '') + '</small></div>';
     }).join('') + '</div>' + managementPagerHtmlV3_('dispatch-attempt', Number(pagination.page || 1), Number(pagination.totalPages || 1), Number(pagination.total || rows.length));
@@ -3859,7 +3904,8 @@
     try {
       var result = await window.V3WorkflowService.previewManualDispatch(
         employeeIds,
-        String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim()
+        String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim(),
+        String(elements.batchDispatchEvaluationVersion && elements.batchDispatchEvaluationVersion.value || 'A')
       );
       state.batchDispatchRepairPreview = result.data || {};
       renderBatchDispatchRepairPreview(state.batchDispatchRepairPreview, false);
@@ -3881,6 +3927,7 @@
       (refreshedBecauseStale ? '<div class="form-message form-message--info">資料已變動，系統已自動更新預覽；請重新確認後執行。</div>' : '') +
       '<div class="admin-result-grid">' +
         metaItem('考核月份', data.evaluationMonth) +
+        metaItem('考核版本', String(data.evaluationVersion || 'A') === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核') +
         metaItem('本次選取', summary.selectedCount || 0) +
         metaItem('預計建立', summary.createCount || 0) +
         metaItem('已有R0跳過', summary.duplicateCount || 0) +
@@ -3943,6 +3990,7 @@
       return Object.assign({}, row, {
         category: 'CREATED',
         evaluationNo: String(item.evaluationNo || ''),
+        evaluationVersion: String(item.evaluationVersion || result.evaluationVersion || 'A'),
         workflowStatus: '待門市店主管填寫',
         reason: '',
         latestResult: '已建立R0',
@@ -3985,6 +4033,7 @@
     try {
       var result = await window.V3WorkflowService.runManualDispatch({
         evaluationMonth: preview.evaluationMonth,
+        evaluationVersion: preview.evaluationVersion || 'A',
         previewToken: preview.previewToken,
         reason: reason,
         secondConfirmed: true,
@@ -4922,7 +4971,12 @@
       CREDENTIAL_QUERY_REQUIRED: '請輸入員工姓名或工號。',
       CREDENTIAL_EMPLOYEE_NOT_FOUND: '查無符合姓名或工號的人員。',
       ACCOUNT_REASON_REQUIRED: '請填寫至少4個字的帳號處理原因。',
-      CONFIRM_TEXT_MISMATCH: '最終確認文字不正確。'
+      CONFIRM_TEXT_MISMATCH: '最終確認文字不正確。',
+      B_MANAGER_GRADE_INVALID: 'B版六項評核只能選擇A、B、C或D。',
+      B_MANAGER_GRADES_REQUIRED: '請完成B版店主管六項評核。',
+      B_MANAGER_A_EXPLANATION_REQUIRED: '選擇A時，請填寫該項A級得分說明。',
+      PDF_B_TEMPLATE_NOT_CONFIGURED: '尚未設定B版PDF範本，請先由教育中心完成B版初始化與範本設定。',
+      BATCH_DISPATCH_VERSION_MISMATCH: '預覽的考核版本與目前選擇不同，請重新預覽。'
     };
     if (code === 'UNKNOWN_ACTION') {
       var rawMessage = String(error && error.message || '');
