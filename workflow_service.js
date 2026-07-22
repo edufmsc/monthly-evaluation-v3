@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.5.0C-usability-admin-fixes */
+/* 月考核系統 V3｜版本：7.5.0D-ui-mail-pagination */
 (function () {
   'use strict';
 
@@ -50,6 +50,7 @@
     accountUnlock: function (payload, requestId) { return call('accountUnlock', payload || {}, requestId); },
     accountSetStatus: function (payload, requestId) { return call('accountSetStatus', payload || {}, requestId); },
     accountSetEvaluationRequirement: function (payload, requestId) { return call('accountSetEvaluationRequirement', payload || {}, requestId); },
+    accountSetNotificationEmail: function (payload, requestId) { return call('accountSetNotificationEmail', payload || {}, requestId); },
     accountForceLogout: function (payload, requestId) { return call('accountForceLogout', payload || {}, requestId); },
     accountCredentialLookup: function (query, employeeId, requestId) {
       return call('accountCredentialLookup', { query: String(query || ''), employeeId: String(employeeId || '') }, requestId);
