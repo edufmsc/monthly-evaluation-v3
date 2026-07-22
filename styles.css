@@ -1765,3 +1765,99 @@ body.idle-warning-open {
   background: #fff8e8;
   color: #7b4b00;
 }
+
+/* 7.7.0A-HF2｜B版唯讀版面、教育中心操作與簽名空間 */
+.b-manager-review-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.b-manager-review-heading h3,
+.b-manager-review-heading p { margin: 0; }
+.b-manager-review-heading > strong {
+  flex: 0 0 auto;
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: #fff1df;
+  color: #8b3b13;
+}
+.b-manager-review-list { display: grid; gap: 14px; }
+.b-manager-review-item {
+  overflow: hidden;
+  border: 1px solid #ead8cb;
+  border-radius: 15px;
+  background: #fffdfb;
+}
+.b-manager-review-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(250px, .9fr);
+  min-width: 0;
+}
+.b-manager-review-competency,
+.b-manager-review-rating { padding: 17px 18px; min-width: 0; }
+.b-manager-review-competency { border-right: 1px solid #ead8cb; }
+.b-manager-review-competency > span,
+.b-manager-review-rating > span,
+.b-manager-review-comment > span,
+.b-manager-overall-comment > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: .86rem;
+  font-weight: 700;
+}
+.b-manager-review-competency h4 { margin: 0 0 12px; font-size: 1.18rem; color: #6f2c11; }
+.b-manager-review-competency b { display: block; margin-bottom: 5px; font-size: .9rem; }
+.b-manager-review-competency p,
+.b-manager-review-rating p,
+.b-manager-review-comment p,
+.b-manager-overall-comment p { margin: 0; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.b-manager-review-rating {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #fff8f1;
+}
+.b-manager-review-rating strong { display: block; margin-bottom: 9px; font-size: 1.22rem; color: #8b310f; }
+.b-manager-review-comment {
+  border-top: 1px solid #ead8cb;
+  padding: 14px 18px;
+  background: #fffaf5;
+}
+.b-manager-overall-comment {
+  margin-top: 14px;
+  padding: 15px 18px;
+  border: 1px solid #ead8cb;
+  border-radius: 14px;
+  background: #fff8f1;
+}
+
+.b-education-evaluation-section .counter-grid { grid-template-columns: 1fr; }
+.b-education-evaluation-section .counter-box { width: 100%; }
+.b-education-evaluation-section .counter-control {
+  grid-template-columns: 58px minmax(100px, 1fr) 42px 58px;
+  gap: 12px;
+}
+.b-education-evaluation-section .counter-button {
+  width: 58px;
+  min-width: 58px;
+  height: 58px;
+  min-height: 58px;
+  font-size: 1.45rem;
+}
+.b-education-evaluation-section .counter-input { min-height: 58px; font-size: 1.35rem; }
+.b-education-evaluation-section .score-result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.b-education-evaluation-section .score-result-grid > div { min-height: 76px; display: flex; flex-direction: column; justify-content: center; }
+
+.signature-canvas { height: 312px; }
+
+@media (max-width: 760px) {
+  .b-manager-review-heading { align-items: flex-start; }
+  .b-manager-review-main { grid-template-columns: 1fr; }
+  .b-manager-review-competency { border-right: 0; border-bottom: 1px solid #ead8cb; }
+  .b-education-evaluation-section .counter-control { grid-template-columns: 56px minmax(70px, 1fr) 36px 56px; gap: 8px; }
+  .b-education-evaluation-section .counter-button { width: 56px; min-width: 56px; height: 56px; min-height: 56px; }
+  .signature-canvas { height: 300px; }
+}
