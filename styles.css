@@ -1549,3 +1549,41 @@ body.idle-warning-open {
   .management-card-heading { flex-direction:row !important; }
   .management-refresh-button { min-width:110px; padding-left:12px; padding-right:12px; }
 }
+
+
+/* 7.5.0D UI、通知Email與分頁改善 */
+.account-create-grid input::placeholder,
+.account-create-grid textarea::placeholder,
+#accountActionEmail::placeholder { color:#9a8f87; opacity:1; }
+.field-hint { display:block; margin-top:5px; color:var(--muted); font-size:.78rem; }
+.management-section-toolbar { display:flex; justify-content:flex-end; align-items:center; margin:12px 0; }
+.management-section-toolbar label { display:flex; align-items:center; gap:8px; font-weight:700; }
+.account-audit-grid { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+.account-audit-row { display:grid; grid-template-columns:minmax(130px,.75fr) minmax(150px,.9fr) minmax(0,1.7fr); align-items:start; }
+.account-audit-row > span,
+.account-audit-row > strong,
+.account-audit-row > small { padding:11px 12px; min-width:0; overflow-wrap:anywhere; border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
+.account-audit-row > :last-child { border-right:0; }
+.account-audit-row:last-child > * { border-bottom:0; }
+.account-audit-row--header { background:var(--surface-soft); font-weight:800; }
+.account-audit-row--header span { color:var(--text); }
+.pdf-summary-filter-button { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.pdf-summary-filter-button span,
+.pdf-summary-filter-button strong { display:inline; margin:0; }
+.pdf-summary-filter-button strong { flex:0 0 auto; }
+.detail-item > span { line-height:1.55; }
+@media (max-width:700px) {
+  .management-section-toolbar { justify-content:stretch; }
+  .management-section-toolbar label { width:100%; justify-content:space-between; }
+  .account-audit-row { grid-template-columns:1fr; border-bottom:1px solid var(--line); }
+  .account-audit-row:last-child { border-bottom:0; }
+  .account-audit-row > span,
+  .account-audit-row > strong,
+  .account-audit-row > small { border-right:0; border-bottom:1px solid var(--line); }
+  .account-audit-row > :last-child { border-bottom:0; }
+  .account-audit-row--header { display:none; }
+}
+
+.detail-item--manager-score > span { display:block; }
+.score-description--title { display:inline; margin-left:2px; color:var(--muted); font-size:.82rem; font-weight:500; line-height:1.55; }
+.detail-item--manager-score > strong { display:block; margin-top:8px; font-size:1.05rem; }
