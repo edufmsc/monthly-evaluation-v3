@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.5.0C-usability-admin-fixes';
+  var APP_BUILD = '7.5.0D-ui-mail-pagination';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -29,7 +29,8 @@
     dispatchManagementLoading: false,
     dispatchPersonPage: 1,
     dispatchAttemptPage: 1,
-    dispatchPageSize: 15,
+    dispatchPersonPageSize: 15,
+    dispatchAttemptPageSize: 15,
     batchDispatchRepairPreview: null,
     batchDispatchSelectedEmployees: {},
     dispatchManagementSelectionMonth: '',
@@ -176,7 +177,7 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">正式營運工具｜7.5.0C</p><h3>月考核派發管理中心</h3>' +
+      '<p class="step-label">正式營運工具｜7.5.0D</p><h3>月考核派發管理中心</h3>' +
       '<p>教育中心共用人工派發入口；可派發與需處理人員優先排列，已存在R0不重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<section class="detail-section dispatch-month-analysis-top"><div class="test-dispatch-heading"><div><h4>月份整體分析</h4>' +
@@ -190,17 +191,17 @@
         '<label class="field-group"><span>店號</span><select id="dispatchManagementStore"><option value="">全部店號</option></select></label>' +
         '<label class="field-group"><span>區域</span><select id="dispatchManagementArea"><option value="">全部區域</option></select></label>' +
         '<label class="field-group"><span>派發來源</span><select id="dispatchManagementSource"><option value="">全部來源</option></select></label>' +
-        '<label class="field-group"><span>每頁顯示</span><select id="dispatchManagementPageSize"><option value="10">10人</option><option value="15" selected>15人</option></select></label>' +
+        '<label class="field-group"><span>人員每頁顯示</span><select id="dispatchManagementPageSize"><option value="10">10人</option><option value="15" selected>15人</option></select></label>' +
         '<div class="test-dispatch-actions"><button id="dispatchManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢派發狀態</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
       '</form>' +
       '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div><div id="dispatchManagementSummary"></div>' +
       '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人後預覽；正式執行前逐筆重新驗證。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
         '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button><button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button><button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
-      '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><div id="dispatchManagementAttempts"></div></details>' +
+      '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><div class="management-section-toolbar"><label>紀錄每頁顯示 <select id="dispatchAttemptPageSize"><option value="10">10筆</option><option value="15" selected>15筆</option></select></label></div><div id="dispatchManagementAttempts"></div></details>' +
       '<section id="batchDispatchRepairPanel" class="test-dispatch-preview" hidden><div id="batchDispatchRepairContent"></div>' +
         '<label class="field-group"><span>人工派發／補派原因</span><textarea id="batchDispatchRepairReason" rows="3" maxlength="300"></textarea></label>' +
-        '<label class="confirm-row"><input id="batchDispatchRepairConfirm" type="checkbox"><span>我已確認系統會逐筆檢查資格、七階段路線與同月份R0。</span></label>' +
+        '<label class="confirm-row"><input id="batchDispatchRepairConfirm" type="checkbox"><span>我已確認系統會逐筆檢查資格、簽核流程與同月份R0。</span></label>' +
         '<label class="field-group"><span>最終確認文字</span><input id="batchDispatchRepairConfirmText" type="text" maxlength="20" autocomplete="off" placeholder="請輸入：確認派發"></label>' +
         '<div class="test-dispatch-actions"><button id="batchDispatchRepairCancelButton" class="secondary-button" type="button">取消</button><button id="batchDispatchRepairRunButton" class="primary-button" type="button" disabled><span class="button-label">執行人工派發／補派</span><span class="button-spinner" aria-hidden="true"></span></button></div><article id="batchDispatchRepairResult" class="card admin-result-card" hidden></article></section>';
     systemPanel.appendChild(article);
@@ -215,21 +216,21 @@
     var article = document.createElement('article');
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.5.0C</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.5.0D</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<details id="accountCreatePanel" class="detail-section account-create-section"><summary>新增帳號／密碼</summary><form id="accountCreateForm" class="account-create-grid">' +
-        '<label class="field-group"><span>員工工號</span><input id="accountCreateEmployeeId" required maxlength="40" autocomplete="off"></label>' +
-        '<label class="field-group"><span>4碼登入密碼</span><input id="accountCreatePassword" required inputmode="numeric" maxlength="4" autocomplete="new-password"></label>' +
-        '<label class="field-group"><span>員工姓名</span><input id="accountCreateEmployeeName" required maxlength="60"></label>' +
+        '<label class="field-group"><span>員工工號</span><input id="accountCreateEmployeeId" required maxlength="40" autocomplete="off" placeholder="例如：0001"></label>' +
+        '<label class="field-group"><span>4碼登入密碼</span><input id="accountCreatePassword" required inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="例如：0123"></label>' +
+        '<label class="field-group"><span>員工姓名</span><input id="accountCreateEmployeeName" required maxlength="60" placeholder="例如：王小明"></label>' +
         '<label class="field-group"><span>系統角色</span><select id="accountCreateRole" required><option value="">請選擇</option>' + roleOptions + '</select></label>' +
-        '<label class="field-group"><span>店號</span><input id="accountCreateStoreCode" maxlength="20" placeholder="門市角色建議填寫"></label>' +
-        '<label class="field-group"><span>部門／營業處</span><input id="accountCreateDepartment" maxlength="40"></label>' +
-        '<label class="field-group"><span>區域</span><input id="accountCreateArea" maxlength="40"></label>' +
-        '<label class="field-group"><span>轉任日</span><input id="accountCreateTransferDate" type="date"></label>' +
+        '<label class="field-group"><span>店號</span><input id="accountCreateStoreCode" maxlength="20" placeholder="例如：A01；非門市角色可留白"></label>' +
+        '<label class="field-group"><span>部門／營業處</span><input id="accountCreateDepartment" maxlength="40" placeholder="例如：營一處／教育中心"></label>' +
+        '<label class="field-group"><span>區域</span><input id="accountCreateArea" maxlength="40" placeholder="例如：營一區；無區域可留白"></label>' +
+        '<label class="field-group"><span>轉任日</span><input id="accountCreateTransferDate" type="date"><small class="field-hint">無轉任日可留白</small></label>' +
         '<label class="field-group"><span>是否需要考核</span><select id="accountCreateNeedsEvaluation"><option value="是">是</option><option value="否" selected>否</option></select></label>' +
         '<label class="field-group"><span>在職狀態</span><select id="accountCreateEmploymentStatus"><option value="在職" selected>在職</option><option value="離職">離職</option><option value="留停">留停</option></select></label>' +
         '<label class="field-group"><span>帳號狀態</span><select id="accountCreateAccountStatus"><option value="啟用" selected>啟用</option><option value="停用">停用</option></select></label>' +
-        '<label class="field-group account-create-wide"><span>備註</span><input id="accountCreateNote" maxlength="200"></label>' +
-        '<label class="field-group account-create-wide"><span>新增原因</span><textarea id="accountCreateReason" rows="2" maxlength="300" required></textarea></label>' +
+        '<label class="field-group"><span>通知Email</span><input id="accountCreateNotificationEmail" type="email" maxlength="120" autocomplete="off" placeholder="例如：name@example.com；可留白"></label><label class="field-group account-create-wide"><span>備註</span><input id="accountCreateNote" maxlength="200" placeholder="例如：新進人員、暫停考核原因等"></label>' +
+        '<label class="field-group account-create-wide"><span>新增原因</span><textarea id="accountCreateReason" rows="2" maxlength="300" required placeholder="例如：新進人員建立月考核系統帳號"></textarea></label>' +
         '<label class="confirm-row account-create-wide"><input id="accountCreateConfirm" type="checkbox"><span>我已核對工號、姓名、角色、考核權限與密碼。</span></label>' +
         '<label class="field-group account-create-wide"><span>最終確認文字</span><input id="accountCreateConfirmText" maxlength="20" placeholder="請輸入：確認新增"></label>' +
         '<div class="test-dispatch-actions account-create-wide"><button id="accountCreateResetButton" class="secondary-button" type="button">清除</button><button id="accountCreateSubmitButton" class="primary-button" type="submit"><span class="button-label">建立帳號</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
@@ -237,7 +238,7 @@
       '<section class="detail-section account-credential-section"><div class="test-dispatch-heading"><div><h4>協助查詢登入帳密</h4><p class="section-help">輸入姓名或工號；查詢紀錄不保存密碼內容。</p></div></div><form id="accountCredentialLookupForm" class="account-credential-form"><label class="field-group"><span>員工完整姓名／完整工號</span><input id="accountCredentialLookupQuery" maxlength="80" autocomplete="off"></label><div class="test-dispatch-actions"><button id="accountCredentialLookupButton" class="primary-button primary-button--small" type="submit"><span class="button-label">查詢帳密</span><span class="button-spinner"></span></button><button id="accountCredentialClearButton" class="secondary-button secondary-button--small" type="button">清除結果</button></div></form><div id="accountCredentialLookupMessage" class="form-message" hidden></div><div id="accountCredentialLookupResult" hidden></div></section>' +
       '<form id="accountManagementFilterForm" class="filter-grid"><label class="field-group"><span>工號／姓名／店號或店別</span><input id="accountManagementKeyword" maxlength="80"></label><label class="field-group"><span>系統角色</span><select id="accountManagementRole"><option value="">全部角色</option></select></label><label class="field-group"><span>在職狀態</span><select id="accountManagementEmployment"><option value="">全部狀態</option></select></label><label class="field-group"><span>帳號狀態</span><select id="accountManagementStatus"><option value="">全部狀態</option><option value="啟用">啟用</option><option value="停用">停用</option><option value="鎖定">鎖定</option><option value="未設定">未設定</option></select></label><label class="field-group"><span>登入狀況</span><select id="accountManagementLoginIssue"><option value="">全部登入狀況</option><option value="unlockable">需解鎖／清除錯誤次數</option><option value="locked">目前鎖定</option><option value="password_invalid">密碼格式異常</option><option value="not_login_ready">目前不可登入</option></select></label><label class="field-group"><span>每頁顯示</span><select id="accountManagementPageSize"><option value="10">10人</option><option value="15">15人</option></select></label><div class="test-dispatch-actions account-management-search-actions"><button id="accountManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢帳號</span><span class="button-spinner"></span></button><button id="accountManagementClearButton" class="secondary-button" type="button">清除條件</button></div></form>' +
       '<div class="account-quick-filter-bar"><span>快速處理</span><button id="accountUnlockQuickFilterButton" class="secondary-button secondary-button--small" type="button">查看需解鎖／清除錯誤次數</button></div><div id="accountManagementMessage" class="form-message form-message--info">請設定查詢條件後查詢；系統不會自動載入全部人員。</div><div id="accountManagementSummary" hidden></div><section id="accountManagementList" class="test-dispatch-preview account-management-list"><div class="empty-state"><h3>尚未查詢帳號</h3></div></section><div id="accountManagementPagination" class="account-management-pagination" hidden><button id="accountManagementPreviousButton" class="secondary-button secondary-button--small">上一頁</button><strong id="accountManagementPageText">第1頁</strong><button id="accountManagementNextButton" class="secondary-button secondary-button--small">下一頁</button></div>' +
-      '<section id="accountActionPanel" class="test-dispatch-preview" hidden><div id="accountActionContent"></div><label class="field-group"><span>處理原因</span><textarea id="accountActionReason" rows="3" maxlength="300"></textarea></label><label class="confirm-row"><input id="accountActionConfirm" type="checkbox"><span id="accountActionConfirmLabel">我已確認此操作的影響。</span></label><label class="field-group"><span>最終確認文字</span><input id="accountActionConfirmText" maxlength="20"><small id="accountActionConfirmHint"></small></label><div class="test-dispatch-actions"><button id="accountActionCancelButton" class="secondary-button">取消</button><button id="accountActionRunButton" class="primary-button" disabled><span class="button-label">執行</span><span class="button-spinner"></span></button></div><article id="accountActionResult" class="card admin-result-card" hidden></article></section>' +
+      '<section id="accountActionPanel" class="test-dispatch-preview" hidden><div id="accountActionContent"></div><label id="accountActionEmailGroup" class="field-group" hidden><span>新的通知Email</span><input id="accountActionEmail" type="email" maxlength="120" autocomplete="off" placeholder="輸入完整Email；留白代表清除"></label><label class="field-group"><span>處理原因</span><textarea id="accountActionReason" rows="3" maxlength="300"></textarea></label><label class="confirm-row"><input id="accountActionConfirm" type="checkbox"><span id="accountActionConfirmLabel">我已確認此操作的影響。</span></label><label class="field-group"><span>最終確認文字</span><input id="accountActionConfirmText" maxlength="20"><small id="accountActionConfirmHint"></small></label><div class="test-dispatch-actions"><button id="accountActionCancelButton" class="secondary-button">取消</button><button id="accountActionRunButton" class="primary-button" disabled><span class="button-label">執行</span><span class="button-spinner"></span></button></div><article id="accountActionResult" class="card admin-result-card" hidden></article></section>' +
       '<details id="accountAuditPanel" class="detail-section"><summary>查看最近帳號操作紀錄</summary><div class="account-audit-toolbar"><label>每頁顯示 <select id="accountAuditPageSize"><option value="10">10筆</option><option value="15">15筆</option></select></label></div><div id="accountAuditList"><p class="section-help">展開後載入最新紀錄。</p></div><div id="accountAuditPagination" class="account-management-pagination" hidden><button id="accountAuditPreviousButton" class="secondary-button secondary-button--small">上一頁</button><strong id="accountAuditPageText">第1頁</strong><button id="accountAuditNextButton" class="secondary-button secondary-button--small">下一頁</button></div></details>';
     systemPanel.appendChild(article);
   }
@@ -249,8 +250,8 @@
     var monthOptions = '<option value="">全部月份</option>' + Array.from({length:12}, function(_, i) { var m=i+1; return '<option value="' + m + '">' + m + '月</option>'; }).join('');
     var article = document.createElement('article');
     article.id = 'pdfManagementCard'; article.className = 'card test-dispatch-card pdf-management-card';
-    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">PDF失敗重試與處理｜7.5.0C</p><h3>PDF處理中心</h3><p>依年度與月份查詢，避免一次顯示全部資料；異常數量可直接點擊篩選處理。</p></div><button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
-      '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter"><label class="field-group"><span>民國年度</span><input id="pdfManagementYear" inputmode="numeric" maxlength="3" placeholder="例如 115"></label><label class="field-group"><span>月份</span><select id="pdfManagementMonthNumber">' + monthOptions + '</select></label><label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" maxlength="80"></label><label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus"><option value="ALL">全部狀態</option><option value="ABNORMAL">全部異常</option><option value="GENERATION_FAILED">PDF產生失敗</option><option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option><option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option><option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option></select></label><div class="test-dispatch-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner"></span></button></div></form>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">PDF失敗重試與處理｜7.5.0D</p><h3>PDF處理中心</h3><p>依年度與月份查詢，避免一次顯示全部資料；異常數量可直接點擊篩選處理。</p></div><button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+      '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter"><label class="field-group"><span>民國年度</span><input id="pdfManagementYear" inputmode="numeric" maxlength="3" placeholder="例如 115"></label><label class="field-group"><span>月份</span><select id="pdfManagementMonthNumber">' + monthOptions + '</select></label><label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" maxlength="80"></label><label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus"><option value="ALL">全部狀態</option><option value="ABNORMAL">全部異常</option><option value="GENERATION_FAILED">PDF產生失敗</option><option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option><option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option><option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option></select></label><label class="field-group"><span>每頁顯示</span><select id="pdfManagementPageSize"><option value="10">10筆</option><option value="15" selected>15筆</option></select></label><div class="test-dispatch-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner"></span></button></div></form>' +
       '<div id="pdfManagementMessage" class="form-message" hidden></div><div id="pdfManagementSummary" class="admin-result-grid pdf-management-summary"></div>' +
       '<section class="detail-section pdf-management-tools"><div class="test-dispatch-heading"><div><h4>重新產生PDF</h4><p class="section-help">一次最多5張；新檔成功後才更新目前檢視資料，舊檔保留。</p></div><button id="pdfManagementAbnormalButton" class="secondary-button secondary-button--small pdf-abnormal-button" type="button">異常 0筆</button></div><div class="test-dispatch-actions"><button id="pdfManagementSelectVisibleButton" class="secondary-button secondary-button--small">勾選目前可重試PDF</button><button id="pdfManagementClearButton" class="secondary-button secondary-button--small">清除勾選</button><button id="pdfManagementRetrySelectedButton" class="primary-button primary-button--small" disabled><span class="button-label">重試選取PDF</span><span class="button-spinner"></span></button><strong id="pdfManagementSelectedCount">已選0張</strong></div></section>' +
       '<section id="pdfManagementList" class="test-dispatch-preview pdf-management-list"></section><section id="pdfManagementActionPanel" class="test-dispatch-preview" hidden><div id="pdfManagementActionContent"></div><label class="field-group"><span>處理原因</span><textarea id="pdfManagementReason" rows="3" maxlength="300"></textarea></label><label class="confirm-row"><input id="pdfManagementConfirm" type="checkbox"><span>我已確認本次操作不會刪除舊PDF、考核資料或簽名快照。</span></label><label class="field-group"><span>最終確認文字</span><input id="pdfManagementConfirmText" maxlength="20"><small id="pdfManagementConfirmHint"></small></label><div class="test-dispatch-actions"><button id="pdfManagementCancelButton" class="secondary-button">取消</button><button id="pdfManagementRunButton" class="primary-button" disabled><span class="button-label">執行</span><span class="button-spinner"></span></button></div><article id="pdfManagementActionResult" class="card admin-result-card" hidden></article></section>';
@@ -420,7 +421,7 @@
       'connectionBadge', 'configErrorCard', 'loginView', 'dashboardView', 'loginForm',
       'employeeId', 'password', 'togglePassword', 'loginMessage', 'loginButton',
       'userName', 'userRole', 'userEmployeeId', 'profileRole', 'userDepartment', 'profileDepartment',
-      'userArea', 'userStore', 'profileStore', 'logoutButton', 'systemTabButton',
+      'userArea', 'userStore', 'profileStore', 'userNotificationEmail', 'logoutButton', 'systemTabButton',
       'dashboardMessage', 'appVersion', 'pendingCountBadge', 'progressCountBadge', 'pendingPanel', 'progressPanel', 'historyPanel', 'profilePanel', 'systemPanel',
       'refreshPendingButton', 'pendingList', 'refreshProgressButton', 'progressFilterForm', 'progressMonth',
       'progressEmployeeId', 'progressEmployeeFilter', 'progressDepartment', 'progressArea', 'progressStatus',
@@ -1818,7 +1819,9 @@
     var managerKeys = ['責任感','協調性','表達能力','學習態度','解決問題能力','個人儀容'];
     var sections = [
       ['門市店主管評核', managerKeys.map(function(key) {
-        return [key, record[key], window.V3EvaluationForm && window.V3EvaluationForm.getManagerScoreDescription ? window.V3EvaluationForm.getManagerScoreDescription(key, record[key]) : ''];
+        var description = window.V3EvaluationForm && window.V3EvaluationForm.getManagerScoreDescription
+          ? window.V3EvaluationForm.getManagerScoreDescription(key, record[key]) : '';
+        return [key, record[key], description, 'manager-score'];
       }).concat([['門市店主管小計', record['門市店主管小計']], ['門市店主管評語', record['門市店主管評語']]])],
       ['教育中心評核', [
         ['職能積分累計', record['職能積分累計']], ['職能積分得分', record['職能積分得分']],
@@ -1831,14 +1834,16 @@
       ['區主管與受評人員', [['區主管增減分', record['區主管增減分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員備註', record['受評人員確認備註']]]],
       ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']], ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段']]]]
     ];
-    if (state.activeTab !== 'progress') {
+    if (state.activeTab === 'history') {
       sections.push(['PDF處理', [['PDF狀態', record['PDF狀態']], ['PDF檔名', record['PDF檔名']], ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])], ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''], ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']]]);
     }
     var html = currentScoreCardHtml(record) + sections.map(function(section) {
       var visible = section[1].filter(function(pair) { return String(pair[1] === null || pair[1] === undefined ? '' : pair[1]).trim() !== ''; });
       if (!visible.length) return '';
       return '<article class="detail-section"><h3>' + escapeHtml(section[0]) + '</h3><div class="detail-grid">' + visible.map(function(pair) {
-        return '<div class="detail-item"><span>' + escapeHtml(pair[0]) + '</span><strong>' + escapeHtml(pair[1]) + '</strong>' + (pair[2] ? '<small class="score-description">' + escapeHtml(pair[2]) + '</small>' : '') + '</div>';
+        var isManagerScore = pair[3] === 'manager-score';
+        var labelHtml = '<span>' + escapeHtml(pair[0]) + (isManagerScore && pair[2] ? '<small class="score-description score-description--title">（' + escapeHtml(pair[2]) + '）</small>' : '') + '</span>';
+        return '<div class="detail-item' + (isManagerScore ? ' detail-item--manager-score' : '') + '">' + labelHtml + '<strong>' + escapeHtml(pair[1]) + '</strong>' + (!isManagerScore && pair[2] ? '<small class="score-description">' + escapeHtml(pair[2]) + '</small>' : '') + '</div>';
       }).join('') + '</div></article>';
     }).join('');
     html += signatureSummaryHtml(record.signatureSummary || {});
@@ -2499,11 +2504,12 @@
         month: composePdfManagementMonthV3_(),
         keyword: String(elements.pdfManagementKeyword && elements.pdfManagementKeyword.value || '').trim(),
         status: String(elements.pdfManagementStatus && elements.pdfManagementStatus.value || 'ALL').trim(),
-        page: Number(state.pdfManagementPage || 1), pageSize: Number(state.pdfManagementPageSize || 15)
+        page: Number(state.pdfManagementPage || 1), pageSize: Number(elements.pdfManagementPageSize && elements.pdfManagementPageSize.value || state.pdfManagementPageSize || 15)
       });
       state.pdfManagement = result.data || {};
       state.pdfManagementPage = Number(state.pdfManagement.page || 1);
       state.pdfManagementPageSize = Number(state.pdfManagement.pageSize || 15);
+      if (elements.pdfManagementPageSize) elements.pdfManagementPageSize.value = String(state.pdfManagementPageSize === 10 ? 10 : 15);
       reconcilePdfManagementSelectionV3_();
       renderPdfManagementCenterV3_(state.pdfManagement);
       setPdfManagementMessageV3_('success', 'PDF處理資料已更新。');
@@ -2932,11 +2938,12 @@
     if (actions.canDisable) buttons.push(accountActionButtonHtmlV3('disable', item.employeeId, '停用'));
     if (actions.canEnableEvaluation) buttons.push(accountActionButtonHtmlV3('enableEvaluation', item.employeeId, '啟用考核'));
     if (actions.canDisableEvaluation) buttons.push(accountActionButtonHtmlV3('disableEvaluation', item.employeeId, '停止考核'));
+    if (actions.canUpdateNotificationEmail) buttons.push(accountActionButtonHtmlV3('updateEmail', item.employeeId, '更新Email'));
     if (actions.canForceLogout) buttons.push(accountActionButtonHtmlV3('forceLogout', item.employeeId, '登出'));
     if (!buttons.length) buttons.push('<span class="table-muted">無可用操作</span>');
     var statusClass = item.accountStatus === '啟用' ? ' tag--success' : item.accountStatus === '鎖定' ? ' tag--danger' : ' tag--warning';
     return '<tr><td><strong>' + escapeHtml(item.employeeName || '未命名') + '</strong><small>' + escapeHtml(item.employeeId || '') + '</small></td>' +
-      '<td><strong>' + escapeHtml(item.role || '未設定') + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '</small><small>需考核：' + escapeHtml(item.needsEvaluation || '否') + '</small></td>' +
+      '<td><strong>' + escapeHtml(item.role || '未設定') + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '</small><small>需考核：' + escapeHtml(item.needsEvaluation || '否') + '</small><small>Email：' + escapeHtml(item.notificationEmailMasked || '未設定') + '</small></td>' +
       '<td><span class="tag' + statusClass + '">' + escapeHtml(item.accountStatus || '未設定') + '</span><small>' + escapeHtml(item.employmentStatus || '未設定') + '</small></td>' +
       '<td><strong class="' + (item.canLogin ? 'text-success' : 'text-danger') + '">' + (item.canLogin ? '可登入' : '不可登入') + '</strong>' +
         '<small>錯誤' + escapeHtml(item.failedAttempts || 0) + '次' + (item.temporaryLockActive ? '｜剩餘約' + escapeHtml(item.lockRemainingMinutes || 1) + '分鐘' : '') + '</small>' +
@@ -2962,6 +2969,7 @@
     if (actions.canDisable) buttons.push(accountActionButtonHtmlV3('disable', item.employeeId, '停用帳號'));
     if (actions.canEnableEvaluation) buttons.push(accountActionButtonHtmlV3('enableEvaluation', item.employeeId, '啟用考核'));
     if (actions.canDisableEvaluation) buttons.push(accountActionButtonHtmlV3('disableEvaluation', item.employeeId, '停止考核'));
+    if (actions.canUpdateNotificationEmail) buttons.push(accountActionButtonHtmlV3('updateEmail', item.employeeId, '更新通知Email'));
     if (actions.canForceLogout) buttons.push(accountActionButtonHtmlV3('forceLogout', item.employeeId, '強制登出'));
     if (!buttons.length) buttons.push('<button class="secondary-button secondary-button--small" type="button" disabled>無可用操作</button>');
 
@@ -2972,7 +2980,7 @@
       '<p>員工工號：' + escapeHtml(item.employeeId || '') + '</p></div><div>' + tags.join('') + '</div></div>' +
       '<div class="evaluation-card__meta">' +
         metaItem('系統角色', item.role || '未設定') + metaItem('部門／區域', joinText(item.department, item.area)) +
-        metaItem('店別', joinStore(item.storeCode, item.storeName)) + metaItem('是否需要考核', item.needsEvaluation || '否') + metaItem('目前可登入', item.canLogin ? '是' : '否') +
+        metaItem('店別', joinStore(item.storeCode, item.storeName)) + metaItem('通知Email', item.notificationEmailMasked || '未設定') + metaItem('是否需要考核', item.needsEvaluation || '否') + metaItem('目前可登入', item.canLogin ? '是' : '否') +
         metaItem('異常原因', item.issueReason || '無') + metaItem('登入失敗次數', String(item.failedAttempts || 0) + '次') +
         metaItem('鎖定時間', lockText) + metaItem('預計解除時間', unlockText) +
         metaItem('剩餘鎖定時間', remainingText) + metaItem('密碼狀態', item.passwordConfigured ? '有效4碼' : '格式異常／未設定') +
@@ -2995,12 +3003,15 @@
       disable: { label: '停用帳號', description: '停止後續登入並撤銷此人員目前所有登入狀態；原登入失敗次數與鎖定時間不會被清除。' },
       forceLogout: { label: '強制登出', description: '不改變帳號狀態，只撤銷此人員目前所有裝置登入。' },
       enableEvaluation: { label: '啟用考核', description: '將「是否需要考核」設為是，之後月份可列入派發判斷。' },
-      disableEvaluation: { label: '停止考核', description: '將「是否需要考核」設為否，之後月份不再自動列入派發。已建立考核表不受影響。' }
+      disableEvaluation: { label: '停止考核', description: '將「是否需要考核」設為否，之後月份不再自動列入派發。已建立考核表不受影響。' },
+      updateEmail: { label: '更新通知Email', description: '由教育中心維護通知Email；使用者本人只能看到遮蔽後內容，不能自行修改。留白可清除既有Email。' }
     };
     var config = map[action];
     if (!config) return;
     state.accountAction = { action: action, employeeId: item.employeeId, employeeName: item.employeeName, confirmText: config.label };
     elements.accountActionContent.innerHTML = '<h4>' + escapeHtml(config.label) + '｜' + escapeHtml(item.employeeId + ' ' + item.employeeName) + '</h4><p class="section-help">' + escapeHtml(config.description) + '</p>';
+    if (elements.accountActionEmailGroup) elements.accountActionEmailGroup.hidden = action !== 'updateEmail';
+    if (elements.accountActionEmail) { elements.accountActionEmail.value = ''; elements.accountActionEmail.placeholder = action === 'updateEmail' ? '目前：' + (item.notificationEmailMasked || '未設定') + '；輸入新Email或留白清除' : ''; }
     elements.accountActionReason.value = '';
     elements.accountActionConfirm.checked = false;
     elements.accountActionConfirmText.value = '';
@@ -3018,6 +3029,8 @@
     if (!elements.accountActionPanel) return;
     elements.accountActionPanel.hidden = true;
     elements.accountActionReason.value = '';
+    if (elements.accountActionEmailGroup) elements.accountActionEmailGroup.hidden = true;
+    if (elements.accountActionEmail) elements.accountActionEmail.value = '';
     elements.accountActionConfirm.checked = false;
     elements.accountActionConfirmText.value = '';
     elements.accountActionResult.hidden = true;
@@ -3026,7 +3039,8 @@
   function updateAccountActionRunState() {
     if (!elements.accountActionRunButton) return;
     var action = state.accountAction;
-    var ready = Boolean(action) && String(elements.accountActionReason.value || '').trim().length >= 4 &&
+    var emailReady = !action || action.action !== 'updateEmail' || !String(elements.accountActionEmail && elements.accountActionEmail.value || '').trim() || isValidNotificationEmailUiV3_(elements.accountActionEmail.value);
+    var ready = Boolean(action) && emailReady && String(elements.accountActionReason.value || '').trim().length >= 4 &&
       elements.accountActionConfirm.checked && String(elements.accountActionConfirmText.value || '').trim() === String(action && action.confirmText || '');
     elements.accountActionRunButton.disabled = !ready || state.accountManagementLoading;
   }
@@ -3052,6 +3066,7 @@
       else if (action.action === 'forceLogout') service = window.V3WorkflowService.accountForceLogout;
       else if (action.action === 'enableEvaluation') { service = window.V3WorkflowService.accountSetEvaluationRequirement; payload.needsEvaluation = '是'; }
       else if (action.action === 'disableEvaluation') { service = window.V3WorkflowService.accountSetEvaluationRequirement; payload.needsEvaluation = '否'; }
+      else if (action.action === 'updateEmail') { service = window.V3WorkflowService.accountSetNotificationEmail; payload.notificationEmail = String(elements.accountActionEmail && elements.accountActionEmail.value || '').trim(); }
       if (!service) throw new Error('無法辨識帳號管理操作。');
       var result = await service(payload, window.V3ApiClient.createRequestId());
       var data = result.data || {};
@@ -3146,24 +3161,27 @@
       elements.accountAuditList.innerHTML = '<p class="section-help">尚無帳號操作紀錄。</p>';
       return;
     }
-    elements.accountAuditList.innerHTML = '<div class="route-list">' + rows.map(function (row) {
-      return '<div class="route-row"><span>' + escapeHtml(row.action || '未標示操作') + '</span><strong>' + escapeHtml(joinText(row.targetEmployeeId, row.targetEmployeeName)) +
-        '</strong><small>' + escapeHtml(row.actionTime || '') + '｜操作人：' + escapeHtml(joinText(row.operatorEmployeeId, row.operatorName)) +
-        '｜原因：' + escapeHtml(row.reason || '未填寫') + '</small></div>';
+    elements.accountAuditList.innerHTML = '<div class="account-audit-grid"><div class="account-audit-row account-audit-row--header"><span>操作</span><span>目標人員</span><span>時間／操作人／原因</span></div>' + rows.map(function (row) {
+      return '<div class="account-audit-row"><span>' + escapeHtml(row.action || '未標示操作') + '</span><strong>' + escapeHtml(joinText(row.targetEmployeeId, row.targetEmployeeName)) +
+        '</strong><small>' + escapeHtml(row.actionTime || '') + '<br>操作人：' + escapeHtml(joinText(row.operatorEmployeeId, row.operatorName)) +
+        '<br>原因：' + escapeHtml(row.reason || '未填寫') + '</small></div>';
     }).join('') + '</div>';
   }
 
-
   function cacheModificationElementsV3_() {
-    ['dispatchManagementPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateConfirmText','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton'].forEach(function(id) {
+    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateConfirmText','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementPageSize','pdfManagementAbnormalButton'].forEach(function(id) {
       elements[id] = document.getElementById(id);
     });
   }
 
   function bindModificationEventsV3_() {
     if (elements.dispatchManagementPageSize) elements.dispatchManagementPageSize.addEventListener('change', function() {
-      state.dispatchPageSize = Number(elements.dispatchManagementPageSize.value) === 10 ? 10 : 15;
-      state.dispatchPersonPage = 1; state.dispatchAttemptPage = 1; loadDispatchManagementCenter();
+      state.dispatchPersonPageSize = Number(elements.dispatchManagementPageSize.value) === 10 ? 10 : 15;
+      state.dispatchPersonPage = 1; loadDispatchManagementCenter();
+    });
+    if (elements.dispatchAttemptPageSize) elements.dispatchAttemptPageSize.addEventListener('change', function() {
+      state.dispatchAttemptPageSize = Number(elements.dispatchAttemptPageSize.value) === 10 ? 10 : 15;
+      state.dispatchAttemptPage = 1; loadDispatchManagementCenter();
     });
     if (elements.accountCreateForm) elements.accountCreateForm.addEventListener('submit', handleAccountCreateV3_);
     if (elements.accountCreateResetButton) elements.accountCreateResetButton.addEventListener('click', resetAccountCreateFormV3_);
@@ -3175,6 +3193,10 @@
     });
     if (elements.accountAuditPreviousButton) elements.accountAuditPreviousButton.addEventListener('click', function() { if (state.accountAuditPage > 1) { state.accountAuditPage -= 1; loadAccountAuditPageV3_(); } });
     if (elements.accountAuditNextButton) elements.accountAuditNextButton.addEventListener('click', function() { state.accountAuditPage += 1; loadAccountAuditPageV3_(); });
+    if (elements.pdfManagementPageSize) elements.pdfManagementPageSize.addEventListener('change', function() {
+      state.pdfManagementPageSize = Number(elements.pdfManagementPageSize.value) === 10 ? 10 : 15;
+      state.pdfManagementPage = 1; loadPdfManagementCenter();
+    });
     if (elements.pdfManagementAbnormalButton) elements.pdfManagementAbnormalButton.addEventListener('click', function() { applyPdfAbnormalFilterV3_('ABNORMAL'); });
   }
 
@@ -3207,12 +3229,14 @@
       employeeName: elements.accountCreateEmployeeName.value, role: elements.accountCreateRole.value,
       storeCode: elements.accountCreateStoreCode.value, department: elements.accountCreateDepartment.value,
       area: elements.accountCreateArea.value, transferDate: elements.accountCreateTransferDate.value,
+      notificationEmail: elements.accountCreateNotificationEmail.value,
       needsEvaluation: elements.accountCreateNeedsEvaluation.value, employmentStatus: elements.accountCreateEmploymentStatus.value,
       accountStatus: elements.accountCreateAccountStatus.value, note: elements.accountCreateNote.value,
       reason: elements.accountCreateReason.value, confirmed: elements.accountCreateConfirm.checked,
       confirmText: elements.accountCreateConfirmText.value
     };
     if (!/^\d{4}$/.test(String(payload.password || ''))) return showMessage(elements.accountCreateMessage, 'error', '登入密碼必須為4碼數字。');
+    if (String(payload.notificationEmail || '').trim() && !isValidNotificationEmailUiV3_(payload.notificationEmail)) return showMessage(elements.accountCreateMessage, 'error', '通知Email格式不正確。');
     if (String(payload.reason || '').trim().length < 4) return showMessage(elements.accountCreateMessage, 'error', '請填寫至少4個字的新增原因。');
     if (!payload.confirmed || String(payload.confirmText || '').trim() !== '確認新增') return showMessage(elements.accountCreateMessage, 'error', '請勾選確認並輸入「確認新增」。');
     setButtonLoading(elements.accountCreateSubmitButton, true, '建立中');
@@ -3221,7 +3245,7 @@
       var response = await window.V3WorkflowService.accountCreate(payload, window.V3ApiClient.createRequestId());
       var data = response.data || {}; var account = data.account || {};
       elements.accountCreateResult.hidden = false;
-      elements.accountCreateResult.innerHTML = '<h4>帳號建立完成</h4><div class="admin-result-grid">' + metaItem('員工', joinText(account.employeeId, account.employeeName)) + metaItem('角色', account.role) + metaItem('是否需要考核', account.needsEvaluation || payload.needsEvaluation) + metaItem('帳號狀態', account.accountStatus) + '</div><p>' + escapeHtml(data.message || '') + '</p>';
+      elements.accountCreateResult.innerHTML = '<h4>帳號建立完成</h4><div class="admin-result-grid">' + metaItem('員工', joinText(account.employeeId, account.employeeName)) + metaItem('角色', account.role) + metaItem('通知Email', account.notificationEmailMasked || '未設定') + metaItem('是否需要考核', account.needsEvaluation || payload.needsEvaluation) + metaItem('帳號狀態', account.accountStatus) + '</div><p>' + escapeHtml(data.message || '') + '</p>';
       showMessage(elements.accountCreateMessage, 'success', '帳號已建立。');
       state.accountAuditPage = 1;
       if (elements.accountAuditPanel && elements.accountAuditPanel.open) loadAccountAuditPageV3_();
@@ -3272,13 +3296,17 @@
         area: String(elements.dispatchManagementArea.value || ''),
         source: String(elements.dispatchManagementSource.value || ''),
         personPage: Number(state.dispatchPersonPage || 1),
-        personPageSize: Number(elements.dispatchManagementPageSize && elements.dispatchManagementPageSize.value || state.dispatchPageSize || 15),
+        personPageSize: Number(elements.dispatchManagementPageSize && elements.dispatchManagementPageSize.value || state.dispatchPersonPageSize || 15),
         attemptPage: Number(state.dispatchAttemptPage || 1),
-        attemptPageSize: Number(elements.dispatchManagementPageSize && elements.dispatchManagementPageSize.value || state.dispatchPageSize || 15)
+        attemptPageSize: Number(elements.dispatchAttemptPageSize && elements.dispatchAttemptPageSize.value || state.dispatchAttemptPageSize || 15)
       });
       state.dispatchManagement = result.data || {};
       state.dispatchPersonPage = Number(state.dispatchManagement.personPagination && state.dispatchManagement.personPagination.page || 1);
       state.dispatchAttemptPage = Number(state.dispatchManagement.attemptPagination && state.dispatchManagement.attemptPagination.page || 1);
+      state.dispatchPersonPageSize = Number(state.dispatchManagement.personPagination && state.dispatchManagement.personPagination.pageSize || state.dispatchPersonPageSize || 15) === 10 ? 10 : 15;
+      state.dispatchAttemptPageSize = Number(state.dispatchManagement.attemptPagination && state.dispatchManagement.attemptPagination.pageSize || state.dispatchAttemptPageSize || 15) === 10 ? 10 : 15;
+      if (elements.dispatchManagementPageSize) elements.dispatchManagementPageSize.value = String(state.dispatchPersonPageSize);
+      if (elements.dispatchAttemptPageSize) elements.dispatchAttemptPageSize.value = String(state.dispatchAttemptPageSize);
       var loadedMonth = state.dispatchManagement.evaluationMonth || currentRocMonthFirstDay();
       if (state.dispatchManagementSelectionMonth && state.dispatchManagementSelectionMonth !== loadedMonth) {
         state.batchDispatchSelectedEmployees = {};
@@ -3405,7 +3433,7 @@
   }
 
   function managementPagerHtmlV3_(scope, page, totalPages, total) {
-    if (totalPages <= 1 && total <= 15) return '';
+    if (total <= 0) return '';
     return '<div class="history-pager management-pager" data-management-pager="' + escapeHtml(scope) + '">' +
       '<button type="button" class="secondary-button" data-management-page="prev"' + (page <= 1 ? ' disabled' : '') + '>上一頁</button>' +
       '<strong>第' + escapeHtml(page) + '頁／共' + escapeHtml(totalPages) + '頁（' + escapeHtml(total) + '筆）</strong>' +
@@ -3482,7 +3510,7 @@
     if (!employeeIds.length || state.dispatchManagementLoading) return;
     state.dispatchManagementLoading = true;
     setButtonLoading(elements.batchDispatchPreviewButton, true, '預覽中');
-    showDispatchManagementMessage('info', '正在逐筆重新檢查選取人員的派發資格與七階段路線…');
+    showDispatchManagementMessage('info', '正在逐筆重新檢查選取人員的派發資格與簽核流程…');
     try {
       var result = await window.V3WorkflowService.previewManualDispatch(
         employeeIds,
@@ -3518,7 +3546,7 @@
         var organization = item.organization || {};
         var label = item.action === 'CREATE' ? '預計建立' : (item.action === 'DUPLICATE' ? '重複跳過' : '不可建立');
         var tone = item.action === 'CREATE' ? 'tag--success' : (item.action === 'DUPLICATE' ? 'tag--warning' : 'tag--danger');
-        var reason = item.reason || (item.errors || []).join('；') || '路線檢查通過';
+        var reason = item.reason || (item.errors || []).join('；') || '簽核流程檢查通過';
         return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(label) + '</span> ' +
           escapeHtml(joinStore(organization.storeCode, organization.storeName)) + '</span><strong>' +
           escapeHtml(joinText(employee.employeeId, employee.employeeName)) +
@@ -3608,7 +3636,7 @@
 
     state.dispatchManagementLoading = true;
     setButtonLoading(elements.batchDispatchRepairRunButton, true, '派發處理中');
-    showGlobalNotice('processing', '正在執行人工派發／補派', '系統正逐筆確認資格、七階段路線與同月份R0。', false);
+    showGlobalNotice('processing', '正在執行人工派發／補派', '系統正逐筆確認資格、簽核流程與同月份R0。', false);
     try {
       var result = await window.V3WorkflowService.runManualDispatch({
         evaluationMonth: preview.evaluationMonth,
@@ -4076,6 +4104,7 @@
     elements.userArea.textContent = valueOrDash(user.area);
     elements.userStore.textContent = joinStore(user.storeCode, user.storeName);
     elements.profileStore.textContent = joinStore(user.storeCode, user.storeName);
+    if (elements.userNotificationEmail) elements.userNotificationEmail.textContent = valueOrDash(user.notificationEmailMasked || '未設定');
     configureRoleBasedInterface(session);
     elements.loginView.hidden = true;
     elements.dashboardView.hidden = false;
@@ -4534,7 +4563,7 @@
       DISPATCH_REPAIR_OWNER_MISMATCH: '此補派預覽不是由目前登入者建立。',
       DISPATCH_REPAIR_PREVIEW_MISMATCH: '補派預覽與目前月份或人員不一致。',
       DISPATCH_EMPLOYEE_NOT_ELIGIBLE: '此人員目前不符合正式派發資格。',
-      DISPATCH_ROUTE_INVALID: '此人員的七階段路線尚未通過，請先修正主檔。',
+      DISPATCH_ROUTE_INVALID: '此人員的簽核流程尚未通過，請先修正主檔。',
       FORCE_CLOSE_CONFIRMATION_REQUIRED: '請完成強制結案最終確認。',
       FORCE_CLOSE_NOT_AVAILABLE: '此月考核表目前不能執行強制結案。',
       SELF_ACCOUNT_DISABLE_BLOCKED: '不可停用自己目前登入中的帳號。',
@@ -4599,6 +4628,11 @@
     elements.globalNoticeOverlay.hidden = true;
     elements.globalNoticeClose.hidden = false;
     if (isSessionInvalidNotice) clearStoredSessionInvalidNoticeV3_();
+  }
+
+  function isValidNotificationEmailUiV3_(value) {
+    var text = String(value || '').trim();
+    return !text || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
   }
 
   function valueOrDash(value) {
