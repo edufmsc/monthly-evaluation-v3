@@ -1677,3 +1677,29 @@ body.idle-warning-open {
   .notification-url-field { grid-column: auto; }
   .notification-recipient-header { flex-direction: column; }
 }
+
+
+/* 7.6.0B｜指定待辦通知 */
+.notification-batch-actions { align-items: center; }
+.notification-selection-tools { margin-top: 10px; align-items: center; }
+.notification-selection-tools strong { margin-left: auto; white-space: nowrap; }
+.notification-recipient-card { transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease; }
+.notification-recipient-card.is-selected {
+  border-color: #9b3f12;
+  box-shadow: 0 0 0 2px rgba(155, 63, 18, .10);
+  background: #fffaf6;
+}
+.notification-recipient-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  font-weight: 700;
+  color: #5c463a;
+  cursor: pointer;
+}
+.notification-recipient-select input { width: 18px; height: 18px; accent-color: #9b3f12; }
+.notification-recipient-select:has(input:disabled) { color: #9b8d85; cursor: not-allowed; }
+@media (max-width: 720px) {
+  .notification-selection-tools strong { width: 100%; margin-left: 0; }
+}
