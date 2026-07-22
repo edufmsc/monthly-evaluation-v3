@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.5.0D-ui-mail-pagination */
+/* 月考核系統 V3｜版本：7.6.0A-pending-mail */
 (function () {
   'use strict';
 
@@ -79,6 +79,12 @@
     getMySignaturePreview: function (source, evaluationNo) {
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
     },
+    notificationManagementCenter: function (filters) { return call('notificationManagementCenter', filters || {}); },
+    notificationSaveSettings: function (payload, requestId) { return call('notificationSaveSettings', payload || {}, requestId); },
+    notificationCreateBatch: function (payload, requestId) { return call('notificationCreateBatch', payload || {}, requestId); },
+    notificationInstallSchedule: function (payload) { return call('notificationInstallSchedule', payload || {}); },
+    notificationDisableSchedule: function () { return call('notificationDisableSchedule', {}); },
+    notificationRunWorker: function () { return call('notificationRunWorker', {}); },
     pdfManagementCenter: function (filters) {
       return call('pdfManagementCenter', filters || {});
     },
