@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.5.0B-scale-performance';
+  var APP_BUILD = '7.5.0C-usability-admin-fixes';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -39,6 +39,9 @@
     accountManagementPage: 1,
     accountManagementPageSize: 10,
     accountManagementHasSearched: false,
+    accountAuditPage: 1,
+    accountAuditPageSize: 10,
+    accountAuditLoading: false,
     activeSystemPage: 'home',
     accountAction: null,
     accountCredentialLookup: null,
@@ -48,6 +51,7 @@
     pdfManagementPageSize: 15,
     pdfManagementSelected: {},
     pdfManagementAction: null,
+    pdfManagementDefaulted: false,
     archiveManagement: null,
     archiveManagementLoading: false,
     archivePreview: null,
@@ -109,10 +113,13 @@
     ensureContinuousReviewToolbar();
     ensureIdleWarningDialogV3_();
     cacheElements();
+    cacheModificationElementsV3_();
     ensurePdfViewerModal();
     bindEvents();
+    bindModificationEventsV3_();
     elements.appVersion.textContent = APP_BUILD;
     if (elements.dispatchManagementMonth && !elements.dispatchManagementMonth.value) elements.dispatchManagementMonth.value = currentRocMonthFirstDay();
+    initializePdfMonthFiltersV3_();
 
     if (!window.V3ApiClient.isConfigured()) {
       elements.configErrorCard.hidden = false;
@@ -168,104 +175,70 @@
     var article = document.createElement('article');
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading">' +
-      '<div><p class="step-label">正式營運工具｜7.2.0A</p><h3>月考核派發管理中心</h3>' +
-      '<p>教育中心成員與教育中心主管共用同一個人工派發入口。勾選1人即單筆派發，勾選多人即多人派發；已存在的R0不會重複建立。</p></div>' +
-      '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
-      '<form id="dispatchManagementFilterForm" class="filter-grid">' +
-        '<label class="field-group"><span>考核月份</span><input id="dispatchManagementMonth" type="text" placeholder="115/07/01"></label>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
+      '<p class="step-label">正式營運工具｜7.5.0C</p><h3>月考核派發管理中心</h3>' +
+      '<p>教育中心共用人工派發入口；可派發與需處理人員優先排列，已存在R0不重複建立。</p></div>' +
+      '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+      '<section class="detail-section dispatch-month-analysis-top"><div class="test-dispatch-heading"><div><h4>月份整體分析</h4>' +
+        '<p class="section-help">先選月份再產生分析；不會在登入時自動掃描所有月份。</p></div>' +
+        '<button id="dispatchMonthAnalysisButton" class="secondary-button secondary-button--small" type="button"><span class="button-label">產生月份分析</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<label class="field-group dispatch-month-field"><span>考核月份</span><input id="dispatchManagementMonth" type="text" placeholder="115/07/01"></label>' +
+        '<article id="dispatchMonthAnalysisResult" class="card admin-result-card" hidden></article></section>' +
+      '<form id="dispatchManagementFilterForm" class="filter-grid dispatch-management-filter">' +
         '<label class="field-group"><span>人員／工號／考核單號</span><input id="dispatchManagementKeyword" type="text" maxlength="80"></label>' +
-        '<label class="field-group"><span>處理狀態</span><select id="dispatchManagementCategory">' +
-          '<option value="ALL">全部狀態</option><option value="CREATED">已建立R0</option>' +
-          '<option value="DUPLICATE">重複跳過</option><option value="ROUTE_ERROR">路線異常</option>' +
-          '<option value="SYSTEM_FAILED">系統失敗</option><option value="UNPROCESSED">尚未派發</option>' +
-        '</select></label>' +
+        '<label class="field-group"><span>處理狀態</span><select id="dispatchManagementCategory"><option value="ALL">全部狀態</option><option value="UNPROCESSED">尚未派發</option><option value="ROUTE_ERROR">路線異常</option><option value="SYSTEM_FAILED">系統失敗</option><option value="CREATED">已建立R0</option><option value="DUPLICATE">重複跳過</option></select></label>' +
         '<label class="field-group"><span>店號</span><select id="dispatchManagementStore"><option value="">全部店號</option></select></label>' +
         '<label class="field-group"><span>區域</span><select id="dispatchManagementArea"><option value="">全部區域</option></select></label>' +
         '<label class="field-group"><span>派發來源</span><select id="dispatchManagementSource"><option value="">全部來源</option></select></label>' +
-        '<div class="test-dispatch-actions"><button id="dispatchManagementSearchButton" class="secondary-button" type="submit">' +
-          '<span class="button-label">查詢派發狀態</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<label class="field-group"><span>每頁顯示</span><select id="dispatchManagementPageSize"><option value="10">10人</option><option value="15" selected>15人</option></select></label>' +
+        '<div class="test-dispatch-actions"><button id="dispatchManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢派發狀態</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
       '</form>' +
-      '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
-      '<div id="dispatchManagementSummary"></div>' +
-      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>月份總整分析</h4>' +
-        '<p class="section-help">不會在登入時自動載入；按下按鈕後只分析上方所選月份，不匯出CSV。</p></div>' +
-        '<button id="dispatchMonthAnalysisButton" class="secondary-button secondary-button--small" type="button"><span class="button-label">產生月份分析</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-        '<article id="dispatchMonthAnalysisResult" class="card admin-result-card" hidden></article></section>' +
-      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4>' +
-        '<p class="section-help">勾選1人或多人後使用同一套預覽與建立流程；正式執行前會逐筆重新驗證。</p></div>' +
-        '<strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
-        '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button>' +
-        '<button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button>' +
-        '<button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
+      '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div><div id="dispatchManagementSummary"></div>' +
+      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人後預覽；正式執行前逐筆重新驗證。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
+        '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button><button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button><button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
-      '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary>' +
-        '<div id="dispatchManagementAttempts"></div></details>' +
-      '<section id="batchDispatchRepairPanel" class="test-dispatch-preview" hidden>' +
-        '<div id="batchDispatchRepairContent"></div>' +
-        '<label class="field-group"><span>人工派發／補派原因</span><textarea id="batchDispatchRepairReason" rows="3" maxlength="300" placeholder="請具體說明本次人工派發／補派原因"></textarea></label>' +
-        '<label class="confirm-row"><input id="batchDispatchRepairConfirm" type="checkbox">' +
-          '<span>我已確認每位人員仍會獨立檢查派發資格、七階段路線與同月份R0。</span></label>' +
+      '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><div id="dispatchManagementAttempts"></div></details>' +
+      '<section id="batchDispatchRepairPanel" class="test-dispatch-preview" hidden><div id="batchDispatchRepairContent"></div>' +
+        '<label class="field-group"><span>人工派發／補派原因</span><textarea id="batchDispatchRepairReason" rows="3" maxlength="300"></textarea></label>' +
+        '<label class="confirm-row"><input id="batchDispatchRepairConfirm" type="checkbox"><span>我已確認系統會逐筆檢查資格、七階段路線與同月份R0。</span></label>' +
         '<label class="field-group"><span>最終確認文字</span><input id="batchDispatchRepairConfirmText" type="text" maxlength="20" autocomplete="off" placeholder="請輸入：確認派發"></label>' +
-        '<div class="test-dispatch-actions"><button id="batchDispatchRepairCancelButton" class="secondary-button" type="button">取消</button>' +
-          '<button id="batchDispatchRepairRunButton" class="primary-button" type="button" disabled>' +
-          '<span class="button-label">執行人工派發／補派</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-        '<article id="batchDispatchRepairResult" class="card admin-result-card" hidden></article>' +
-      '</section>';
+        '<div class="test-dispatch-actions"><button id="batchDispatchRepairCancelButton" class="secondary-button" type="button">取消</button><button id="batchDispatchRepairRunButton" class="primary-button" type="button" disabled><span class="button-label">執行人工派發／補派</span><span class="button-spinner" aria-hidden="true"></span></button></div><article id="batchDispatchRepairResult" class="card admin-result-card" hidden></article></section>';
     systemPanel.appendChild(article);
   }
-
 
   function ensureAccountManagementPanel() {
     if (document.getElementById('accountManagementCard')) return;
     var systemPanel = document.getElementById('systemPanel');
     if (!systemPanel) return;
-
+    var roles = ['門市店主管','教育中心成員','教育中心主管','區主管','受評人員','營業處副總','營業處協理','總經理'];
+    var roleOptions = roles.map(function(role) { return '<option value="' + role + '">' + role + '</option>'; }).join('');
     var article = document.createElement('article');
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading"><div>' +
-      '<p class="step-label">帳號與登入管理｜7.4.0C</p><h3>帳號管理中心</h3>' +
-      '<p>教育中心成員與主管權限一致。密碼由教育中心在員工主檔統一維護；本頁可查詢帳密、解除暫時鎖定、啟停帳號及強制登出，但不提供網頁修改密碼。</p></div>' +
-      '<button id="accountManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
-      '<section class="detail-section account-credential-section">' +
-        '<div class="test-dispatch-heading"><div><h4>協助查詢登入帳密</h4>' +
-        '<p class="section-help">僅教育中心可使用。輸入姓名或工號；同名時會先要求選擇正確人員。查詢紀錄不保存密碼內容。</p></div></div>' +
-        '<form id="accountCredentialLookupForm" class="account-credential-form">' +
-          '<label class="field-group"><span>員工完整姓名／完整工號</span><input id="accountCredentialLookupQuery" type="text" maxlength="80" autocomplete="off" placeholder="例如：王小明或完整工號 FMSC0000123"></label>' +
-          '<div class="test-dispatch-actions"><button id="accountCredentialLookupButton" class="primary-button primary-button--small" type="submit"><span class="button-label">查詢帳密</span><span class="button-spinner" aria-hidden="true"></span></button>' +
-          '<button id="accountCredentialClearButton" class="secondary-button secondary-button--small" type="button">清除結果</button></div>' +
-        '</form>' +
-        '<div id="accountCredentialLookupMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
-        '<div id="accountCredentialLookupResult" hidden></div>' +
-      '</section>' +
-      '<form id="accountManagementFilterForm" class="filter-grid">' +
-        '<label class="field-group"><span>工號（完整）／姓名／店號或店別</span><input id="accountManagementKeyword" type="text" maxlength="80" autocomplete="off" placeholder="工號與店號需完整輸入"></label>' +
-        '<label class="field-group"><span>系統角色</span><select id="accountManagementRole"><option value="">全部角色</option></select></label>' +
-        '<label class="field-group"><span>在職狀態</span><select id="accountManagementEmployment"><option value="">全部狀態</option></select></label>' +
-        '<label class="field-group"><span>帳號狀態</span><select id="accountManagementStatus"><option value="">全部狀態</option><option value="啟用">啟用</option><option value="停用">停用</option><option value="鎖定">鎖定</option><option value="未設定">未設定</option></select></label>' +
-        '<label class="field-group"><span>登入狀況</span><select id="accountManagementLoginIssue"><option value="">全部登入狀況</option><option value="unlockable">需解鎖／清除錯誤次數</option><option value="locked">目前鎖定</option><option value="password_invalid">密碼格式異常</option><option value="not_login_ready">目前不可登入</option></select></label>' +
-        '<label class="field-group"><span>每頁顯示</span><select id="accountManagementPageSize"><option value="10">10人</option><option value="15">15人</option></select></label>' +
-        '<div class="test-dispatch-actions account-management-search-actions"><button id="accountManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢帳號</span><span class="button-spinner" aria-hidden="true"></span></button>' +
-          '<button id="accountManagementClearButton" class="secondary-button" type="button">清除條件</button></div>' +
-      '</form>' +
-      '<div class="account-quick-filter-bar"><span>快速處理</span><button id="accountUnlockQuickFilterButton" class="secondary-button secondary-button--small" type="button">查看需解鎖／清除錯誤次數</button></div>' +
-      '<div id="accountManagementMessage" class="form-message form-message--info" role="status" aria-live="polite">請輸入完整工號、姓名、完整店號，或選擇角色／狀態後再查詢；系統不會自動載入全部人員。</div>' +
-      '<div id="accountManagementSummary" hidden></div>' +
-      '<section id="accountManagementList" class="test-dispatch-preview account-management-list">' +
-        '<div class="empty-state"><h3>尚未查詢帳號</h3><p>設定查詢條件後按「查詢帳號」，每頁預設顯示10人。</p></div></section>' +
-      '<div id="accountManagementPagination" class="account-management-pagination" hidden><button id="accountManagementPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button>' +
-        '<strong id="accountManagementPageText">第1頁</strong><button id="accountManagementNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div>' +
-      '<section id="accountActionPanel" class="test-dispatch-preview" hidden>' +
-        '<div id="accountActionContent"></div>' +
-        '<label class="field-group"><span>處理原因</span><textarea id="accountActionReason" rows="3" maxlength="300" placeholder="請填寫至少4個字的具體原因"></textarea></label>' +
-        '<label class="confirm-row"><input id="accountActionConfirm" type="checkbox"><span id="accountActionConfirmLabel">我已確認此操作的影響。</span></label>' +
-        '<label class="field-group"><span>最終確認文字</span><input id="accountActionConfirmText" type="text" maxlength="20" autocomplete="off"><small id="accountActionConfirmHint"></small></label>' +
-        '<div class="test-dispatch-actions"><button id="accountActionCancelButton" class="secondary-button" type="button">取消</button>' +
-          '<button id="accountActionRunButton" class="primary-button" type="button" disabled><span class="button-label">執行</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-        '<article id="accountActionResult" class="card admin-result-card" hidden></article>' +
-      '</section>' +
-      '<details id="accountAuditPanel" class="detail-section" hidden><summary>查看最近帳號操作紀錄</summary><div id="accountAuditList"></div></details>';
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.5.0C</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+      '<details id="accountCreatePanel" class="detail-section account-create-section"><summary>新增帳號／密碼</summary><form id="accountCreateForm" class="account-create-grid">' +
+        '<label class="field-group"><span>員工工號</span><input id="accountCreateEmployeeId" required maxlength="40" autocomplete="off"></label>' +
+        '<label class="field-group"><span>4碼登入密碼</span><input id="accountCreatePassword" required inputmode="numeric" maxlength="4" autocomplete="new-password"></label>' +
+        '<label class="field-group"><span>員工姓名</span><input id="accountCreateEmployeeName" required maxlength="60"></label>' +
+        '<label class="field-group"><span>系統角色</span><select id="accountCreateRole" required><option value="">請選擇</option>' + roleOptions + '</select></label>' +
+        '<label class="field-group"><span>店號</span><input id="accountCreateStoreCode" maxlength="20" placeholder="門市角色建議填寫"></label>' +
+        '<label class="field-group"><span>部門／營業處</span><input id="accountCreateDepartment" maxlength="40"></label>' +
+        '<label class="field-group"><span>區域</span><input id="accountCreateArea" maxlength="40"></label>' +
+        '<label class="field-group"><span>轉任日</span><input id="accountCreateTransferDate" type="date"></label>' +
+        '<label class="field-group"><span>是否需要考核</span><select id="accountCreateNeedsEvaluation"><option value="是">是</option><option value="否" selected>否</option></select></label>' +
+        '<label class="field-group"><span>在職狀態</span><select id="accountCreateEmploymentStatus"><option value="在職" selected>在職</option><option value="離職">離職</option><option value="留停">留停</option></select></label>' +
+        '<label class="field-group"><span>帳號狀態</span><select id="accountCreateAccountStatus"><option value="啟用" selected>啟用</option><option value="停用">停用</option></select></label>' +
+        '<label class="field-group account-create-wide"><span>備註</span><input id="accountCreateNote" maxlength="200"></label>' +
+        '<label class="field-group account-create-wide"><span>新增原因</span><textarea id="accountCreateReason" rows="2" maxlength="300" required></textarea></label>' +
+        '<label class="confirm-row account-create-wide"><input id="accountCreateConfirm" type="checkbox"><span>我已核對工號、姓名、角色、考核權限與密碼。</span></label>' +
+        '<label class="field-group account-create-wide"><span>最終確認文字</span><input id="accountCreateConfirmText" maxlength="20" placeholder="請輸入：確認新增"></label>' +
+        '<div class="test-dispatch-actions account-create-wide"><button id="accountCreateResetButton" class="secondary-button" type="button">清除</button><button id="accountCreateSubmitButton" class="primary-button" type="submit"><span class="button-label">建立帳號</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+      '</form><div id="accountCreateMessage" class="form-message" hidden></div><article id="accountCreateResult" class="card admin-result-card" hidden></article></details>' +
+      '<section class="detail-section account-credential-section"><div class="test-dispatch-heading"><div><h4>協助查詢登入帳密</h4><p class="section-help">輸入姓名或工號；查詢紀錄不保存密碼內容。</p></div></div><form id="accountCredentialLookupForm" class="account-credential-form"><label class="field-group"><span>員工完整姓名／完整工號</span><input id="accountCredentialLookupQuery" maxlength="80" autocomplete="off"></label><div class="test-dispatch-actions"><button id="accountCredentialLookupButton" class="primary-button primary-button--small" type="submit"><span class="button-label">查詢帳密</span><span class="button-spinner"></span></button><button id="accountCredentialClearButton" class="secondary-button secondary-button--small" type="button">清除結果</button></div></form><div id="accountCredentialLookupMessage" class="form-message" hidden></div><div id="accountCredentialLookupResult" hidden></div></section>' +
+      '<form id="accountManagementFilterForm" class="filter-grid"><label class="field-group"><span>工號／姓名／店號或店別</span><input id="accountManagementKeyword" maxlength="80"></label><label class="field-group"><span>系統角色</span><select id="accountManagementRole"><option value="">全部角色</option></select></label><label class="field-group"><span>在職狀態</span><select id="accountManagementEmployment"><option value="">全部狀態</option></select></label><label class="field-group"><span>帳號狀態</span><select id="accountManagementStatus"><option value="">全部狀態</option><option value="啟用">啟用</option><option value="停用">停用</option><option value="鎖定">鎖定</option><option value="未設定">未設定</option></select></label><label class="field-group"><span>登入狀況</span><select id="accountManagementLoginIssue"><option value="">全部登入狀況</option><option value="unlockable">需解鎖／清除錯誤次數</option><option value="locked">目前鎖定</option><option value="password_invalid">密碼格式異常</option><option value="not_login_ready">目前不可登入</option></select></label><label class="field-group"><span>每頁顯示</span><select id="accountManagementPageSize"><option value="10">10人</option><option value="15">15人</option></select></label><div class="test-dispatch-actions account-management-search-actions"><button id="accountManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢帳號</span><span class="button-spinner"></span></button><button id="accountManagementClearButton" class="secondary-button" type="button">清除條件</button></div></form>' +
+      '<div class="account-quick-filter-bar"><span>快速處理</span><button id="accountUnlockQuickFilterButton" class="secondary-button secondary-button--small" type="button">查看需解鎖／清除錯誤次數</button></div><div id="accountManagementMessage" class="form-message form-message--info">請設定查詢條件後查詢；系統不會自動載入全部人員。</div><div id="accountManagementSummary" hidden></div><section id="accountManagementList" class="test-dispatch-preview account-management-list"><div class="empty-state"><h3>尚未查詢帳號</h3></div></section><div id="accountManagementPagination" class="account-management-pagination" hidden><button id="accountManagementPreviousButton" class="secondary-button secondary-button--small">上一頁</button><strong id="accountManagementPageText">第1頁</strong><button id="accountManagementNextButton" class="secondary-button secondary-button--small">下一頁</button></div>' +
+      '<section id="accountActionPanel" class="test-dispatch-preview" hidden><div id="accountActionContent"></div><label class="field-group"><span>處理原因</span><textarea id="accountActionReason" rows="3" maxlength="300"></textarea></label><label class="confirm-row"><input id="accountActionConfirm" type="checkbox"><span id="accountActionConfirmLabel">我已確認此操作的影響。</span></label><label class="field-group"><span>最終確認文字</span><input id="accountActionConfirmText" maxlength="20"><small id="accountActionConfirmHint"></small></label><div class="test-dispatch-actions"><button id="accountActionCancelButton" class="secondary-button">取消</button><button id="accountActionRunButton" class="primary-button" disabled><span class="button-label">執行</span><span class="button-spinner"></span></button></div><article id="accountActionResult" class="card admin-result-card" hidden></article></section>' +
+      '<details id="accountAuditPanel" class="detail-section"><summary>查看最近帳號操作紀錄</summary><div class="account-audit-toolbar"><label>每頁顯示 <select id="accountAuditPageSize"><option value="10">10筆</option><option value="15">15筆</option></select></label></div><div id="accountAuditList"><p class="section-help">展開後載入最新紀錄。</p></div><div id="accountAuditPagination" class="account-management-pagination" hidden><button id="accountAuditPreviousButton" class="secondary-button secondary-button--small">上一頁</button><strong id="accountAuditPageText">第1頁</strong><button id="accountAuditNextButton" class="secondary-button secondary-button--small">下一頁</button></div></details>';
     systemPanel.appendChild(article);
   }
 
@@ -273,48 +246,16 @@
     if (document.getElementById('pdfManagementCard')) return;
     var systemPanel = document.getElementById('systemPanel');
     if (!systemPanel) return;
-
+    var monthOptions = '<option value="">全部月份</option>' + Array.from({length:12}, function(_, i) { var m=i+1; return '<option value="' + m + '">' + m + '月</option>'; }).join('');
     var article = document.createElement('article');
-    article.id = 'pdfManagementCard';
-    article.className = 'card test-dispatch-card pdf-management-card';
-    article.innerHTML = '<div class="test-dispatch-heading"><div>' +
-      '<p class="step-label">PDF失敗重試與處理｜7.4.0A</p><h3>PDF處理中心</h3>' +
-      '<p>集中查詢PDF產生、公開與檢視狀態。可勾選多張逐筆重新產生；每張仍會獨立驗證，舊PDF不會刪除。</p></div>' +
-      '<button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small" type="button">重新整理</button></div>' +
-      '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter">' +
-        '<label class="field-group"><span>考核月份</span><input id="pdfManagementMonth" type="text" maxlength="9" placeholder="例如 115/07"></label>' +
-        '<label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" type="text" maxlength="80" autocomplete="off"></label>' +
-        '<label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus">' +
-          '<option value="ALL">全部狀態</option><option value="GENERATION_FAILED">PDF產生失敗</option>' +
-          '<option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option>' +
-          '<option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option>' +
-          '<option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option>' +
-        '</select></label>' +
-        '<div class="test-dispatch-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-      '</form>' +
-      '<div id="pdfManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
-      '<div id="pdfManagementSummary" class="admin-result-grid pdf-management-summary"></div>' +
-      '<section class="detail-section pdf-management-tools"><div class="test-dispatch-heading"><div><h4>重新產生PDF</h4>' +
-        '<p class="section-help">一次最多5張。完成PDF也可重新產生；新檔成功後才更新目前檢視資料，舊檔保留。</p></div>' +
-        '<strong id="pdfManagementSelectedCount">已選0張</strong></div>' +
-        '<div class="test-dispatch-actions"><button id="pdfManagementSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可重試PDF</button>' +
-          '<button id="pdfManagementClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button>' +
-          '<button id="pdfManagementRetrySelectedButton" class="primary-button primary-button--small" type="button" disabled><span class="button-label">重試選取PDF</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-      '</section>' +
-      '<section id="pdfManagementList" class="test-dispatch-preview pdf-management-list"></section>' +
-      '<section id="pdfManagementActionPanel" class="test-dispatch-preview" hidden>' +
-        '<div id="pdfManagementActionContent"></div>' +
-        '<label class="field-group"><span>處理原因</span><textarea id="pdfManagementReason" rows="3" maxlength="300" placeholder="請填寫至少4個字的具體原因"></textarea></label>' +
-        '<label class="confirm-row"><input id="pdfManagementConfirm" type="checkbox"><span>我已確認本次操作不會刪除舊PDF、考核資料或簽名快照。</span></label>' +
-        '<label class="field-group"><span>最終確認文字</span><input id="pdfManagementConfirmText" type="text" maxlength="20" autocomplete="off"><small id="pdfManagementConfirmHint"></small></label>' +
-        '<div class="test-dispatch-actions"><button id="pdfManagementCancelButton" class="secondary-button" type="button">取消</button>' +
-          '<button id="pdfManagementRunButton" class="primary-button" type="button" disabled><span class="button-label">執行</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
-        '<article id="pdfManagementActionResult" class="card admin-result-card" hidden></article>' +
-      '</section>';
+    article.id = 'pdfManagementCard'; article.className = 'card test-dispatch-card pdf-management-card';
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">PDF失敗重試與處理｜7.5.0C</p><h3>PDF處理中心</h3><p>依年度與月份查詢，避免一次顯示全部資料；異常數量可直接點擊篩選處理。</p></div><button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+      '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter"><label class="field-group"><span>民國年度</span><input id="pdfManagementYear" inputmode="numeric" maxlength="3" placeholder="例如 115"></label><label class="field-group"><span>月份</span><select id="pdfManagementMonthNumber">' + monthOptions + '</select></label><label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" maxlength="80"></label><label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus"><option value="ALL">全部狀態</option><option value="ABNORMAL">全部異常</option><option value="GENERATION_FAILED">PDF產生失敗</option><option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option><option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option><option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option></select></label><div class="test-dispatch-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner"></span></button></div></form>' +
+      '<div id="pdfManagementMessage" class="form-message" hidden></div><div id="pdfManagementSummary" class="admin-result-grid pdf-management-summary"></div>' +
+      '<section class="detail-section pdf-management-tools"><div class="test-dispatch-heading"><div><h4>重新產生PDF</h4><p class="section-help">一次最多5張；新檔成功後才更新目前檢視資料，舊檔保留。</p></div><button id="pdfManagementAbnormalButton" class="secondary-button secondary-button--small pdf-abnormal-button" type="button">異常 0筆</button></div><div class="test-dispatch-actions"><button id="pdfManagementSelectVisibleButton" class="secondary-button secondary-button--small">勾選目前可重試PDF</button><button id="pdfManagementClearButton" class="secondary-button secondary-button--small">清除勾選</button><button id="pdfManagementRetrySelectedButton" class="primary-button primary-button--small" disabled><span class="button-label">重試選取PDF</span><span class="button-spinner"></span></button><strong id="pdfManagementSelectedCount">已選0張</strong></div></section>' +
+      '<section id="pdfManagementList" class="test-dispatch-preview pdf-management-list"></section><section id="pdfManagementActionPanel" class="test-dispatch-preview" hidden><div id="pdfManagementActionContent"></div><label class="field-group"><span>處理原因</span><textarea id="pdfManagementReason" rows="3" maxlength="300"></textarea></label><label class="confirm-row"><input id="pdfManagementConfirm" type="checkbox"><span>我已確認本次操作不會刪除舊PDF、考核資料或簽名快照。</span></label><label class="field-group"><span>最終確認文字</span><input id="pdfManagementConfirmText" maxlength="20"><small id="pdfManagementConfirmHint"></small></label><div class="test-dispatch-actions"><button id="pdfManagementCancelButton" class="secondary-button">取消</button><button id="pdfManagementRunButton" class="primary-button" disabled><span class="button-label">執行</span><span class="button-spinner"></span></button></div><article id="pdfManagementActionResult" class="card admin-result-card" hidden></article></section>';
     systemPanel.appendChild(article);
   }
-
-
 
   function ensureAnnualArchivePanelV3_() {
     if (document.getElementById('annualArchiveCard')) return;
@@ -695,7 +636,7 @@
       showDashboardShell(state.session);
       startIdleSessionGuardV3_({ reset: true });
       await loadBootstrap();
-      await checkHealth(false);
+      checkHealth(false).catch(function () { /* 後端狀態改為背景更新，不阻塞登入畫面 */ });
     } catch (error) {
       showLoginMessage('error', friendlyError(error));
     } finally {
@@ -712,7 +653,7 @@
     state.pendingRenderSignature = createListRenderSignature(state.pending, { total: data.counts && data.counts.pending || state.pending.length });
     renderPending();
     elements.pendingCountBadge.textContent = String(data.counts && data.counts.pending || state.pending.length);
-    await loadProgress({ quiet: true });
+    loadProgress({ quiet: true }).catch(function () { /* 流程追蹤背景載入，不阻塞登入完成 */ });
     clearDashboardMessage();
   }
 
@@ -1874,48 +1815,32 @@
   }
 
   function detailSectionsHtml(record) {
+    var managerKeys = ['責任感','協調性','表達能力','學習態度','解決問題能力','個人儀容'];
     var sections = [
-      ['門市店主管評核', [
-        ['責任感', record['責任感']], ['協調性', record['協調性']], ['表達能力', record['表達能力']],
-        ['學習態度', record['學習態度']], ['解決問題能力', record['解決問題能力']], ['個人儀容', record['個人儀容']],
-        ['小計', record['門市店主管小計']], ['評語', record['門市店主管評語']]
-      ]],
+      ['門市店主管評核', managerKeys.map(function(key) {
+        return [key, record[key], window.V3EvaluationForm && window.V3EvaluationForm.getManagerScoreDescription ? window.V3EvaluationForm.getManagerScoreDescription(key, record[key]) : ''];
+      }).concat([['門市店主管小計', record['門市店主管小計']], ['門市店主管評語', record['門市店主管評語']]])],
       ['教育中心評核', [
         ['職能積分累計', record['職能積分累計']], ['職能積分得分', record['職能積分得分']],
         ['OJT完成篇數', record['OJT完成篇數']], ['OJT得分', record['OJT得分']],
         ['回報錯誤次數', record['每週回報錯誤次數']], ['未回報次數', record['每週未回報次數']],
-        ['每週進度回報得分', record['每週進度回報得分']],
-        ['培訓出勤異常次數', record['培訓出勤異常次數']], ['作業遲繳天數', record['作業遲繳天數']],
-        ['培訓課程狀況得分', record['培訓課程狀況得分']],
-        ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']],
-        ['主管評語', record['教育中心主管評語']]
+        ['每週進度回報得分', record['每週進度回報得分']], ['培訓出勤異常次數', record['培訓出勤異常次數']],
+        ['作業遲繳天數', record['作業遲繳天數']], ['培訓課程狀況得分', record['培訓課程狀況得分']],
+        ['教育中心小計', record['教育中心小計']], ['異常回報', record['教育中心異常回報']], ['主管評語', record['教育中心主管評語']]
       ]],
-      ['區主管與受評人員', [
-        ['區主管增減分', record['區主管增減分']], ['區主管評語', record['區主管評語']],
-        ['受評人員確認結果', record['受評人員確認結果']], ['受評人員備註', record['受評人員確認備註']]
-      ]],
-      ['後續簽核', [
-        ['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']],
-        ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']],
-        ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段']]
-      ]],
-      ['PDF處理', [
-        ['PDF狀態', record['PDF狀態']], ['PDF檔名', record['PDF檔名']],
-        ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])],
-        ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''],
-        ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']
-      ]]
+      ['區主管與受評人員', [['區主管增減分', record['區主管增減分']], ['區主管評語', record['區主管評語']], ['受評人員確認結果', record['受評人員確認結果']], ['受評人員備註', record['受評人員確認備註']]]],
+      ['後續簽核', [['營業處主管評語', record['營業處主管評語']], ['營業處主管結果', record['營業處主管簽核結果']], ['總經理評語', record['總經理評語']], ['總經理結果', record['總經理簽核結果']], ['已評得分', record['已評得分']], ['已評滿分', record['已評滿分']], ['未評階段', record['未評階段']]]]
     ];
-
-    var scoreHtml = currentScoreCardHtml(record);
-    var html = scoreHtml + sections.map(function (section) {
-      var visible = section[1].filter(function (pair) { return String(pair[1] === null || pair[1] === undefined ? '' : pair[1]).trim() !== ''; });
+    if (state.activeTab !== 'progress') {
+      sections.push(['PDF處理', [['PDF狀態', record['PDF狀態']], ['PDF檔名', record['PDF檔名']], ['PDF產生時間', formatDateTimeDisplay(record['PDF產生時間'])], ['PDF重試次數', isEducationPdfManagerUi() ? record['PDF重試次數'] : ''], ['PDF最後錯誤', isEducationPdfManagerUi() ? record['PDF最後錯誤'] : '']]]);
+    }
+    var html = currentScoreCardHtml(record) + sections.map(function(section) {
+      var visible = section[1].filter(function(pair) { return String(pair[1] === null || pair[1] === undefined ? '' : pair[1]).trim() !== ''; });
       if (!visible.length) return '';
-      return '<article class="detail-section"><h3>' + escapeHtml(section[0]) + '</h3><div class="detail-grid">' +
-        visible.map(function (pair) { return '<div class="detail-item"><span>' + escapeHtml(pair[0]) + '</span><strong>' + escapeHtml(pair[1]) + '</strong></div>'; }).join('') +
-      '</div></article>';
+      return '<article class="detail-section"><h3>' + escapeHtml(section[0]) + '</h3><div class="detail-grid">' + visible.map(function(pair) {
+        return '<div class="detail-item"><span>' + escapeHtml(pair[0]) + '</span><strong>' + escapeHtml(pair[1]) + '</strong>' + (pair[2] ? '<small class="score-description">' + escapeHtml(pair[2]) + '</small>' : '') + '</div>';
+      }).join('') + '</div></article>';
     }).join('');
-
     html += signatureSummaryHtml(record.signatureSummary || {});
     return html || '<article class="detail-section"><p>目前尚無已填寫內容。</p></article>';
   }
@@ -2571,11 +2496,10 @@
     if (elements.pdfManagementSearchButton) setButtonLoading(elements.pdfManagementSearchButton, true, '查詢中');
     try {
       var result = await window.V3WorkflowService.pdfManagementCenter({
-        month: String(elements.pdfManagementMonth && elements.pdfManagementMonth.value || '').trim(),
+        month: composePdfManagementMonthV3_(),
         keyword: String(elements.pdfManagementKeyword && elements.pdfManagementKeyword.value || '').trim(),
         status: String(elements.pdfManagementStatus && elements.pdfManagementStatus.value || 'ALL').trim(),
-        page: Number(state.pdfManagementPage || 1),
-        pageSize: Number(state.pdfManagementPageSize || 15)
+        page: Number(state.pdfManagementPage || 1), pageSize: Number(state.pdfManagementPageSize || 15)
       });
       state.pdfManagement = result.data || {};
       state.pdfManagementPage = Number(state.pdfManagement.page || 1);
@@ -2597,18 +2521,19 @@
     var source = data || {};
     var summary = source.summary || {};
     if (elements.pdfManagementSummary) {
+      var abnormalCount = Number(summary.generationFailed || 0) + Number(summary.publicFailed || 0) + Number(summary.viewFailed || 0);
       elements.pdfManagementSummary.innerHTML = [
-        ['全部PDF', summary.total || 0],
-        ['產生失敗', summary.generationFailed || 0],
-        ['公開失敗', summary.publicFailed || 0],
-        ['檢視失敗', summary.viewFailed || 0],
-        ['待處理', summary.pending || 0],
-        ['處理中', summary.processing || 0],
-        ['已完成', summary.complete || 0],
-        ['已作廢', summary.voided || 0]
+        ['全部PDF', summary.total || 0, 'ALL'], ['全部異常', abnormalCount, 'ABNORMAL'],
+        ['產生失敗', summary.generationFailed || 0, 'GENERATION_FAILED'], ['公開失敗', summary.publicFailed || 0, 'PUBLIC_FAILED'],
+        ['檢視失敗', summary.viewFailed || 0, 'VIEW_FAILED'], ['待處理', summary.pending || 0, 'PENDING'],
+        ['處理中', summary.processing || 0, 'PROCESSING'], ['已完成', summary.complete || 0, 'COMPLETE'], ['已作廢', summary.voided || 0, 'VOID']
       ].map(function(pair) {
-        return '<div><span>' + escapeHtml(pair[0]) + '</span><strong>' + escapeHtml(pair[1]) + '</strong></div>';
+        return '<button type="button" class="pdf-summary-filter-button" data-pdf-summary-status="' + pair[2] + '"><span>' + escapeHtml(pair[0]) + '</span><strong>' + escapeHtml(pair[1]) + '</strong></button>';
       }).join('');
+      Array.prototype.slice.call(elements.pdfManagementSummary.querySelectorAll('[data-pdf-summary-status]')).forEach(function(button) {
+        button.addEventListener('click', function() { applyPdfAbnormalFilterV3_(button.getAttribute('data-pdf-summary-status')); });
+      });
+      if (elements.pdfManagementAbnormalButton) elements.pdfManagementAbnormalButton.textContent = '異常 ' + abnormalCount + '筆';
     }
 
     var rows = Array.isArray(source.items) ? source.items : [];
@@ -2912,7 +2837,6 @@
     state.accountManagementHasSearched = false;
     if (elements.accountManagementSummary) { elements.accountManagementSummary.hidden = true; elements.accountManagementSummary.innerHTML = ''; }
     if (elements.accountManagementPagination) elements.accountManagementPagination.hidden = true;
-    if (elements.accountAuditPanel) elements.accountAuditPanel.hidden = true;
     if (elements.accountManagementList) elements.accountManagementList.innerHTML = emptyStateHtml('尚未查詢帳號', '設定查詢條件後按「查詢帳號」，每頁預設顯示10人。');
     showAccountManagementMessage('info', '查詢條件已清除。系統不會自動載入全部人員。');
   }
@@ -2924,8 +2848,7 @@
       state.accountManagementHasSearched = false;
       if (elements.accountManagementSummary) elements.accountManagementSummary.hidden = true;
       if (elements.accountManagementPagination) elements.accountManagementPagination.hidden = true;
-      if (elements.accountAuditPanel) elements.accountAuditPanel.hidden = true;
-      elements.accountManagementList.innerHTML = emptyStateHtml('請先設定查詢條件', '可輸入完整工號、姓名、完整店號，或選擇角色／在職狀態／帳號狀態。');
+        elements.accountManagementList.innerHTML = emptyStateHtml('請先設定查詢條件', '可輸入完整工號、姓名、完整店號，或選擇角色／在職狀態／帳號狀態。');
       showAccountManagementMessage('info', '為避免一次載入全公司帳號，請至少設定一項查詢條件。');
       return;
     }
@@ -2997,7 +2920,7 @@
     elements.accountManagementPageText.textContent = '第' + page + '頁／共' + totalPages + '頁（' + Number(data.totalMatched || 0) + '人）';
     elements.accountManagementPreviousButton.disabled = page <= 1;
     elements.accountManagementNextButton.disabled = page >= totalPages;
-    renderAccountAuditListV3(data.recentAudit || []);
+    if (elements.accountAuditPanel) elements.accountAuditPanel.hidden = false;
   }
 
 
@@ -3007,11 +2930,13 @@
     if (actions.canUnlock) buttons.push(accountActionButtonHtmlV3('unlock', item.employeeId, '解鎖'));
     if (actions.canEnable) buttons.push(accountActionButtonHtmlV3('enable', item.employeeId, '啟用'));
     if (actions.canDisable) buttons.push(accountActionButtonHtmlV3('disable', item.employeeId, '停用'));
+    if (actions.canEnableEvaluation) buttons.push(accountActionButtonHtmlV3('enableEvaluation', item.employeeId, '啟用考核'));
+    if (actions.canDisableEvaluation) buttons.push(accountActionButtonHtmlV3('disableEvaluation', item.employeeId, '停止考核'));
     if (actions.canForceLogout) buttons.push(accountActionButtonHtmlV3('forceLogout', item.employeeId, '登出'));
     if (!buttons.length) buttons.push('<span class="table-muted">無可用操作</span>');
     var statusClass = item.accountStatus === '啟用' ? ' tag--success' : item.accountStatus === '鎖定' ? ' tag--danger' : ' tag--warning';
     return '<tr><td><strong>' + escapeHtml(item.employeeName || '未命名') + '</strong><small>' + escapeHtml(item.employeeId || '') + '</small></td>' +
-      '<td><strong>' + escapeHtml(item.role || '未設定') + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '</small></td>' +
+      '<td><strong>' + escapeHtml(item.role || '未設定') + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '</small><small>需考核：' + escapeHtml(item.needsEvaluation || '否') + '</small></td>' +
       '<td><span class="tag' + statusClass + '">' + escapeHtml(item.accountStatus || '未設定') + '</span><small>' + escapeHtml(item.employmentStatus || '未設定') + '</small></td>' +
       '<td><strong class="' + (item.canLogin ? 'text-success' : 'text-danger') + '">' + (item.canLogin ? '可登入' : '不可登入') + '</strong>' +
         '<small>錯誤' + escapeHtml(item.failedAttempts || 0) + '次' + (item.temporaryLockActive ? '｜剩餘約' + escapeHtml(item.lockRemainingMinutes || 1) + '分鐘' : '') + '</small>' +
@@ -3035,6 +2960,8 @@
     if (actions.canUnlock) buttons.push(accountActionButtonHtmlV3('unlock', item.employeeId, '解除鎖定／清除失敗次數'));
     if (actions.canEnable) buttons.push(accountActionButtonHtmlV3('enable', item.employeeId, '啟用帳號'));
     if (actions.canDisable) buttons.push(accountActionButtonHtmlV3('disable', item.employeeId, '停用帳號'));
+    if (actions.canEnableEvaluation) buttons.push(accountActionButtonHtmlV3('enableEvaluation', item.employeeId, '啟用考核'));
+    if (actions.canDisableEvaluation) buttons.push(accountActionButtonHtmlV3('disableEvaluation', item.employeeId, '停止考核'));
     if (actions.canForceLogout) buttons.push(accountActionButtonHtmlV3('forceLogout', item.employeeId, '強制登出'));
     if (!buttons.length) buttons.push('<button class="secondary-button secondary-button--small" type="button" disabled>無可用操作</button>');
 
@@ -3045,7 +2972,7 @@
       '<p>員工工號：' + escapeHtml(item.employeeId || '') + '</p></div><div>' + tags.join('') + '</div></div>' +
       '<div class="evaluation-card__meta">' +
         metaItem('系統角色', item.role || '未設定') + metaItem('部門／區域', joinText(item.department, item.area)) +
-        metaItem('店別', joinStore(item.storeCode, item.storeName)) + metaItem('目前可登入', item.canLogin ? '是' : '否') +
+        metaItem('店別', joinStore(item.storeCode, item.storeName)) + metaItem('是否需要考核', item.needsEvaluation || '否') + metaItem('目前可登入', item.canLogin ? '是' : '否') +
         metaItem('異常原因', item.issueReason || '無') + metaItem('登入失敗次數', String(item.failedAttempts || 0) + '次') +
         metaItem('鎖定時間', lockText) + metaItem('預計解除時間', unlockText) +
         metaItem('剩餘鎖定時間', remainingText) + metaItem('密碼狀態', item.passwordConfigured ? '有效4碼' : '格式異常／未設定') +
@@ -3066,7 +2993,9 @@
       unlock: { label: '解除鎖定', description: '清除登入失敗次數與鎖定時間；若為暫時鎖定，帳號恢復啟用並撤銷舊登入。' },
       enable: { label: '啟用帳號', description: '恢復帳號登入資格並撤銷舊登入；原登入失敗次數與鎖定時間不會被清除。' },
       disable: { label: '停用帳號', description: '停止後續登入並撤銷此人員目前所有登入狀態；原登入失敗次數與鎖定時間不會被清除。' },
-      forceLogout: { label: '強制登出', description: '不改變帳號狀態，只撤銷此人員目前所有裝置登入。' }
+      forceLogout: { label: '強制登出', description: '不改變帳號狀態，只撤銷此人員目前所有裝置登入。' },
+      enableEvaluation: { label: '啟用考核', description: '將「是否需要考核」設為是，之後月份可列入派發判斷。' },
+      disableEvaluation: { label: '停止考核', description: '將「是否需要考核」設為否，之後月份不再自動列入派發。已建立考核表不受影響。' }
     };
     var config = map[action];
     if (!config) return;
@@ -3121,6 +3050,8 @@
       else if (action.action === 'enable') { service = window.V3WorkflowService.accountSetStatus; payload.newStatus = '啟用'; }
       else if (action.action === 'disable') { service = window.V3WorkflowService.accountSetStatus; payload.newStatus = '停用'; }
       else if (action.action === 'forceLogout') service = window.V3WorkflowService.accountForceLogout;
+      else if (action.action === 'enableEvaluation') { service = window.V3WorkflowService.accountSetEvaluationRequirement; payload.needsEvaluation = '是'; }
+      else if (action.action === 'disableEvaluation') { service = window.V3WorkflowService.accountSetEvaluationRequirement; payload.needsEvaluation = '否'; }
       if (!service) throw new Error('無法辨識帳號管理操作。');
       var result = await service(payload, window.V3ApiClient.createRequestId());
       var data = result.data || {};
@@ -3222,6 +3153,105 @@
     }).join('') + '</div>';
   }
 
+
+  function cacheModificationElementsV3_() {
+    ['dispatchManagementPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateConfirmText','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton'].forEach(function(id) {
+      elements[id] = document.getElementById(id);
+    });
+  }
+
+  function bindModificationEventsV3_() {
+    if (elements.dispatchManagementPageSize) elements.dispatchManagementPageSize.addEventListener('change', function() {
+      state.dispatchPageSize = Number(elements.dispatchManagementPageSize.value) === 10 ? 10 : 15;
+      state.dispatchPersonPage = 1; state.dispatchAttemptPage = 1; loadDispatchManagementCenter();
+    });
+    if (elements.accountCreateForm) elements.accountCreateForm.addEventListener('submit', handleAccountCreateV3_);
+    if (elements.accountCreateResetButton) elements.accountCreateResetButton.addEventListener('click', resetAccountCreateFormV3_);
+    if (elements.accountAuditPanel) elements.accountAuditPanel.addEventListener('toggle', function() {
+      if (elements.accountAuditPanel.open) { state.accountAuditPage = 1; loadAccountAuditPageV3_(); }
+    });
+    if (elements.accountAuditPageSize) elements.accountAuditPageSize.addEventListener('change', function() {
+      state.accountAuditPageSize = Number(elements.accountAuditPageSize.value) === 15 ? 15 : 10; state.accountAuditPage = 1; loadAccountAuditPageV3_();
+    });
+    if (elements.accountAuditPreviousButton) elements.accountAuditPreviousButton.addEventListener('click', function() { if (state.accountAuditPage > 1) { state.accountAuditPage -= 1; loadAccountAuditPageV3_(); } });
+    if (elements.accountAuditNextButton) elements.accountAuditNextButton.addEventListener('click', function() { state.accountAuditPage += 1; loadAccountAuditPageV3_(); });
+    if (elements.pdfManagementAbnormalButton) elements.pdfManagementAbnormalButton.addEventListener('click', function() { applyPdfAbnormalFilterV3_('ABNORMAL'); });
+  }
+
+  function initializePdfMonthFiltersV3_() {
+    if (!elements.pdfManagementYear || !elements.pdfManagementMonthNumber || state.pdfManagementDefaulted) return;
+    var now = new Date();
+    elements.pdfManagementYear.value = String(now.getFullYear() - 1911);
+    elements.pdfManagementMonthNumber.value = String(now.getMonth() + 1);
+    state.pdfManagementDefaulted = true;
+  }
+
+  function composePdfManagementMonthV3_() {
+    var year = String(elements.pdfManagementYear && elements.pdfManagementYear.value || '').trim();
+    var month = String(elements.pdfManagementMonthNumber && elements.pdfManagementMonthNumber.value || '').trim();
+    if (!year && !month) return '';
+    if (!year || !month) return '';
+    return year + '/' + String(month).padStart(2, '0');
+  }
+
+  function applyPdfAbnormalFilterV3_(status) {
+    if (elements.pdfManagementStatus) elements.pdfManagementStatus.value = status || 'ABNORMAL';
+    state.pdfManagementPage = 1; state.pdfManagementSelected = {};
+    loadPdfManagementCenter();
+  }
+
+  async function handleAccountCreateV3_(event) {
+    event.preventDefault();
+    var payload = {
+      employeeId: elements.accountCreateEmployeeId.value, password: elements.accountCreatePassword.value,
+      employeeName: elements.accountCreateEmployeeName.value, role: elements.accountCreateRole.value,
+      storeCode: elements.accountCreateStoreCode.value, department: elements.accountCreateDepartment.value,
+      area: elements.accountCreateArea.value, transferDate: elements.accountCreateTransferDate.value,
+      needsEvaluation: elements.accountCreateNeedsEvaluation.value, employmentStatus: elements.accountCreateEmploymentStatus.value,
+      accountStatus: elements.accountCreateAccountStatus.value, note: elements.accountCreateNote.value,
+      reason: elements.accountCreateReason.value, confirmed: elements.accountCreateConfirm.checked,
+      confirmText: elements.accountCreateConfirmText.value
+    };
+    if (!/^\d{4}$/.test(String(payload.password || ''))) return showMessage(elements.accountCreateMessage, 'error', '登入密碼必須為4碼數字。');
+    if (String(payload.reason || '').trim().length < 4) return showMessage(elements.accountCreateMessage, 'error', '請填寫至少4個字的新增原因。');
+    if (!payload.confirmed || String(payload.confirmText || '').trim() !== '確認新增') return showMessage(elements.accountCreateMessage, 'error', '請勾選確認並輸入「確認新增」。');
+    setButtonLoading(elements.accountCreateSubmitButton, true, '建立中');
+    showMessage(elements.accountCreateMessage, 'info', '正在建立帳號…');
+    try {
+      var response = await window.V3WorkflowService.accountCreate(payload, window.V3ApiClient.createRequestId());
+      var data = response.data || {}; var account = data.account || {};
+      elements.accountCreateResult.hidden = false;
+      elements.accountCreateResult.innerHTML = '<h4>帳號建立完成</h4><div class="admin-result-grid">' + metaItem('員工', joinText(account.employeeId, account.employeeName)) + metaItem('角色', account.role) + metaItem('是否需要考核', account.needsEvaluation || payload.needsEvaluation) + metaItem('帳號狀態', account.accountStatus) + '</div><p>' + escapeHtml(data.message || '') + '</p>';
+      showMessage(elements.accountCreateMessage, 'success', '帳號已建立。');
+      state.accountAuditPage = 1;
+      if (elements.accountAuditPanel && elements.accountAuditPanel.open) loadAccountAuditPageV3_();
+    } catch (error) { showMessage(elements.accountCreateMessage, 'error', friendlyError(error)); }
+    finally { setButtonLoading(elements.accountCreateSubmitButton, false, '建立帳號'); }
+  }
+
+  function resetAccountCreateFormV3_() {
+    if (elements.accountCreateForm) elements.accountCreateForm.reset();
+    if (elements.accountCreateResult) { elements.accountCreateResult.hidden = true; elements.accountCreateResult.innerHTML = ''; }
+    clearMessage(elements.accountCreateMessage);
+  }
+
+  async function loadAccountAuditPageV3_() {
+    if (state.accountAuditLoading || !elements.accountAuditList) return;
+    state.accountAuditLoading = true;
+    elements.accountAuditList.innerHTML = '<p class="section-help">正在載入操作紀錄…</p>';
+    try {
+      var response = await window.V3WorkflowService.accountAuditPage({ page: state.accountAuditPage, pageSize: state.accountAuditPageSize });
+      var data = response.data || {};
+      state.accountAuditPage = Number(data.page || 1); state.accountAuditPageSize = Number(data.pageSize || 10);
+      renderAccountAuditListV3(data.items || []);
+      if (elements.accountAuditPagination) elements.accountAuditPagination.hidden = Number(data.total || 0) <= state.accountAuditPageSize;
+      if (elements.accountAuditPageText) elements.accountAuditPageText.textContent = '第' + state.accountAuditPage + '／' + Number(data.totalPages || 1) + '頁｜共' + Number(data.total || 0) + '筆';
+      if (elements.accountAuditPreviousButton) elements.accountAuditPreviousButton.disabled = state.accountAuditPage <= 1;
+      if (elements.accountAuditNextButton) elements.accountAuditNextButton.disabled = state.accountAuditPage >= Number(data.totalPages || 1);
+    } catch (error) { elements.accountAuditList.innerHTML = '<p class="section-help">' + escapeHtml(friendlyError(error)) + '</p>'; }
+    finally { state.accountAuditLoading = false; }
+  }
+
   function showAccountManagementMessage(type, text) {
     showMessage(elements.accountManagementMessage, type, text);
   }
@@ -3242,9 +3272,9 @@
         area: String(elements.dispatchManagementArea.value || ''),
         source: String(elements.dispatchManagementSource.value || ''),
         personPage: Number(state.dispatchPersonPage || 1),
-        personPageSize: Number(state.dispatchPageSize || 15),
+        personPageSize: Number(elements.dispatchManagementPageSize && elements.dispatchManagementPageSize.value || state.dispatchPageSize || 15),
         attemptPage: Number(state.dispatchAttemptPage || 1),
-        attemptPageSize: Number(state.dispatchPageSize || 15)
+        attemptPageSize: Number(elements.dispatchManagementPageSize && elements.dispatchManagementPageSize.value || state.dispatchPageSize || 15)
       });
       state.dispatchManagement = result.data || {};
       state.dispatchPersonPage = Number(state.dispatchManagement.personPagination && state.dispatchManagement.personPagination.page || 1);
