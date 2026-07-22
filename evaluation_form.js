@@ -617,11 +617,27 @@
     return normalized + '｜' + B_GRADE_SCORES[normalized] + '分：' + item.standards[normalized];
   }
 
+
+  function getBManagerReviewDetail(key, grade) {
+    var item = B_MANAGER_ITEMS.filter(function(candidate) { return candidate.key === key; })[0];
+    var normalized = String(grade || '').trim().toUpperCase();
+    if (!item) return null;
+    return {
+      key: item.key,
+      label: item.label,
+      definition: item.definition,
+      grade: normalized,
+      score: Object.prototype.hasOwnProperty.call(B_GRADE_SCORES, normalized) ? B_GRADE_SCORES[normalized] : '',
+      standard: item.standards[normalized] || ''
+    };
+  }
+
   window.V3EvaluationForm = Object.freeze({
     ACTION_LABELS: ACTION_LABELS,
     getActionLabel: getActionLabel,
     getManagerScoreDescription: getManagerScoreDescription,
     getBManagerRatingDescription: getBManagerRatingDescription,
+    getBManagerReviewDetail: getBManagerReviewDetail,
     renderActionForm: renderActionForm,
     collectActionPayload: collectActionPayload,
     initializeInteractiveControls: initializeInteractiveControls,
