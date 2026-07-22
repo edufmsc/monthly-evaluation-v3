@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.6.0A-pending-mail */
+/* 月考核系統 V3｜版本：7.8.0A-management-completion */
 (function () {
   'use strict';
 
@@ -71,6 +71,10 @@
     dispatchMonthAnalysis: function (evaluationMonth) {
       return call('dispatchMonthAnalysis', { evaluationMonth: String(evaluationMonth || '') });
     },
+    monthlyPlanCenter: function (filters) { return call('monthlyPlanCenter', filters || {}); },
+    monthlyPlanSave: function (payload, requestId) { return call('monthlyPlanSave', payload || {}, requestId); },
+    monthlyPlanLock: function (payload, requestId) { return call('monthlyPlanLock', payload || {}, requestId); },
+    monthlyPlanReopen: function (payload, requestId) { return call('monthlyPlanReopen', payload || {}, requestId); },
     forceClosePreview: function (evaluationNo) {
       return call('forceClosePreview', { evaluationNo: String(evaluationNo || '') });
     },
@@ -81,10 +85,11 @@
       return call('getMySignaturePreview', { source: source || 'saved', evaluationNo: evaluationNo || '' });
     },
     notificationManagementCenter: function (filters) { return call('notificationManagementCenter', filters || {}); },
+    notificationPreviewBatch: function (payload) { return call('notificationPreviewBatch', payload || {}); },
     notificationSaveSettings: function (payload, requestId) { return call('notificationSaveSettings', payload || {}, requestId); },
     notificationCreateBatch: function (payload, requestId) { return call('notificationCreateBatch', payload || {}, requestId); },
     notificationInstallSchedule: function (payload) { return call('notificationInstallSchedule', payload || {}); },
-    notificationDisableSchedule: function () { return call('notificationDisableSchedule', {}); },
+    notificationDisableSchedule: function (payload) { return call('notificationDisableSchedule', payload || {}); },
     notificationRunWorker: function () { return call('notificationRunWorker', {}); },
     pdfManagementCenter: function (filters) {
       return call('pdfManagementCenter', filters || {});
