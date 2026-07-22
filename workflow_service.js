@@ -58,10 +58,11 @@
     dispatchManagementCenter: function (filters) {
       return call('dispatchManagementCenter', filters || {});
     },
-    previewManualDispatch: function (employeeIds, evaluationMonth) {
+    previewManualDispatch: function (employeeIds, evaluationMonth, evaluationVersion) {
       return call('previewManualDispatch', {
         employeeIds: Array.isArray(employeeIds) ? employeeIds : [],
-        evaluationMonth: String(evaluationMonth || '')
+        evaluationMonth: String(evaluationMonth || ''),
+        evaluationVersion: String(evaluationVersion || 'A')
       });
     },
     runManualDispatch: function (payload, requestId) {
