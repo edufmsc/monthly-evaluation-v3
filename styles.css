@@ -1703,3 +1703,65 @@ body.idle-warning-open {
 @media (max-width: 720px) {
   .notification-selection-tools strong { width: 100%; margin-left: 0; }
 }
+
+/* 7.7.0A｜B版店副理進階考核 */
+.batch-dispatch-version-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: end;
+  margin: 12px 0 16px;
+}
+.batch-dispatch-version-row .section-help { margin: 0 0 10px; }
+.b-manager-criteria-list { display: grid; gap: 16px; }
+.b-manager-criterion { padding: 18px; }
+.b-manager-criterion .criterion-heading > div { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.b-competency-definition {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff8f1;
+  border: 1px solid #efd6c4;
+}
+.b-competency-definition b { display: block; margin-bottom: 4px; color: #7c2d12; }
+.b-competency-definition p { margin: 0; line-height: 1.65; }
+.b-grade-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.b-grade-choice { position: relative; display: block; cursor: pointer; }
+.b-grade-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.b-grade-choice span {
+  display: block;
+  min-height: 92px;
+  padding: 12px 14px;
+  border: 2px solid #e7e0dc;
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.b-grade-choice strong { display: block; margin-bottom: 6px; color: #7c2d12; }
+.b-grade-choice small { display: block; line-height: 1.55; color: #4c4540; }
+.b-grade-choice input:checked + span {
+  border-color: #a6461f;
+  background: #fff6ef;
+  box-shadow: 0 0 0 3px rgba(166, 70, 31, .12);
+}
+.b-grade-choice input:focus-visible + span { outline: 3px solid rgba(44, 95, 149, .25); outline-offset: 2px; }
+.b-a-explanation { margin-top: 12px; }
+.b-a-explanation[hidden] { display: none !important; }
+.b-education-evaluation-section .education-score-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 760px) {
+  .batch-dispatch-version-row,
+  .b-grade-grid,
+  .b-education-evaluation-section .education-score-grid { grid-template-columns: 1fr; }
+  .b-grade-choice span { min-height: 0; }
+}
+
+.tag--version-b {
+  border-color: #c9a86a;
+  background: #fff8e8;
+  color: #7b4b00;
+}
