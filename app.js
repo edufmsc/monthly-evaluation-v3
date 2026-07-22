@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.7.0A-HF2-b-ui-score-connection';
+  var APP_BUILD = '7.7.0A-HF3-version-identity';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -918,7 +918,9 @@
     }
 
     pushTag(effectiveClosed ? '結案' : status, '');
-    if (String(item.evaluationVersion || 'A').toUpperCase() === 'B') pushTag('B版｜店副理進階', ' tag--version-b');
+    var evaluationVersion = String(item.evaluationVersion || 'A').trim().toUpperCase() === 'B' ? 'B' : 'A';
+    pushTag(evaluationVersion === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核',
+      evaluationVersion === 'B' ? ' tag--version-b' : ' tag--version-a');
     if (pdfStatus && pdfStatus !== '未排隊') {
       pushTag('PDF' + pdfStatus, pdfStatus === '完成' ? ' tag--success' : pdfStatus === '失敗' ? ' tag--danger' : ' tag--warning');
     }
@@ -1981,10 +1983,10 @@
       var gradeText = grade ? grade + (score !== '' ? '｜' + score + '分' : '') : '尚未評分';
       return '<section class="b-manager-review-item">' +
         '<div class="b-manager-review-main">' +
-          '<div class="b-manager-review-competency"><span>考核項目</span><h4>' + escapeHtml(label) + '</h4>' +
-            '<b>職能定義</b><p>' + escapeHtml(definition || '—') + '</p></div>' +
+          '<div class="b-manager-review-competency"><h4>' + escapeHtml(label) + '</h4>' +
+            '<p>' + escapeHtml(definition || '—') + '</p></div>' +
           '<div class="b-manager-review-rating"><span>店主管評核</span><strong>' + escapeHtml(gradeText) + '</strong>' +
-            '<p>' + escapeHtml(standard ? grade + '　' + standard : '—') + '</p></div>' +
+            '<p>' + escapeHtml(standard || '—') + '</p></div>' +
         '</div>' +
         (explanation ? '<div class="b-manager-review-comment"><span>A級得分說明</span><p>' + escapeHtml(explanation) + '</p></div>' : '') +
       '</section>';
@@ -2998,7 +3000,9 @@
       '<div class="evaluation-card__top"><div><h3>' + escapeHtml(item.employeeName || '未命名') + '</h3>' +
         '<p>' + escapeHtml(item.evaluationNo || '') + '｜' + escapeHtml(item.employeeId || '') + '</p></div>' +
         '<div class="pdf-management-tags">' +
-          (String(item.evaluationVersion || 'A').toUpperCase() === 'B' ? '<span class="tag tag--version-b">B版｜店副理進階</span>' : '') +
+          (String(item.evaluationVersion || 'A').toUpperCase() === 'B'
+            ? '<span class="tag tag--version-b">B版｜店副理進階</span>'
+            : '<span class="tag tag--version-a">A版｜一般月考核</span>') +
           '<span class="tag ' + issueClass + '">' + escapeHtml(item.issueLabel || '其他狀態') + '</span>' + selection + '</div></div>' +
       '<div class="evaluation-card__meta">' +
         metaItem('考核版本', String(item.evaluationVersion || 'A').toUpperCase() === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核') +
@@ -3798,10 +3802,14 @@
         batchControl = '<label class="confirm-row"><input type="checkbox" data-batch-dispatch="' + escapeHtml(row.employeeId) + '"' +
           (state.batchDispatchSelectedEmployees[row.employeeId] ? ' checked' : '') + '><span>選取人工派發／補派</span></label>';
       }
-      return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' +
+      var rowVersionTag = row.evaluationNo
+        ? (String(row.evaluationVersion || 'A').toUpperCase() === 'B'
+          ? '<span class="tag tag--version-b">B版｜店副理進階</span> '
+          : '<span class="tag tag--version-a">A版｜一般月考核</span> ')
+        : '';
+      return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' + rowVersionTag +
         escapeHtml(joinStore(row.storeCode, row.storeName)) + '</span><strong>' +
         escapeHtml(joinText(row.employeeId, row.employeeName)) + (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') +
-        (String(row.evaluationVersion || '').toUpperCase() === 'B' ? '｜B版' : '') +
         '</strong><small>' + escapeHtml(row.reason || row.workflowStatus || '目前無異常') +
         (row.executionSource ? '<br>最近來源：' + escapeHtml(row.executionSource) + '｜' + escapeHtml(row.completedAt || '') : '') +
         '</small>' + batchControl + (actions ? '<div class="evaluation-card__actions">' + actions + '</div>' : '') + '</div>';
@@ -3828,11 +3836,15 @@
       return;
     }
     elements.dispatchManagementAttempts.innerHTML = '<div class="route-list">' + rows.map(function (row) {
+      var attemptVersionTag = row.evaluationNo
+        ? (String(row.evaluationVersion || 'A').toUpperCase() === 'B'
+          ? '<span class="tag tag--version-b">B版｜店副理進階</span> '
+          : '<span class="tag tag--version-a">A版｜一般月考核</span> ')
+        : '';
       return '<div class="route-row"><span><span class="tag ' + dispatchCategoryTone(row.category) + '">' +
-        escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' + escapeHtml(row.executionSource || '未標示來源') +
+        escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' + attemptVersionTag + escapeHtml(row.executionSource || '未標示來源') +
         '</span><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) +
-        (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') +
-        (String(row.evaluationVersion || '').toUpperCase() === 'B' ? '｜B版' : '') + '</strong><small>' +
+        (row.evaluationNo ? '｜' + escapeHtml(row.evaluationNo) : '') + '</strong><small>' +
         escapeHtml(row.completedAt || '') + (row.batchId ? '｜批次 ' + escapeHtml(row.batchId) : '') +
         (row.reason ? '<br>' + escapeHtml(row.reason) : '') + '</small></div>';
     }).join('') + '</div>' + managementPagerHtmlV3_('dispatch-attempt', Number(pagination.page || 1), Number(pagination.totalPages || 1), Number(pagination.total || rows.length));
