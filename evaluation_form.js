@@ -145,7 +145,7 @@
 
   function renderBManagerForm(record) {
     var html = versionHiddenInput(record) + '<div class="form-section manager-evaluation-section b-manager-evaluation-section">' +
-      '<div class="section-title-row"><div><p class="step-label">B版｜店副理進階訓練月考核表</p><h3>門市店主管評分</h3>' +
+      '<div class="section-title-row"><div><p class="step-label">店副理進階月考核表</p><h3>門市店主管評分</h3>' +
       '<p class="section-help">請先閱讀職能定義與A～D標準，再點選評等。系統會自動換算A＝10、B＝8、C＝6、D＝0分。</p></div>' +
       '<div class="score-total-badge"><span>店主管小計</span><strong data-b-manager-total>0／60</strong></div></div>' +
       '<div class="b-manager-criteria-list">';
@@ -250,7 +250,7 @@
     var assignmentLate = currentNumber(record, '作業遲繳天數', 0);
     var attendanceIssue = currentNumber(record, '培訓出勤異常次數', 0);
     var html = versionHiddenInput(record) + '<div class="form-section education-evaluation-section b-education-evaluation-section">' +
-      '<div class="section-title-row"><div><p class="step-label">B版｜教育中心填寫</p><h3>課程與出勤評分（共20分）</h3>' +
+      '<div class="section-title-row"><div><p class="step-label">教育中心填寫</p><h3>課程與出勤評分（共20分）</h3>' +
       '<p class="section-help">作業／心得／問卷正常繳交10分，每遲繳1天扣1分；培訓課程正常出勤10分，每次遲到或出勤異常扣1分，最低0分。</p></div>' +
       '<div class="education-total-badge"><span>教育中心小計</span><strong data-b-education-total>0／20分</strong></div></div>' +
       '<div class="education-score-grid">' +
