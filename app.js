@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.5.0E-progress-pdf-ui';
+  var APP_BUILD = '7.6.0A-pending-mail';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -29,8 +29,8 @@
     dispatchManagementLoading: false,
     dispatchPersonPage: 1,
     dispatchAttemptPage: 1,
-    dispatchPersonPageSize: 15,
-    dispatchAttemptPageSize: 15,
+    dispatchPersonPageSize: 10,
+    dispatchAttemptPageSize: 10,
     batchDispatchRepairPreview: null,
     batchDispatchSelectedEmployees: {},
     dispatchManagementSelectionMonth: '',
@@ -57,6 +57,10 @@
     archiveManagementLoading: false,
     archivePreview: null,
     archiveAction: null,
+    notificationManagement: null,
+    notificationManagementLoading: false,
+    notificationRecipientPage: 1,
+    notificationLogPage: 1,
     forceClosePreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
@@ -110,6 +114,7 @@
     ensureAccountManagementPanel();
     ensurePdfManagementPanel();
     ensureAnnualArchivePanelV3_();
+    ensureNotificationManagementPanelV3_();
     ensureSystemManagementWorkspaceV3_();
     ensureContinuousReviewToolbar();
     ensureIdleWarningDialogV3_();
@@ -177,7 +182,7 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">正式營運工具｜7.5.0D</p><h3>月考核派發管理中心</h3>' +
+      '<p class="step-label">正式營運工具｜7.6.0A</p><h3>月考核派發管理中心</h3>' +
       '<p>教育中心共用人工派發入口；可派發與需處理人員優先排列，已存在R0不重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<section class="detail-section dispatch-month-analysis-top"><div class="test-dispatch-heading"><div><h4>月份整體分析</h4>' +
@@ -191,14 +196,14 @@
         '<label class="field-group"><span>店號</span><select id="dispatchManagementStore"><option value="">全部店號</option></select></label>' +
         '<label class="field-group"><span>區域</span><select id="dispatchManagementArea"><option value="">全部區域</option></select></label>' +
         '<label class="field-group"><span>派發來源</span><select id="dispatchManagementSource"><option value="">全部來源</option></select></label>' +
-        '<label class="field-group"><span>人員每頁顯示</span><select id="dispatchManagementPageSize"><option value="10">10人</option><option value="15" selected>15人</option></select></label>' +
+        '<div class="field-group dispatch-fixed-page-note"><span>顯示方式</span><strong>每頁固定10人</strong></div>' +
         '<div class="test-dispatch-actions"><button id="dispatchManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢派發狀態</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
       '</form>' +
       '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div><div id="dispatchManagementSummary"></div>' +
       '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人後預覽；正式執行前逐筆重新驗證。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
         '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button><button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button><button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
-      '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><div class="management-section-toolbar"><label>紀錄每頁顯示 <select id="dispatchAttemptPageSize"><option value="10">10筆</option><option value="15" selected>15筆</option></select></label></div><div id="dispatchManagementAttempts"></div></details>' +
+      '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><p class="section-help">每頁固定顯示10筆，可使用上一頁／下一頁切換。</p><div id="dispatchManagementAttempts"></div></details>' +
       '<section id="batchDispatchRepairPanel" class="test-dispatch-preview" hidden><div id="batchDispatchRepairContent"></div>' +
         '<label class="field-group"><span>人工派發／補派原因</span><textarea id="batchDispatchRepairReason" rows="3" maxlength="300"></textarea></label>' +
         '<label class="confirm-row"><input id="batchDispatchRepairConfirm" type="checkbox"><span>我已確認系統會逐筆檢查資格、簽核流程與同月份R0。</span></label>' +
@@ -216,7 +221,7 @@
     var article = document.createElement('article');
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.5.0D</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.6.0A</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<details id="accountCreatePanel" class="detail-section account-create-section"><summary>新增帳號／密碼</summary><form id="accountCreateForm" class="account-create-grid">' +
         '<label class="field-group"><span>員工工號</span><input id="accountCreateEmployeeId" required maxlength="40" autocomplete="off" placeholder="例如：0001"></label>' +
         '<label class="field-group"><span>4碼登入密碼</span><input id="accountCreatePassword" required inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="例如：0123"></label>' +
@@ -250,7 +255,7 @@
     var monthOptions = '<option value="">全部月份</option>' + Array.from({length:12}, function(_, i) { var m=i+1; return '<option value="' + m + '">' + m + '月</option>'; }).join('');
     var article = document.createElement('article');
     article.id = 'pdfManagementCard'; article.className = 'card test-dispatch-card pdf-management-card';
-    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">PDF失敗重試與處理｜7.5.0D</p><h3>PDF處理中心</h3><p>依年度與月份查詢，避免一次顯示全部資料；異常數量可直接點擊篩選處理。</p></div><button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">PDF失敗重試與處理｜7.6.0A</p><h3>PDF處理中心</h3><p>依年度與月份查詢，避免一次顯示全部資料；異常數量可直接點擊篩選處理。</p></div><button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter"><label class="field-group"><span>民國年度</span><input id="pdfManagementYear" inputmode="numeric" maxlength="3" placeholder="例如 115"></label><label class="field-group"><span>月份</span><select id="pdfManagementMonthNumber">' + monthOptions + '</select></label><label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" maxlength="80" placeholder="輸入任一資訊"></label><label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus"><option value="ALL">全部狀態</option><option value="ABNORMAL">全部異常</option><option value="GENERATION_FAILED">PDF產生失敗</option><option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option><option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option><option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option></select></label><div class="test-dispatch-actions pdf-management-search-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner"></span></button></div></form>' +
       '<div id="pdfManagementMessage" class="form-message" hidden></div><div id="pdfManagementSummary" class="admin-result-grid pdf-management-summary"></div>' +
       '<section class="detail-section pdf-management-tools"><div class="test-dispatch-heading"><div><h4>重新產生PDF</h4><p class="section-help">一次最多5張；新檔成功後才更新目前檢視資料，舊檔保留。</p></div><button id="pdfManagementAbnormalButton" class="secondary-button secondary-button--small pdf-abnormal-button" type="button">異常 0筆</button></div><div class="test-dispatch-actions"><button id="pdfManagementSelectVisibleButton" class="secondary-button secondary-button--small">勾選目前可重試PDF</button><button id="pdfManagementClearButton" class="secondary-button secondary-button--small">清除勾選</button><button id="pdfManagementRetrySelectedButton" class="primary-button primary-button--small" disabled><span class="button-label">重試選取PDF</span><span class="button-spinner"></span></button><strong id="pdfManagementSelectedCount">已選0張</strong></div></section>' +
@@ -297,6 +302,52 @@
     systemPanel.appendChild(article);
   }
 
+
+  function ensureNotificationManagementPanelV3_() {
+    if (document.getElementById('notificationManagementCard')) return;
+    var systemPanel = document.getElementById('systemPanel');
+    if (!systemPanel) return;
+    var article = document.createElement('article');
+    article.id = 'notificationManagementCard';
+    article.className = 'card test-dispatch-card';
+    var hourOptions = [];
+    for (var hour = 0; hour < 24; hour += 1) {
+      hourOptions.push('<option value="' + hour + '"' + (hour === 9 ? ' selected' : '') + '>' + String(hour).padStart(2, '0') + ':00</option>');
+    }
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
+      '<p class="step-label">待辦Email通知｜7.6.0A</p><h3>待辦通知中心</h3>' +
+      '<p>每日摘要會附上可直接開啟的月考核系統網址；待辦超過3天時加強逾期提醒。</p></div>' +
+      '<button id="notificationRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+      '<form id="notificationSettingsForm" class="notification-settings-grid">' +
+        '<label class="field-group"><span>每日通知</span><select id="notificationEnabled"><option value="是">啟用</option><option value="否">停用</option></select></label>' +
+        '<label class="field-group notification-url-field"><span>月考核系統網址</span><input id="notificationSystemUrl" type="url" placeholder="https://您的GitHub-Pages網址" required></label>' +
+        '<label class="field-group"><span>每日摘要時間</span><select id="notificationDailyHour">' + hourOptions.join('') + '</select></label>' +
+        '<label class="field-group"><span>逾期提醒</span><input id="notificationOverdueDays" type="number" min="1" max="30" value="3"><small>超過3天後在摘要中再次提醒承辦人</small></label>' +
+        '<label class="field-group"><span>每批寄送上限</span><input id="notificationBatchSize" type="number" min="1" max="40" value="20"></label>' +
+        '<div class="test-dispatch-actions notification-settings-actions"><button id="notificationSaveButton" class="primary-button" type="submit"><span class="button-label">儲存設定</span><span class="button-spinner"></span></button></div>' +
+      '</form>' +
+      '<div id="notificationMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
+      '<div id="notificationSummary"></div>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>一鍵通知</h4><p class="section-help">建立通知工作後立即回覆，實際Email由背景工作器分批寄送，不會讓畫面長時間等待。</p></div></div>' +
+        '<label class="confirm-row"><input id="notificationForceResend" type="checkbox"><span>即使今天已寄送也再次通知</span></label>' +
+        '<div class="test-dispatch-actions"><button id="notificationSendAllButton" class="primary-button" type="button">通知全部待辦人員</button>' +
+        '<button id="notificationSendOverdueButton" class="secondary-button" type="button">只通知逾期人員</button>' +
+        '<button id="notificationRunWorkerButton" class="secondary-button" type="button">立即執行寄送工作器</button></div>' +
+      '</section>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>通知排程</h4><p class="section-help">每日摘要依設定時間建立；背景工作器每5分鐘處理待寄送工作。</p></div></div>' +
+        '<div id="notificationScheduleStatus" class="section-help"></div>' +
+        '<div class="test-dispatch-actions"><button id="notificationInstallScheduleButton" class="secondary-button" type="button">安裝／更新排程</button>' +
+        '<button id="notificationDisableScheduleButton" class="secondary-button" type="button">停用排程</button></div>' +
+      '</section>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>目前有待辦的人員</h4><p class="section-help">每頁固定10人；未設定Email者不會建立寄送工作。</p></div></div>' +
+        '<div id="notificationRecipientList"></div><div id="notificationRecipientPagination" class="account-management-pagination" hidden>' +
+        '<button id="notificationRecipientPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="notificationRecipientPageText">第1頁</strong><button id="notificationRecipientNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></section>' +
+      '<details id="notificationLogPanel" class="detail-section"><summary>查看最近通知紀錄</summary><p class="section-help">每頁固定10筆，不顯示完整Email。</p>' +
+        '<div id="notificationLogList"></div><div id="notificationLogPagination" class="account-management-pagination" hidden>' +
+        '<button id="notificationLogPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="notificationLogPageText">第1頁</strong><button id="notificationLogNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></details>';
+    systemPanel.appendChild(article);
+  }
+
   function ensureSystemManagementWorkspaceV3_() {
     if (document.getElementById('systemManagementWorkspace')) return;
     var systemPanel = document.getElementById('systemPanel');
@@ -317,13 +368,14 @@
       '<div class="system-management-mobile-select"><label for="systemManagementPageSelect">管理功能</label>' +
         '<select id="systemManagementPageSelect">' +
           '<option value="home">管理首頁</option><option value="accounts">帳號與登入</option>' +
-          '<option value="dispatch">月考核派發</option><option value="pdf">PDF處理中心</option>' +
+          '<option value="dispatch">月考核派發</option><option value="notification">待辦通知中心</option><option value="pdf">PDF處理中心</option>' +
           '<option value="archive">年度封存中心</option><option value="health">系統健檢</option></select></div>' +
       '<div class="system-management-layout">' +
         '<nav id="systemManagementNav" class="system-management-nav" aria-label="系統管理功能">' +
           systemManagementNavButtonV3_('home', '管理首頁', '功能總覽與入口') +
           systemManagementNavButtonV3_('accounts', '帳號與登入', '帳密、解鎖與啟停') +
           systemManagementNavButtonV3_('dispatch', '月考核派發', '人工派發與補派') +
+          systemManagementNavButtonV3_('notification', '待辦通知中心', '每日摘要與一鍵通知') +
           systemManagementNavButtonV3_('pdf', 'PDF處理中心', '失敗重試與檔案檢查') +
           systemManagementNavButtonV3_('archive', '年度封存中心', '年度打包、核對與安全清理') +
           systemManagementNavButtonV3_('health', '系統健檢', '連線、Session與異常檢查') +
@@ -336,12 +388,14 @@
     var homePage = createSystemManagementPageV3_('home');
     var accountsPage = createSystemManagementPageV3_('accounts');
     var dispatchPage = createSystemManagementPageV3_('dispatch');
+    var notificationPage = createSystemManagementPageV3_('notification');
     var pdfPage = createSystemManagementPageV3_('pdf');
     var archivePage = createSystemManagementPageV3_('archive');
     var healthPage = createSystemManagementPageV3_('health');
     pages.appendChild(homePage);
     pages.appendChild(accountsPage);
     pages.appendChild(dispatchPage);
+    pages.appendChild(notificationPage);
     pages.appendChild(pdfPage);
     pages.appendChild(archivePage);
     pages.appendChild(healthPage);
@@ -351,7 +405,8 @@
       '<p>管理功能互相獨立，不會在進入系統管理時一次載入帳號、派發與PDF資料。</p></div></div>' +
       '<div class="system-home-grid">' +
         systemHomeCardV3_('accounts', '帳號與登入', '查詢單一或特定範圍人員；每頁10人，可切換15人。', '帳密查詢、解除鎖定、啟停帳號、強制登出') +
-        systemHomeCardV3_('dispatch', '月考核派發', '只在進入本頁時載入當月派發狀態。', '人工派發、補派、路線異常、月份分析') +
+        systemHomeCardV3_('dispatch', '月考核派發', '只在進入本頁時載入當月派發狀態。', '人工派發、補派、簽核流程異常、月份分析') +
+        systemHomeCardV3_('notification', '待辦通知中心', '每日摘要附系統網址，並提供教育中心一鍵通知。', '超過3天加強提醒，Email由背景工作器分批寄送') +
         systemHomeCardV3_('pdf', 'PDF處理中心', '集中處理PDF失敗、公開失敗與檔案檢查。', '單筆或逐筆重試，不刪除舊PDF') +
         systemHomeCardV3_('archive', '年度封存中心', '一鍵建立封存包，人工核對後完成封存。', '主系統清理需等待30天並再次確認') +
         systemHomeCardV3_('health', '系統健檢', '手動執行連線、登入狀態及系統異常檢查。', '不會進入頁面就自動執行') +
@@ -359,10 +414,12 @@
 
     var accountCard = document.getElementById('accountManagementCard');
     var dispatchCard = document.getElementById('dispatchManagementCard');
+    var notificationCard = document.getElementById('notificationManagementCard');
     var pdfCard = document.getElementById('pdfManagementCard');
     var archiveCard = document.getElementById('annualArchiveCard');
     if (accountCard) accountsPage.appendChild(accountCard);
     if (dispatchCard) dispatchPage.appendChild(dispatchCard);
+    if (notificationCard) notificationPage.appendChild(notificationCard);
     if (pdfCard) pdfPage.appendChild(pdfCard);
     if (archiveCard) archivePage.appendChild(archiveCard);
 
@@ -2514,6 +2571,199 @@
     }
     return '';
   }
+
+  async function loadNotificationManagementCenterV3_(options) {
+    var settings = options || {};
+    if (state.notificationManagementLoading) return;
+    state.notificationManagementLoading = true;
+    if (!settings.quiet) setNotificationMessageV3_('info', '正在整理待辦人員與通知紀錄…');
+    if (elements.notificationRefreshButton) elements.notificationRefreshButton.disabled = true;
+    try {
+      var response = await window.V3WorkflowService.notificationManagementCenter({
+        recipientPage: Number(state.notificationRecipientPage || 1),
+        logPage: Number(state.notificationLogPage || 1)
+      });
+      state.notificationManagement = response.data || {};
+      state.notificationRecipientPage = Number(state.notificationManagement.recipientPagination && state.notificationManagement.recipientPagination.page || 1);
+      state.notificationLogPage = Number(state.notificationManagement.logPagination && state.notificationManagement.logPagination.page || 1);
+      renderNotificationManagementCenterV3_(state.notificationManagement);
+      if (!settings.quiet) setNotificationMessageV3_('success', '待辦通知資料已更新。');
+    } catch (error) {
+      setNotificationMessageV3_('error', friendlyError(error));
+      if (elements.notificationRecipientList) elements.notificationRecipientList.innerHTML = emptyStateHtml('通知資料載入失敗', friendlyError(error));
+    } finally {
+      state.notificationManagementLoading = false;
+      if (elements.notificationRefreshButton) elements.notificationRefreshButton.disabled = false;
+    }
+  }
+
+  function renderNotificationManagementCenterV3_(data) {
+    var source = data || {};
+    var settings = source.settings || {};
+    if (elements.notificationEnabled) elements.notificationEnabled.value = settings.enabled || '是';
+    if (elements.notificationSystemUrl) {
+      var defaultUrl = window.location.href.split('#')[0].split('?')[0];
+      elements.notificationSystemUrl.value = settings.systemUrl || defaultUrl;
+    }
+    if (elements.notificationDailyHour) elements.notificationDailyHour.value = String(settings.dailyHour != null ? settings.dailyHour : 9);
+    if (elements.notificationOverdueDays) elements.notificationOverdueDays.value = String(settings.overdueDays != null ? settings.overdueDays : 3);
+    if (elements.notificationBatchSize) elements.notificationBatchSize.value = String(settings.batchSize != null ? settings.batchSize : 20);
+
+    var summary = source.summary || {};
+    var queue = source.queueSummary || {};
+    if (elements.notificationSummary) {
+      elements.notificationSummary.innerHTML = '<div class="admin-result-grid">' +
+        metaItem('有待辦人數', summary.recipientCount || 0) +
+        metaItem('待辦案件', summary.pendingCount || 0) +
+        metaItem('逾期人數', summary.overdueRecipientCount || 0) +
+        metaItem('逾期案件', summary.overdueCount || 0) +
+        metaItem('未設定Email', summary.missingEmailCount || 0) +
+        metaItem('待寄送', queue.pending || 0) +
+        metaItem('寄送中', queue.processing || 0) +
+        metaItem('寄送失敗', queue.failed || 0) +
+      '</div>';
+    }
+
+    var schedule = source.schedule || {};
+    if (elements.notificationScheduleStatus) {
+      elements.notificationScheduleStatus.innerHTML = '每日摘要排程：<strong>' + (schedule.dailyInstalled ? '已安裝' : '未安裝') +
+        '</strong>｜背景工作器：<strong>' + (schedule.workerInstalled ? '已安裝' : '未安裝') + '</strong>';
+    }
+    renderNotificationRecipientsV3_(source.recipients || [], source.recipientPagination || {});
+    renderNotificationLogsV3_(source.logs || [], source.logPagination || {});
+  }
+
+  function renderNotificationRecipientsV3_(rows, pagination) {
+    if (!elements.notificationRecipientList) return;
+    if (!rows.length) {
+      elements.notificationRecipientList.innerHTML = emptyStateHtml('目前沒有待辦通知對象', '所有人目前都沒有待處理案件。');
+    } else {
+      elements.notificationRecipientList.innerHTML = '<div class="notification-recipient-grid">' + rows.map(function(item) {
+        var emailClass = item.hasEmail ? 'tag-success' : 'tag-danger';
+        var itemText = (item.items || []).slice(0, 3).map(function(task) {
+          return '<li>' + escapeHtml([task.evaluationMonth, task.employeeName, task.workflowStatus, '等待' + Number(task.waitDays || 0) + '天'].filter(Boolean).join('｜')) + '</li>';
+        }).join('');
+        return '<article class="notification-recipient-card"><div class="notification-recipient-header"><div><h4>' +
+          escapeHtml(joinText(item.employeeId, item.name)) + '</h4><p>' + escapeHtml(item.role || '') + '</p></div>' +
+          '<span class="tag ' + emailClass + '">' + escapeHtml(item.hasEmail ? item.emailMasked : '未設定Email') + '</span></div>' +
+          '<div class="notification-recipient-counts"><span>待辦 <strong>' + Number(item.pendingCount || 0) + '</strong></span><span>逾期 <strong>' + Number(item.overdueCount || 0) + '</strong></span><span>最久 <strong>' + Number(item.oldestDays || 0) + '天</strong></span></div>' +
+          (itemText ? '<ol class="notification-task-preview">' + itemText + '</ol>' : '') + '</article>';
+      }).join('') + '</div>';
+    }
+    updateSimplePaginationV3_(elements.notificationRecipientPagination, elements.notificationRecipientPageText,
+      elements.notificationRecipientPreviousButton, elements.notificationRecipientNextButton, pagination);
+  }
+
+  function renderNotificationLogsV3_(rows, pagination) {
+    if (!elements.notificationLogList) return;
+    if (!rows.length) {
+      elements.notificationLogList.innerHTML = '<p class="section-help">目前尚無通知紀錄。</p>';
+    } else {
+      elements.notificationLogList.innerHTML = '<div class="account-audit-grid"><div class="account-audit-row account-audit-row--header"><span>類型／結果</span><span>收件人</span><span>時間／筆數／錯誤</span></div>' + rows.map(function(row) {
+        return '<div class="account-audit-row"><span><strong>' + escapeHtml(row.type || '') + '</strong><br>' + escapeHtml(row.result || '') + '</span>' +
+          '<strong>' + escapeHtml(row.recipient || '系統批次') + '<small>' + escapeHtml(row.emailMasked || '') + '</small></strong>' +
+          '<small>' + escapeHtml(row.sentAt || '') + '<br>待辦：' + Number(row.pendingCount || 0) + '｜逾期：' + Number(row.overdueCount || 0) +
+          (row.error ? '<br>錯誤：' + escapeHtml(row.error) : '') + '</small></div>';
+      }).join('') + '</div>';
+    }
+    updateSimplePaginationV3_(elements.notificationLogPagination, elements.notificationLogPageText,
+      elements.notificationLogPreviousButton, elements.notificationLogNextButton, pagination);
+  }
+
+  function updateSimplePaginationV3_(container, textElement, previousButton, nextButton, pagination) {
+    if (!container) return;
+    var page = Number(pagination.page || 1);
+    var totalPages = Number(pagination.totalPages || 1);
+    var total = Number(pagination.total || 0);
+    container.hidden = false;
+    if (textElement) textElement.textContent = '第' + page + '頁／共' + totalPages + '頁（' + total + '筆）';
+    if (previousButton) previousButton.disabled = page <= 1;
+    if (nextButton) nextButton.disabled = page >= totalPages;
+  }
+
+  function notificationSettingsPayloadV3_() {
+    return {
+      enabled: String(elements.notificationEnabled && elements.notificationEnabled.value || '是'),
+      systemUrl: String(elements.notificationSystemUrl && elements.notificationSystemUrl.value || '').trim(),
+      dailyHour: Number(elements.notificationDailyHour && elements.notificationDailyHour.value || 9),
+      overdueDays: Number(elements.notificationOverdueDays && elements.notificationOverdueDays.value || 3),
+      batchSize: Number(elements.notificationBatchSize && elements.notificationBatchSize.value || 20)
+    };
+  }
+
+  async function saveNotificationSettingsV3_() {
+    var payload = notificationSettingsPayloadV3_();
+    if (!/^https:\/\//i.test(payload.systemUrl)) return setNotificationMessageV3_('error', '系統網址必須使用 https://。');
+    setButtonLoading(elements.notificationSaveButton, true, '儲存中');
+    try {
+      var response = await window.V3WorkflowService.notificationSaveSettings(payload, window.V3ApiClient.createRequestId());
+      setNotificationMessageV3_('success', response.data && response.data.message || '通知設定已儲存。');
+      await loadNotificationManagementCenterV3_({ quiet: true });
+    } catch (error) {
+      setNotificationMessageV3_('error', friendlyError(error));
+    } finally {
+      setButtonLoading(elements.notificationSaveButton, false, '儲存設定');
+    }
+  }
+
+  async function createNotificationBatchV3_(scope) {
+    var label = scope === 'OVERDUE' ? '逾期人員' : '全部待辦人員';
+    if (!window.confirm('確定建立「' + label + '」Email通知批次嗎？\n\n系統會將工作放入背景佇列，不會在目前畫面同步寄完。')) return;
+    var button = scope === 'OVERDUE' ? elements.notificationSendOverdueButton : elements.notificationSendAllButton;
+    setButtonLoading(button, true, '建立中');
+    try {
+      var response = await window.V3WorkflowService.notificationCreateBatch({
+        scope: scope,
+        forceResend: Boolean(elements.notificationForceResend && elements.notificationForceResend.checked)
+      }, window.V3ApiClient.createRequestId());
+      var data = response.data || {};
+      setNotificationMessageV3_('success', (data.message || '') + ' 未設定Email：' + Number(data.missingEmailCount || 0) + '人；今日已通知略過：' + Number(data.skippedTodayCount || 0) + '人。');
+      await loadNotificationManagementCenterV3_({ quiet: true });
+    } catch (error) {
+      setNotificationMessageV3_('error', friendlyError(error));
+    } finally {
+      setButtonLoading(button, false, scope === 'OVERDUE' ? '只通知逾期人員' : '通知全部待辦人員');
+    }
+  }
+
+  async function installNotificationScheduleV3_() {
+    if (!window.confirm('確定安裝／更新待辦Email排程嗎？\n\n每日摘要將依目前設定時間建立，背景工作器每5分鐘執行。')) return;
+    elements.notificationInstallScheduleButton.disabled = true;
+    try {
+      var response = await window.V3WorkflowService.notificationInstallSchedule(notificationSettingsPayloadV3_());
+      setNotificationMessageV3_('success', response.data && response.data.message || '通知排程已安裝。');
+      await loadNotificationManagementCenterV3_({ quiet: true });
+    } catch (error) { setNotificationMessageV3_('error', friendlyError(error)); }
+    finally { elements.notificationInstallScheduleButton.disabled = false; }
+  }
+
+  async function disableNotificationScheduleV3_() {
+    if (!window.confirm('確定停用每日摘要與背景寄送排程嗎？\n既有待寄送工作不會刪除。')) return;
+    elements.notificationDisableScheduleButton.disabled = true;
+    try {
+      var response = await window.V3WorkflowService.notificationDisableSchedule();
+      setNotificationMessageV3_('success', response.data && response.data.message || '通知排程已停用。');
+      await loadNotificationManagementCenterV3_({ quiet: true });
+    } catch (error) { setNotificationMessageV3_('error', friendlyError(error)); }
+    finally { elements.notificationDisableScheduleButton.disabled = false; }
+  }
+
+  async function runNotificationWorkerV3_() {
+    elements.notificationRunWorkerButton.disabled = true;
+    try {
+      var response = await window.V3WorkflowService.notificationRunWorker();
+      var data = response.data || {};
+      setNotificationMessageV3_('success', data.message || ('已處理' + Number(data.processed || 0) + '筆通知。'));
+      await loadNotificationManagementCenterV3_({ quiet: true });
+    } catch (error) { setNotificationMessageV3_('error', friendlyError(error)); }
+    finally { elements.notificationRunWorkerButton.disabled = false; }
+  }
+
+  function setNotificationMessageV3_(type, text) {
+    if (!elements.notificationMessage) return;
+    showMessage(elements.notificationMessage, type, text);
+  }
+
   async function loadPdfManagementCenter(options) {
     var settings = options || {};
     if (state.pdfManagementLoading) return;
@@ -3193,7 +3443,7 @@
   }
 
   function cacheModificationElementsV3_() {
-    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateConfirmText','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton'].forEach(function(id) {
+    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateConfirmText','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendAllButton','notificationSendOverdueButton','notificationRunWorkerButton','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText'].forEach(function(id) {
       elements[id] = document.getElementById(id);
     });
   }
@@ -3217,6 +3467,18 @@
     });
     if (elements.accountAuditPreviousButton) elements.accountAuditPreviousButton.addEventListener('click', function() { if (state.accountAuditPage > 1) { state.accountAuditPage -= 1; loadAccountAuditPageV3_(); } });
     if (elements.accountAuditNextButton) elements.accountAuditNextButton.addEventListener('click', function() { state.accountAuditPage += 1; loadAccountAuditPageV3_(); });
+    if (elements.notificationSettingsForm) elements.notificationSettingsForm.addEventListener('submit', function(event) { event.preventDefault(); saveNotificationSettingsV3_(); });
+    if (elements.notificationRefreshButton) elements.notificationRefreshButton.addEventListener('click', function() { loadNotificationManagementCenterV3_(); });
+    if (elements.notificationSendAllButton) elements.notificationSendAllButton.addEventListener('click', function() { createNotificationBatchV3_('ALL'); });
+    if (elements.notificationSendOverdueButton) elements.notificationSendOverdueButton.addEventListener('click', function() { createNotificationBatchV3_('OVERDUE'); });
+    if (elements.notificationRunWorkerButton) elements.notificationRunWorkerButton.addEventListener('click', runNotificationWorkerV3_);
+    if (elements.notificationInstallScheduleButton) elements.notificationInstallScheduleButton.addEventListener('click', installNotificationScheduleV3_);
+    if (elements.notificationDisableScheduleButton) elements.notificationDisableScheduleButton.addEventListener('click', disableNotificationScheduleV3_);
+    if (elements.notificationRecipientPreviousButton) elements.notificationRecipientPreviousButton.addEventListener('click', function() { if (state.notificationRecipientPage > 1) { state.notificationRecipientPage -= 1; loadNotificationManagementCenterV3_(); } });
+    if (elements.notificationRecipientNextButton) elements.notificationRecipientNextButton.addEventListener('click', function() { var pages = Number(state.notificationManagement && state.notificationManagement.recipientPagination && state.notificationManagement.recipientPagination.totalPages || 1); if (state.notificationRecipientPage < pages) { state.notificationRecipientPage += 1; loadNotificationManagementCenterV3_(); } });
+    if (elements.notificationLogPanel) elements.notificationLogPanel.addEventListener('toggle', function() { if (elements.notificationLogPanel.open) loadNotificationManagementCenterV3_({ quiet: true }); });
+    if (elements.notificationLogPreviousButton) elements.notificationLogPreviousButton.addEventListener('click', function() { if (state.notificationLogPage > 1) { state.notificationLogPage -= 1; loadNotificationManagementCenterV3_(); } });
+    if (elements.notificationLogNextButton) elements.notificationLogNextButton.addEventListener('click', function() { var pages = Number(state.notificationManagement && state.notificationManagement.logPagination && state.notificationManagement.logPagination.totalPages || 1); if (state.notificationLogPage < pages) { state.notificationLogPage += 1; loadNotificationManagementCenterV3_(); } });
     if (elements.pdfManagementAbnormalButton) elements.pdfManagementAbnormalButton.addEventListener('click', function() { applyPdfAbnormalFilterV3_('ABNORMAL'); });
   }
 
@@ -3316,15 +3578,15 @@
         area: String(elements.dispatchManagementArea.value || ''),
         source: String(elements.dispatchManagementSource.value || ''),
         personPage: Number(state.dispatchPersonPage || 1),
-        personPageSize: Number(elements.dispatchManagementPageSize && elements.dispatchManagementPageSize.value || state.dispatchPersonPageSize || 15),
+        personPageSize: 10,
         attemptPage: Number(state.dispatchAttemptPage || 1),
-        attemptPageSize: Number(elements.dispatchAttemptPageSize && elements.dispatchAttemptPageSize.value || state.dispatchAttemptPageSize || 15)
+        attemptPageSize: 10
       });
       state.dispatchManagement = result.data || {};
       state.dispatchPersonPage = Number(state.dispatchManagement.personPagination && state.dispatchManagement.personPagination.page || 1);
       state.dispatchAttemptPage = Number(state.dispatchManagement.attemptPagination && state.dispatchManagement.attemptPagination.page || 1);
-      state.dispatchPersonPageSize = Number(state.dispatchManagement.personPagination && state.dispatchManagement.personPagination.pageSize || state.dispatchPersonPageSize || 15) === 10 ? 10 : 15;
-      state.dispatchAttemptPageSize = Number(state.dispatchManagement.attemptPagination && state.dispatchManagement.attemptPagination.pageSize || state.dispatchAttemptPageSize || 15) === 10 ? 10 : 15;
+      state.dispatchPersonPageSize = 10;
+      state.dispatchAttemptPageSize = 10;
       if (elements.dispatchManagementPageSize) elements.dispatchManagementPageSize.value = String(state.dispatchPersonPageSize);
       if (elements.dispatchAttemptPageSize) elements.dispatchAttemptPageSize.value = String(state.dispatchAttemptPageSize);
       var loadedMonth = state.dispatchManagement.evaluationMonth || currentRocMonthFirstDay();
@@ -4421,13 +4683,13 @@
   }
 
   function resolveSystemManagementPageFromHashV3_() {
-    var match = String(window.location.hash || '').match(/^#system\/(home|accounts|dispatch|pdf|archive|health)$/);
+    var match = String(window.location.hash || '').match(/^#system\/(home|accounts|dispatch|notification|pdf|archive|health)$/);
     return match ? match[1] : (state.activeSystemPage || 'home');
   }
 
   function switchSystemManagementPageV3_(page, options) {
     var settings = options || {};
-    var allowed = ['home', 'accounts', 'dispatch', 'pdf', 'archive', 'health'];
+    var allowed = ['home', 'accounts', 'dispatch', 'notification', 'pdf', 'archive', 'health'];
     var target = allowed.indexOf(String(page || '')) !== -1 ? String(page) : 'home';
     state.activeSystemPage = target;
     (elements.systemPagePanels || Array.prototype.slice.call(document.querySelectorAll('[data-system-page-panel]'))).forEach(function (panel) {
@@ -4442,6 +4704,7 @@
       window.history.replaceState(null, '', window.location.pathname + window.location.search + '#system/' + target);
     }
     if (!settings.skipLoad && target === 'dispatch' && !state.dispatchManagement) loadDispatchManagementCenter({ quiet: true });
+    if (!settings.skipLoad && target === 'notification' && !state.notificationManagement) loadNotificationManagementCenterV3_({ quiet: true });
     if (!settings.skipLoad && target === 'pdf' && !state.pdfManagement) loadPdfManagementCenter({ quiet: true });
     if (!settings.skipLoad && target === 'archive' && !state.archiveManagement) loadAnnualArchiveCenterV3_({ quiet: true });
     if (target === 'dispatch' && window.matchMedia && window.matchMedia('(max-width: 860px)').matches) {
