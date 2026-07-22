@@ -52,6 +52,41 @@
     }
   ];
 
+  var B_MANAGER_ITEMS = [
+    {
+      key: 'B版政令執行評等', scoreKey: 'B版政令執行得分', explanationKey: 'B版政令執行A級說明', label: '政令執行',
+      definition: '能夠把公司的政策、主管命令和想法變成行動，把行動變成結果，從而保質保量完成任務的能力。',
+      standards: { A: '都能做到', B: '常能做到', C: '尚能做到', D: '常未做到' }
+    },
+    {
+      key: 'B版追求卓越評等', scoreKey: 'B版追求卓越得分', explanationKey: 'B版追求卓越A級說明', label: '追求卓越',
+      definition: '能為自己設定具挑戰性的工作目標並全力以赴，要求自己的工作表現達到高標準，並不斷尋求突破。',
+      standards: { A: '工作表現有達高標準，並能為自己設定具挑戰性的工作目標', B: '工作表現有達高標準', C: '工作表現有達標準', D: '工作表現尚需努力' }
+    },
+    {
+      key: 'B版顧客滿意評等', scoreKey: 'B版顧客滿意得分', explanationKey: 'B版顧客滿意A級說明', label: '顧客滿意',
+      definition: '重視顧客需求為公司最終達成目標，並與客戶維持長期的良好關係。',
+      standards: { A: '都能做到', B: '常能做到', C: '尚能做到', D: '常未做到' }
+    },
+    {
+      key: 'B版問題解決評等', scoreKey: 'B版問題解決得分', explanationKey: 'B版問題解決A級說明', label: '問題解決',
+      definition: '能逐步探究問題，確認問題發生的真正根源，並提出具體可行方案執行行動。',
+      standards: { A: '都能做到', B: '常能做到', C: '偶爾才做到', D: '未能做到' }
+    },
+    {
+      key: 'B版團隊領導評等', scoreKey: 'B版團隊領導得分', explanationKey: 'B版團隊領導A級說明', label: '團隊領導',
+      definition: '領導者能激勵部屬、與部屬溝通、化解衝突，依成員特性有效分工，並鼓勵成員投入團隊合作。',
+      standards: { A: '都能做到', B: '常能做到', C: '偶爾做到', D: '未能做到' }
+    },
+    {
+      key: 'B版加分項評等', scoreKey: 'B版加分項得分', explanationKey: 'B版加分項A級說明', label: '加分項',
+      definition: '主管交辦事項執行表現，以及主動為門市做出貢獻。',
+      standards: { A: '都能做到', B: '常能做到', C: '偶爾做到', D: '未能做到' }
+    }
+  ];
+
+  var B_GRADE_SCORES = { A: 10, B: 8, C: 6, D: 0 };
+
   var ACTION_LABELS = {
     manager_submit: '送交教育中心',
     edu_submit: '送交教育中心主管',
@@ -100,8 +135,46 @@
     return String(current) === String(expected) ? ' checked' : '';
   }
 
+  function isVersionB(record) {
+    return String(value(record, '考核版本') || '').trim().toUpperCase() === 'B';
+  }
+
+  function versionHiddenInput(record) {
+    return '<input type="hidden" name="evaluationVersion" value="' + (isVersionB(record) ? 'B' : 'A') + '">';
+  }
+
+  function renderBManagerForm(record) {
+    var html = versionHiddenInput(record) + '<div class="form-section manager-evaluation-section b-manager-evaluation-section">' +
+      '<div class="section-title-row"><div><p class="step-label">B版｜店副理進階訓練月考核表</p><h3>門市店主管評分</h3>' +
+      '<p class="section-help">請先閱讀職能定義與A～D標準，再點選評等。系統會自動換算A＝10、B＝8、C＝6、D＝0分。</p></div>' +
+      '<div class="score-total-badge"><span>店主管小計</span><strong data-b-manager-total>0／60</strong></div></div>' +
+      '<div class="b-manager-criteria-list">';
+
+    B_MANAGER_ITEMS.forEach(function(item, index) {
+      var currentGrade = String(value(record, item.key) || '').trim().toUpperCase();
+      var currentExplanation = value(record, item.explanationKey);
+      html += '<article class="manager-criterion b-manager-criterion" data-b-manager-item="' + index + '">' +
+        '<div class="criterion-heading"><div><h4>' + escapeHtml(item.label) + '</h4><span class="max-score-pill">配分10分</span></div>' +
+        '<strong data-b-manager-item-score="' + index + '">' + (currentGrade ? escapeHtml(currentGrade + '｜' + (B_GRADE_SCORES[currentGrade] || 0) + '分') : '尚未評分') + '</strong></div>' +
+        '<div class="b-competency-definition"><b>職能定義</b><p>' + escapeHtml(item.definition) + '</p></div>' +
+        '<div class="b-grade-grid">';
+      ['A','B','C','D'].forEach(function(grade) {
+        html += '<label class="b-grade-choice"><input type="radio" name="bManagerGrade' + index + '" value="' + grade + '"' +
+          selected(currentGrade, grade) + ' required><span><strong>' + grade + '｜' + B_GRADE_SCORES[grade] + '分</strong><small>' + escapeHtml(item.standards[grade]) + '</small></span></label>';
+      });
+      html += '</div><label class="field-group b-a-explanation" data-b-a-explanation="' + index + '"' + (currentGrade === 'A' ? '' : ' hidden') + '>' +
+        '<span class="field-label">A級得分說明 <b class="required-mark">*</b></span>' +
+        '<textarea name="bManagerExplanation' + index + '" rows="3" maxlength="500"' + (currentGrade === 'A' ? ' required' : '') +
+          ' placeholder="請具體說明達到A級表現的事實或案例。">' + escapeHtml(currentGrade === 'A' ? currentExplanation : '') + '</textarea></label></article>';
+    });
+
+    html += '</div>' + textareaField('comment', '門市店主管評語', value(record, '門市店主管評語'), true, '') + '</div>' + signatureBlock();
+    return html;
+  }
+
+
   function renderManagerForm(record) {
-    var html = '<div class="form-section manager-evaluation-section">' +
+    var html = versionHiddenInput(record) + '<div class="form-section manager-evaluation-section">' +
       '<div class="section-title-row"><div><h3>門市店主管評分</h3><p class="section-help">請依各項完整標準點選 1～10 分，六項最高 60 分。</p></div>' +
       '<div class="score-total-badge"><span>店主管小計</span><strong data-manager-total>0／60</strong></div></div>' +
       '<div class="manager-criteria-list">';
@@ -140,7 +213,7 @@
       assignmentLate = 0;
     }
 
-    var html = '<div class="form-section education-evaluation-section">' +
+    var html = versionHiddenInput(record) + '<div class="form-section education-evaluation-section">' +
       '<div class="section-title-row"><div><h3>教育中心填寫（學習成果階段，共40分）</h3>' +
       '<p class="section-help">請先登錄實際累計資料，再依規則完成四項評分。</p></div>' +
       '<div class="education-total-badge"><span>教育中心階段合計</span><strong data-education-total>0／40分</strong></div></div>' +
@@ -169,6 +242,31 @@
         }) +
       '</div>' +
       textareaField('abnormalReport', '教育中心異常回報', value(record, '教育中心異常回報'), true, '') +
+      '</div>' + signatureBlock();
+    return html;
+  }
+
+  function renderBEducationForm(record) {
+    var assignmentLate = currentNumber(record, '作業遲繳天數', 0);
+    var attendanceIssue = currentNumber(record, '培訓出勤異常次數', 0);
+    var html = versionHiddenInput(record) + '<div class="form-section education-evaluation-section b-education-evaluation-section">' +
+      '<div class="section-title-row"><div><p class="step-label">B版｜教育中心填寫</p><h3>課程與出勤評分（共20分）</h3>' +
+      '<p class="section-help">作業／心得／問卷正常繳交10分，每遲繳1天扣1分；培訓課程正常出勤10分，每次遲到或出勤異常扣1分，最低0分。</p></div>' +
+      '<div class="education-total-badge"><span>教育中心小計</span><strong data-b-education-total>0／20分</strong></div></div>' +
+      '<div class="education-score-grid">' +
+        educationCounterCard({
+          title: '1. 作業／心得／問卷繳交', maxScore: 10,
+          rule: '正常繳交得滿分；每遲繳1天扣1分，最低0分。',
+          counters: [{ name: 'assignmentLateDays', label: '遲繳天數', value: assignmentLate, unit: '天' }],
+          scoreName: 'bAssignmentScore', scoreValue: value(record, 'B版作業心得問卷得分')
+        }) +
+        educationCounterCard({
+          title: '2. 培訓課程出勤', maxScore: 10,
+          rule: '正常出勤得滿分；每次遲到或出勤異常扣1分，最低0分。',
+          counters: [{ name: 'trainingAttendanceCount', label: '遲到／出勤異常次數', value: attendanceIssue, unit: '次' }],
+          scoreName: 'bAttendanceScore', scoreValue: value(record, 'B版培訓課程出勤得分')
+        }) +
+      '</div>' + textareaField('abnormalReport', '教育中心異常回報', value(record, '教育中心異常回報'), true, '') +
       '</div>' + signatureBlock();
     return html;
   }
@@ -210,9 +308,13 @@
     };
     var pair = labels[action] || ['評語', ''];
     var commentRequired = action === 'area_approve';
-    var html = '<div class="form-section"><h3>' + escapeHtml(ACTION_LABELS[action] || '簽核') + '</h3>';
+    var html = versionHiddenInput(record) + '<div class="form-section"><h3>' + escapeHtml(ACTION_LABELS[action] || '簽核') + '</h3>';
     if (action === 'area_approve') {
-      html += plainNumberField('adjustment', '區主管增減分（-10～10）', value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'), -10, 10, true);
+      if (isVersionB(record)) {
+        html += plainNumberField('areaScore', '區主管評分（0～20）', value(record, 'B版區主管評分') === '' ? 0 : value(record, 'B版區主管評分'), 0, 20, true);
+      } else {
+        html += plainNumberField('adjustment', '區主管增減分（-10～10）', value(record, '區主管增減分') === '' ? 0 : value(record, '區主管增減分'), -10, 10, true);
+      }
     }
     if (action === 'employee_confirm') {
       html += '<p class="section-help approval-only-note">確認時不需要填寫評語；只有選擇退回店主管時，系統才會要求輸入疑慮說明。</p>';
@@ -264,8 +366,8 @@
 
   function renderActionForm(record, action) {
     if (action === 'force_transition') return renderForceTransitionForm(record);
-    if (action === 'manager_submit') return renderManagerForm(record);
-    if (action === 'edu_submit') return renderEducationForm(record);
+    if (action === 'manager_submit') return isVersionB(record) ? renderBManagerForm(record) : renderManagerForm(record);
+    if (action === 'edu_submit') return isVersionB(record) ? renderBEducationForm(record) : renderEducationForm(record);
     if (action === 'edu_supervisor_approve' || action === 'area_approve' || action === 'employee_confirm' || action === 'department_executive_approve' || action === 'gm_approve') {
       return renderSimpleApprovalForm(record, action);
     }
@@ -304,25 +406,40 @@
     refreshInteractiveControls(form);
     var data = new FormData(form);
     var payload = { action: action };
+    var evaluationVersion = String(data.get('evaluationVersion') || 'A').trim().toUpperCase();
+    payload.evaluationVersion = evaluationVersion === 'B' ? 'B' : 'A';
     if (action === 'manager_submit') {
-      payload.scores = MANAGER_ITEMS.map(function (_, index) { return Number(data.get('managerScore' + index)); });
+      if (payload.evaluationVersion === 'B') {
+        payload.grades = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerGrade' + index) || '').trim().toUpperCase(); });
+        payload.explanations = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerExplanation' + index) || '').trim(); });
+      } else {
+        payload.scores = MANAGER_ITEMS.map(function (_, index) { return Number(data.get('managerScore' + index)); });
+      }
       payload.comment = String(data.get('comment') || '').trim();
       payload.signature = signatureController.getSignaturePayload();
     } else if (action === 'edu_submit') {
-      payload.accumulatedPoints = Number(data.get('accumulatedPoints'));
-      payload.score1 = Number(data.get('score1'));
-      payload.ojtCount = Number(data.get('ojtCount'));
-      payload.score2 = Number(data.get('score2'));
-      payload.weeklyErrorCount = Number(data.get('weeklyErrorCount'));
-      payload.weeklyMissingCount = Number(data.get('weeklyMissingCount'));
-      payload.trainingAttendanceCount = Number(data.get('trainingAttendanceCount'));
-      payload.assignmentLateDays = Number(data.get('assignmentLateDays'));
-      payload.score3 = Number(data.get('score3'));
-      payload.score4 = Number(data.get('score4'));
+      if (payload.evaluationVersion === 'B') {
+        payload.trainingAttendanceCount = Number(data.get('trainingAttendanceCount'));
+        payload.assignmentLateDays = Number(data.get('assignmentLateDays'));
+        payload.bAssignmentScore = Number(data.get('bAssignmentScore'));
+        payload.bAttendanceScore = Number(data.get('bAttendanceScore'));
+      } else {
+        payload.accumulatedPoints = Number(data.get('accumulatedPoints'));
+        payload.score1 = Number(data.get('score1'));
+        payload.ojtCount = Number(data.get('ojtCount'));
+        payload.score2 = Number(data.get('score2'));
+        payload.weeklyErrorCount = Number(data.get('weeklyErrorCount'));
+        payload.weeklyMissingCount = Number(data.get('weeklyMissingCount'));
+        payload.trainingAttendanceCount = Number(data.get('trainingAttendanceCount'));
+        payload.assignmentLateDays = Number(data.get('assignmentLateDays'));
+        payload.score3 = Number(data.get('score3'));
+        payload.score4 = Number(data.get('score4'));
+      }
       payload.abnormalReport = String(data.get('abnormalReport') || '').trim();
       payload.signature = signatureController.getSignaturePayload();
     } else if (action === 'area_approve') {
-      payload.adjustment = Number(data.get('adjustment'));
+      if (payload.evaluationVersion === 'B') payload.areaScore = Number(data.get('areaScore'));
+      else payload.adjustment = Number(data.get('adjustment'));
       payload.comment = String(data.get('comment') || '').trim();
       payload.signature = signatureController.getSignaturePayload();
     } else if (action === 'employee_confirm') {
@@ -368,7 +485,30 @@
   function refreshInteractiveControls(form) {
     if (!form) return;
     refreshManagerTotal(form);
+    refreshBManagerControls(form);
     refreshEducationScores(form);
+  }
+
+  function refreshBManagerControls(form) {
+    var total = 0;
+    var completed = 0;
+    B_MANAGER_ITEMS.forEach(function(_, index) {
+      var selectedNode = form.querySelector('input[name="bManagerGrade' + index + '"]:checked');
+      var scoreNode = form.querySelector('[data-b-manager-item-score="' + index + '"]');
+      var explanationWrap = form.querySelector('[data-b-a-explanation="' + index + '"]');
+      var explanation = form.elements.namedItem('bManagerExplanation' + index);
+      var grade = selectedNode ? String(selectedNode.value || '').toUpperCase() : '';
+      var score = Object.prototype.hasOwnProperty.call(B_GRADE_SCORES, grade) ? B_GRADE_SCORES[grade] : 0;
+      if (grade) { total += score; completed += 1; }
+      if (scoreNode) scoreNode.textContent = grade ? (grade + '｜' + score + '分') : '尚未評分';
+      if (explanationWrap) explanationWrap.hidden = grade !== 'A';
+      if (explanation) {
+        explanation.required = grade === 'A';
+        if (grade !== 'A' && explanation.value) explanation.value = '';
+      }
+    });
+    var totalNode = form.querySelector('[data-b-manager-total]');
+    if (totalNode) totalNode.textContent = total + '／60' + (completed < B_MANAGER_ITEMS.length ? '（已評' + completed + '項）' : '');
   }
 
   function refreshManagerTotal(form) {
@@ -417,6 +557,8 @@
     var score4 = numberFromForm(form, 'score4');
     var totalNode = form.querySelector('[data-education-total]');
     if (totalNode) totalNode.textContent = (score1 + score2 + score3 + score4) + '／40分';
+    var bTotalNode = form.querySelector('[data-b-education-total]');
+    if (bTotalNode) bTotalNode.textContent = (numberFromForm(form, 'bAssignmentScore') + numberFromForm(form, 'bAttendanceScore')) + '／20分';
   }
 
   function checkedNumber(form, name) {
@@ -468,10 +610,18 @@
     return range ? (range.min + '～' + range.max + '分：' + range.text) : '';
   }
 
+  function getBManagerRatingDescription(key, grade) {
+    var item = B_MANAGER_ITEMS.filter(function(candidate) { return candidate.key === key; })[0];
+    var normalized = String(grade || '').trim().toUpperCase();
+    if (!item || !item.standards[normalized]) return '';
+    return normalized + '｜' + B_GRADE_SCORES[normalized] + '分：' + item.standards[normalized];
+  }
+
   window.V3EvaluationForm = Object.freeze({
     ACTION_LABELS: ACTION_LABELS,
     getActionLabel: getActionLabel,
     getManagerScoreDescription: getManagerScoreDescription,
+    getBManagerRatingDescription: getBManagerRatingDescription,
     renderActionForm: renderActionForm,
     collectActionPayload: collectActionPayload,
     initializeInteractiveControls: initializeInteractiveControls,
