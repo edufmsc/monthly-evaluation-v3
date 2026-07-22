@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.5.0D-ui-mail-pagination';
+  var APP_BUILD = '7.5.0E-progress-pdf-ui';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -49,7 +49,7 @@
     pdfManagement: null,
     pdfManagementLoading: false,
     pdfManagementPage: 1,
-    pdfManagementPageSize: 15,
+    pdfManagementPageSize: 10,
     pdfManagementSelected: {},
     pdfManagementAction: null,
     pdfManagementDefaulted: false,
@@ -251,7 +251,7 @@
     var article = document.createElement('article');
     article.id = 'pdfManagementCard'; article.className = 'card test-dispatch-card pdf-management-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">PDF失敗重試與處理｜7.5.0D</p><h3>PDF處理中心</h3><p>依年度與月份查詢，避免一次顯示全部資料；異常數量可直接點擊篩選處理。</p></div><button id="pdfManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
-      '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter"><label class="field-group"><span>民國年度</span><input id="pdfManagementYear" inputmode="numeric" maxlength="3" placeholder="例如 115"></label><label class="field-group"><span>月份</span><select id="pdfManagementMonthNumber">' + monthOptions + '</select></label><label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" maxlength="80"></label><label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus"><option value="ALL">全部狀態</option><option value="ABNORMAL">全部異常</option><option value="GENERATION_FAILED">PDF產生失敗</option><option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option><option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option><option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option></select></label><label class="field-group"><span>每頁顯示</span><select id="pdfManagementPageSize"><option value="10">10筆</option><option value="15" selected>15筆</option></select></label><div class="test-dispatch-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner"></span></button></div></form>' +
+      '<form id="pdfManagementFilterForm" class="filter-grid pdf-management-filter"><label class="field-group"><span>民國年度</span><input id="pdfManagementYear" inputmode="numeric" maxlength="3" placeholder="例如 115"></label><label class="field-group"><span>月份</span><select id="pdfManagementMonthNumber">' + monthOptions + '</select></label><label class="field-group"><span>考核單號／工號／姓名／店別</span><input id="pdfManagementKeyword" maxlength="80" placeholder="輸入任一資訊"></label><label class="field-group"><span>PDF狀態</span><select id="pdfManagementStatus"><option value="ALL">全部狀態</option><option value="ABNORMAL">全部異常</option><option value="GENERATION_FAILED">PDF產生失敗</option><option value="PUBLIC_FAILED">PDF公開失敗</option><option value="VIEW_FAILED">PDF檢視失敗</option><option value="PENDING">PDF待處理</option><option value="PROCESSING">PDF處理中</option><option value="COMPLETE">PDF完成</option><option value="VOID">已作廢</option></select></label><div class="test-dispatch-actions pdf-management-search-actions"><button id="pdfManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢PDF</span><span class="button-spinner"></span></button></div></form>' +
       '<div id="pdfManagementMessage" class="form-message" hidden></div><div id="pdfManagementSummary" class="admin-result-grid pdf-management-summary"></div>' +
       '<section class="detail-section pdf-management-tools"><div class="test-dispatch-heading"><div><h4>重新產生PDF</h4><p class="section-help">一次最多5張；新檔成功後才更新目前檢視資料，舊檔保留。</p></div><button id="pdfManagementAbnormalButton" class="secondary-button secondary-button--small pdf-abnormal-button" type="button">異常 0筆</button></div><div class="test-dispatch-actions"><button id="pdfManagementSelectVisibleButton" class="secondary-button secondary-button--small">勾選目前可重試PDF</button><button id="pdfManagementClearButton" class="secondary-button secondary-button--small">清除勾選</button><button id="pdfManagementRetrySelectedButton" class="primary-button primary-button--small" disabled><span class="button-label">重試選取PDF</span><span class="button-spinner"></span></button><strong id="pdfManagementSelectedCount">已選0張</strong></div></section>' +
       '<section id="pdfManagementList" class="test-dispatch-preview pdf-management-list"></section><section id="pdfManagementActionPanel" class="test-dispatch-preview" hidden><div id="pdfManagementActionContent"></div><label class="field-group"><span>處理原因</span><textarea id="pdfManagementReason" rows="3" maxlength="300"></textarea></label><label class="confirm-row"><input id="pdfManagementConfirm" type="checkbox"><span>我已確認本次操作不會刪除舊PDF、考核資料或簽名快照。</span></label><label class="field-group"><span>最終確認文字</span><input id="pdfManagementConfirmText" maxlength="20"><small id="pdfManagementConfirmHint"></small></label><div class="test-dispatch-actions"><button id="pdfManagementCancelButton" class="secondary-button">取消</button><button id="pdfManagementRunButton" class="primary-button" disabled><span class="button-label">執行</span><span class="button-spinner"></span></button></div><article id="pdfManagementActionResult" class="card admin-result-card" hidden></article></section>';
@@ -782,12 +782,37 @@
     var summary = state.progressSummary || {};
     var byStatus = summary.byStatus || {};
     var rows = Object.keys(byStatus).sort(function (a, b) { return byStatus[b] - byStatus[a]; });
+    var selectedStatus = String(elements.progressStatus && elements.progressStatus.value || '').trim();
     var totalLabel = isEducationPdfManagerUi() ? '待追蹤／處理總數' : '進行中總數';
-    var html = '<article class="progress-summary-card progress-summary-card--total"><span>' + totalLabel + '</span><strong>' + state.progress.length + '</strong></article>';
+    var totalCount = Number(summary.total != null ? summary.total : state.progress.length);
+    var html = '<button type="button" class="progress-summary-card progress-summary-card--total' + (!selectedStatus ? ' is-active' : '') + '" data-progress-summary-status="" aria-pressed="' + (!selectedStatus ? 'true' : 'false') + '"><span>' + totalLabel + '</span><strong>' + escapeHtml(totalCount) + '</strong></button>';
     html += rows.map(function (status) {
-      return '<article class="progress-summary-card"><span>' + escapeHtml(status) + '</span><strong>' + escapeHtml(byStatus[status]) + '</strong></article>';
+      var active = selectedStatus === status;
+      return '<button type="button" class="progress-summary-card' + (active ? ' is-active' : '') + '" data-progress-summary-status="' + escapeHtml(status) + '" aria-pressed="' + (active ? 'true' : 'false') + '"><span>' + escapeHtml(status) + '</span><strong>' + escapeHtml(byStatus[status]) + '</strong></button>';
     }).join('');
     elements.progressSummary.innerHTML = html;
+    Array.prototype.slice.call(elements.progressSummary.querySelectorAll('[data-progress-summary-status]')).forEach(function(button) {
+      button.addEventListener('click', function() {
+        var status = String(button.getAttribute('data-progress-summary-status') || '').trim();
+        setProgressStatusFilterV3_(status);
+        loadProgress();
+      });
+    });
+  }
+
+  function setProgressStatusFilterV3_(status) {
+    if (!elements.progressStatus) return;
+    var value = String(status || '').trim();
+    var exists = Array.prototype.some.call(elements.progressStatus.options || [], function(option) {
+      return String(option.value || '').trim() === value;
+    });
+    if (value && !exists) {
+      var option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      elements.progressStatus.appendChild(option);
+    }
+    elements.progressStatus.value = value;
   }
 
   function renderHistory() {
@@ -2504,12 +2529,11 @@
         month: composePdfManagementMonthV3_(),
         keyword: String(elements.pdfManagementKeyword && elements.pdfManagementKeyword.value || '').trim(),
         status: String(elements.pdfManagementStatus && elements.pdfManagementStatus.value || 'ALL').trim(),
-        page: Number(state.pdfManagementPage || 1), pageSize: Number(elements.pdfManagementPageSize && elements.pdfManagementPageSize.value || state.pdfManagementPageSize || 15)
+        page: Number(state.pdfManagementPage || 1), pageSize: 10
       });
       state.pdfManagement = result.data || {};
       state.pdfManagementPage = Number(state.pdfManagement.page || 1);
-      state.pdfManagementPageSize = Number(state.pdfManagement.pageSize || 15);
-      if (elements.pdfManagementPageSize) elements.pdfManagementPageSize.value = String(state.pdfManagementPageSize === 10 ? 10 : 15);
+      state.pdfManagementPageSize = 10;
       reconcilePdfManagementSelectionV3_();
       renderPdfManagementCenterV3_(state.pdfManagement);
       setPdfManagementMessageV3_('success', 'PDF處理資料已更新。');
@@ -3169,7 +3193,7 @@
   }
 
   function cacheModificationElementsV3_() {
-    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateConfirmText','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementPageSize','pdfManagementAbnormalButton'].forEach(function(id) {
+    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateConfirmText','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton'].forEach(function(id) {
       elements[id] = document.getElementById(id);
     });
   }
@@ -3193,10 +3217,6 @@
     });
     if (elements.accountAuditPreviousButton) elements.accountAuditPreviousButton.addEventListener('click', function() { if (state.accountAuditPage > 1) { state.accountAuditPage -= 1; loadAccountAuditPageV3_(); } });
     if (elements.accountAuditNextButton) elements.accountAuditNextButton.addEventListener('click', function() { state.accountAuditPage += 1; loadAccountAuditPageV3_(); });
-    if (elements.pdfManagementPageSize) elements.pdfManagementPageSize.addEventListener('change', function() {
-      state.pdfManagementPageSize = Number(elements.pdfManagementPageSize.value) === 10 ? 10 : 15;
-      state.pdfManagementPage = 1; loadPdfManagementCenter();
-    });
     if (elements.pdfManagementAbnormalButton) elements.pdfManagementAbnormalButton.addEventListener('click', function() { applyPdfAbnormalFilterV3_('ABNORMAL'); });
   }
 
