@@ -1517,3 +1517,35 @@ body.idle-warning-open {
   .history-pager .secondary-button { flex: 1 1 120px; }
   .history-pager strong { flex: 1 0 100%; order: -1; }
 }
+
+
+/* 7.5.0C usability and administration fixes */
+.score-description { display:block; margin-top:8px; font-size:.9rem; line-height:1.55; color:var(--muted-color,#6f625a); font-weight:500; }
+.history-filter-grid { grid-template-columns:minmax(145px,1fr) minmax(150px,1fr) minmax(145px,1fr) minmax(145px,1fr) minmax(130px,.8fr) auto; align-items:end; }
+.management-card-heading { flex-direction:row !important; align-items:flex-start; gap:16px; }
+.management-card-heading > div { flex:1 1 auto; min-width:0; }
+.management-refresh-button { flex:0 0 auto; width:auto !important; min-width:132px; white-space:nowrap; }
+.dispatch-month-analysis-top { margin-top:18px; background:rgba(255,248,241,.72); }
+.dispatch-month-field { max-width:260px; }
+.account-create-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:16px; }
+.account-create-wide { grid-column:1/-1; }
+.account-audit-toolbar { display:flex; justify-content:flex-end; margin:12px 0; }
+.account-audit-toolbar label { display:flex; align-items:center; gap:8px; }
+.pdf-management-summary { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }
+.pdf-summary-filter-button { border:1px solid var(--border-color,#ead8c9); background:#fffaf5; border-radius:14px; padding:13px; text-align:left; cursor:pointer; }
+.pdf-summary-filter-button span,.pdf-summary-filter-button strong { display:block; }
+.pdf-summary-filter-button strong { margin-top:4px; font-size:1.15rem; }
+.pdf-summary-filter-button:hover,.pdf-summary-filter-button:focus-visible { border-color:#9f4216; box-shadow:0 4px 14px rgba(80,38,14,.10); }
+.pdf-abnormal-button { white-space:nowrap; }
+@media (max-width:1100px) {
+  .history-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .account-create-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:700px) {
+  .history-filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .history-filter-grid .primary-button { grid-column:1/-1; }
+  .account-create-grid { grid-template-columns:1fr; }
+  .account-create-wide { grid-column:auto; }
+  .management-card-heading { flex-direction:row !important; }
+  .management-refresh-button { min-width:110px; padding-left:12px; padding-right:12px; }
+}
