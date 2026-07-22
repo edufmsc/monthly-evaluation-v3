@@ -457,9 +457,21 @@
     refreshInteractiveControls(form);
   }
 
+
+  function getManagerScoreDescription(key, score) {
+    var item = MANAGER_ITEMS.filter(function (candidate) { return candidate.key === key; })[0];
+    var numericScore = Number(score);
+    if (!item || !isFinite(numericScore)) return '';
+    var range = item.ranges.filter(function (candidate) {
+      return numericScore >= candidate.min && numericScore <= candidate.max;
+    })[0];
+    return range ? (range.min + '～' + range.max + '分：' + range.text) : '';
+  }
+
   window.V3EvaluationForm = Object.freeze({
     ACTION_LABELS: ACTION_LABELS,
     getActionLabel: getActionLabel,
+    getManagerScoreDescription: getManagerScoreDescription,
     renderActionForm: renderActionForm,
     collectActionPayload: collectActionPayload,
     initializeInteractiveControls: initializeInteractiveControls,
