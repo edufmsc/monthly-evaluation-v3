@@ -1610,3 +1610,70 @@ body.idle-warning-open {
 .detail-item--manager-score > span { display:block; }
 .score-description--title { display:inline; margin-left:2px; color:var(--muted); font-size:.82rem; font-weight:500; line-height:1.55; }
 .detail-item--manager-score > strong { display:block; margin-top:8px; font-size:1.05rem; }
+
+/* 7.6.0A｜待辦Email通知中心 */
+.notification-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, .7fr) minmax(280px, 2fr) minmax(130px, .8fr) minmax(150px, .9fr) minmax(130px, .8fr) auto;
+  gap: 14px;
+  align-items: end;
+  margin: 18px 0;
+}
+.notification-url-field { min-width: 0; }
+.notification-settings-actions { align-self: end; }
+.dispatch-fixed-page-note {
+  min-height: 76px;
+  justify-content: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, #ead8cc);
+  border-radius: 12px;
+  background: #fff9f5;
+}
+.notification-recipient-grid {
+  display: grid;
+  gap: 12px;
+}
+.notification-recipient-card {
+  border: 1px solid #ead8cc;
+  border-radius: 14px;
+  padding: 16px;
+  background: #fffdfb;
+}
+.notification-recipient-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.notification-recipient-header h4,
+.notification-recipient-header p { margin: 0; }
+.notification-recipient-header p { color: #7d6b61; margin-top: 4px; }
+.notification-recipient-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 12px;
+}
+.notification-recipient-counts span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f8eee7;
+}
+.notification-task-preview {
+  margin: 12px 0 0 20px;
+  padding: 0;
+  color: #5d5049;
+}
+.notification-task-preview li + li { margin-top: 5px; }
+
+@media (max-width: 1180px) {
+  .notification-settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .notification-url-field { grid-column: 1 / -1; }
+}
+@media (max-width: 680px) {
+  .notification-settings-grid { grid-template-columns: 1fr; }
+  .notification-url-field { grid-column: auto; }
+  .notification-recipient-header { flex-direction: column; }
+}
