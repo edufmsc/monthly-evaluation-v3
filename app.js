@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.7.0A-HF3-version-identity';
+  var APP_BUILD = '7.7.0A-HF4R1-form-name';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -201,8 +201,8 @@
         '<div class="test-dispatch-actions"><button id="dispatchManagementSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢派發狀態</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
       '</form>' +
       '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div><div id="dispatchManagementSummary"></div>' +
-      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人，先選擇考核版本再預覽；建立後版本即鎖定。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
-        '<div class="batch-dispatch-version-row"><label class="field-group"><span>考核版本</span><select id="batchDispatchEvaluationVersion"><option value="A">A版｜一般月考核表</option><option value="B">B版｜店副理進階訓練月考核表</option></select></label><p class="section-help">B版沿用A版完整簽核流程，只更換考核內容、評分方式與PDF範本。</p></div>' +
+      '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人，先選擇考核表類型再預覽；建立後考核表類型即鎖定。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
+        '<div class="batch-dispatch-version-row"><label class="field-group"><span>考核表類型</span><select id="batchDispatchEvaluationVersion"><option value="A">一般月考核表</option><option value="B">店副理進階月考核表</option></select></label><p class="section-help">店副理進階月考核表沿用一般月考核表的完整簽核流程，只更換考核內容、評分方式與PDF範本。</p></div>' +
         '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button><button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button><button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
       '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><p class="section-help">每頁固定顯示10筆，可使用上一頁／下一頁切換。</p><div id="dispatchManagementAttempts"></div></details>' +
@@ -805,7 +805,7 @@
     return JSON.stringify({
       items: (items || []).map(function(item) {
         return [item.evaluationNo, item.status, item.assignedRole, item.assignedEmployeeId, item.dataVersion,
-          item.updatedAt, item.pdfStatus, item.pdfPublicStatus, item.pdfPublicViewToken, item.pdfHasFile, item.isVoid, item.isException];
+          item.updatedAt, item.evaluationVersion, item.pdfStatus, item.pdfPublicStatus, item.pdfPublicViewToken, item.pdfHasFile, item.isVoid, item.isException];
       }),
       summary: summary || {}
     });
@@ -919,7 +919,7 @@
 
     pushTag(effectiveClosed ? '結案' : status, '');
     var evaluationVersion = String(item.evaluationVersion || 'A').trim().toUpperCase() === 'B' ? 'B' : 'A';
-    pushTag(evaluationVersion === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核',
+    pushTag(evaluationVersion === 'B' ? '店副理進階月考核表' : '一般月考核表',
       evaluationVersion === 'B' ? ' tag--version-b' : ' tag--version-a');
     if (pdfStatus && pdfStatus !== '未排隊') {
       pushTag('PDF' + pdfStatus, pdfStatus === '完成' ? ' tag--success' : pdfStatus === '失敗' ? ' tag--danger' : ' tag--warning');
@@ -1896,7 +1896,7 @@
   function summaryHtml(record) {
     return '<div class="summary-grid">' +
       metaItem('考核單號', record['考核單號']) +
-      metaItem('考核版本', String(record['考核版本'] || 'A').toUpperCase() === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核') +
+      metaItem('考核表類型', String(record['考核版本'] || 'A').toUpperCase() === 'B' ? '店副理進階月考核表' : '一般月考核表') +
       metaItem('考核月份', formatRocDateDisplay(record['考核月份'])) +
       metaItem('受評人員', joinText(record['受評人員工號'], record['受評人員姓名'])) +
       metaItem('轉任日', formatRocDateDisplay(record['受評人員轉任日'])) +
@@ -1922,7 +1922,7 @@
       ];
       customVersionHtml = renderBManagerReviewSectionHtml(record, bItems);
       sections = [
-        ['B版｜教育中心評核', [
+        ['教育中心評核', [
           ['作業／心得／問卷遲繳天數', record['作業遲繳天數']],
           ['作業／心得／問卷得分', record['B版作業心得問卷得分']],
           ['培訓課程遲到／異常次數', record['培訓出勤異常次數']],
@@ -1992,7 +1992,7 @@
       '</section>';
     }).join('');
     var managerComment = String(record['門市店主管評語'] || '').trim();
-    return '<article class="detail-section b-manager-review-section"><div class="b-manager-review-heading"><div><p class="step-label">B版</p><h3>門市店主管評核</h3></div>' +
+    return '<article class="detail-section b-manager-review-section"><div class="b-manager-review-heading"><div><p class="step-label">店副理進階月考核表</p><h3>門市店主管評核</h3></div>' +
       '<strong>小計 ' + escapeHtml(record['門市店主管小計'] === '' ? '—' : record['門市店主管小計']) + '／60</strong></div>' +
       '<div class="b-manager-review-list">' + rows + '</div>' +
       (managerComment ? '<div class="b-manager-overall-comment"><span>門市店主管評語</span><p>' + escapeHtml(managerComment) + '</p></div>' : '') +
@@ -3001,11 +3001,11 @@
         '<p>' + escapeHtml(item.evaluationNo || '') + '｜' + escapeHtml(item.employeeId || '') + '</p></div>' +
         '<div class="pdf-management-tags">' +
           (String(item.evaluationVersion || 'A').toUpperCase() === 'B'
-            ? '<span class="tag tag--version-b">B版｜店副理進階</span>'
-            : '<span class="tag tag--version-a">A版｜一般月考核</span>') +
+            ? '<span class="tag tag--version-b">店副理進階月考核表</span>'
+            : '<span class="tag tag--version-a">一般月考核表</span>') +
           '<span class="tag ' + issueClass + '">' + escapeHtml(item.issueLabel || '其他狀態') + '</span>' + selection + '</div></div>' +
       '<div class="evaluation-card__meta">' +
-        metaItem('考核版本', String(item.evaluationVersion || 'A').toUpperCase() === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核') +
+        metaItem('考核表類型', String(item.evaluationVersion || 'A').toUpperCase() === 'B' ? '店副理進階月考核表' : '一般月考核表') +
         metaItem('考核月份', item.evaluationMonth) +
         metaItem('店別', joinStore(item.storeCode, item.storeName)) +
         metaItem('流程狀態', item.workflowStatus) +
@@ -3804,8 +3804,8 @@
       }
       var rowVersionTag = row.evaluationNo
         ? (String(row.evaluationVersion || 'A').toUpperCase() === 'B'
-          ? '<span class="tag tag--version-b">B版｜店副理進階</span> '
-          : '<span class="tag tag--version-a">A版｜一般月考核</span> ')
+          ? '<span class="tag tag--version-b">店副理進階月考核表</span> '
+          : '<span class="tag tag--version-a">一般月考核表</span> ')
         : '';
       return '<div class="route-row"><span><span class="tag ' + tone + '">' + escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' + rowVersionTag +
         escapeHtml(joinStore(row.storeCode, row.storeName)) + '</span><strong>' +
@@ -3838,8 +3838,8 @@
     elements.dispatchManagementAttempts.innerHTML = '<div class="route-list">' + rows.map(function (row) {
       var attemptVersionTag = row.evaluationNo
         ? (String(row.evaluationVersion || 'A').toUpperCase() === 'B'
-          ? '<span class="tag tag--version-b">B版｜店副理進階</span> '
-          : '<span class="tag tag--version-a">A版｜一般月考核</span> ')
+          ? '<span class="tag tag--version-b">店副理進階月考核表</span> '
+          : '<span class="tag tag--version-a">一般月考核表</span> ')
         : '';
       return '<div class="route-row"><span><span class="tag ' + dispatchCategoryTone(row.category) + '">' +
         escapeHtml(dispatchCategoryLabel(row.category)) + '</span> ' + attemptVersionTag + escapeHtml(row.executionSource || '未標示來源') +
@@ -3960,7 +3960,7 @@
       (refreshedBecauseStale ? '<div class="form-message form-message--info">資料已變動，系統已自動更新預覽；請重新確認後執行。</div>' : '') +
       '<div class="admin-result-grid">' +
         metaItem('考核月份', data.evaluationMonth) +
-        metaItem('考核版本', String(data.evaluationVersion || 'A') === 'B' ? 'B版｜店副理進階' : 'A版｜一般月考核') +
+        metaItem('考核表類型', String(data.evaluationVersion || 'A') === 'B' ? '店副理進階月考核表' : '一般月考核表') +
         metaItem('本次選取', summary.selectedCount || 0) +
         metaItem('預計建立', summary.createCount || 0) +
         metaItem('已有R0跳過', summary.duplicateCount || 0) +
@@ -5005,11 +5005,11 @@
       CREDENTIAL_EMPLOYEE_NOT_FOUND: '查無符合姓名或工號的人員。',
       ACCOUNT_REASON_REQUIRED: '請填寫至少4個字的帳號處理原因。',
       CONFIRM_TEXT_MISMATCH: '最終確認文字不正確。',
-      B_MANAGER_GRADE_INVALID: 'B版六項評核只能選擇A、B、C或D。',
-      B_MANAGER_GRADES_REQUIRED: '請完成B版店主管六項評核。',
+      B_MANAGER_GRADE_INVALID: '店副理進階月考核表六項評核只能選擇A、B、C或D。',
+      B_MANAGER_GRADES_REQUIRED: '請完成店副理進階月考核表的店主管六項評核。',
       B_MANAGER_A_EXPLANATION_REQUIRED: '選擇A時，請填寫該項A級得分說明。',
-      PDF_B_TEMPLATE_NOT_CONFIGURED: '尚未設定B版PDF範本，請先由教育中心完成B版初始化與範本設定。',
-      BATCH_DISPATCH_VERSION_MISMATCH: '預覽的考核版本與目前選擇不同，請重新預覽。'
+      PDF_B_TEMPLATE_NOT_CONFIGURED: '尚未設定店副理進階月考核表PDF範本，請先由教育中心完成初始化與範本設定。',
+      BATCH_DISPATCH_VERSION_MISMATCH: '預覽的考核表類型與目前選擇不同，請重新預覽。'
     };
     if (code === 'UNKNOWN_ACTION') {
       var rawMessage = String(error && error.message || '');
