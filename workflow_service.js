@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.9.0A-HF6-priority-operations */
+/* 月考核系統 V3｜版本：7.9.0A-HF7-management-usability */
 (function () {
   'use strict';
 
@@ -78,6 +78,7 @@
     dispatchScheduleInstall: function (payload) { return call('dispatchScheduleInstall', payload || {}); },
     dispatchScheduleDisable: function (payload) { return call('dispatchScheduleDisable', payload || {}); },
     evaluationOutcomeAnalysis: function (filters) { return call('evaluationOutcomeAnalysis', filters || {}); },
+    evaluationOutcomeMetricDetails: function (filters) { return call('evaluationOutcomeMetricDetails', filters || {}); },
     monthlyPlanCenter: function (filters) { return call('monthlyPlanCenter', filters || {}); },
     monthlyPlanSave: function (payload, requestId) { return call('monthlyPlanSave', payload || {}, requestId); },
     monthlyPlanLock: function (payload, requestId) { return call('monthlyPlanLock', payload || {}, requestId); },
