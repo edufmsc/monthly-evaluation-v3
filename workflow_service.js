@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.9.0A-HF7-management-usability */
+/* 月考核系統 V3｜版本：7.9.0A-HF8-operations-control */
 (function () {
   'use strict';
 
@@ -135,6 +135,12 @@
     archiveBuild: function (payload, requestId) { return call('archiveBuild', payload || {}, requestId); },
     archiveFinalize: function (payload, requestId) { return call('archiveFinalize', payload || {}, requestId); },
     archiveCleanup: function (payload, requestId) { return call('archiveCleanup', payload || {}, requestId); },
+    archiveRestorePreview: function (batchId) { return call('archiveRestorePreview', { batchId: String(batchId || '') }); },
+    archiveRestore: function (payload, requestId) { return call('archiveRestore', payload || {}, requestId); },
+    backgroundJobCenter: function (filters) { return call('backgroundJobCenter', filters || {}); },
+    schemaManagementCenter: function () { return call('schemaManagementCenter', {}); },
+    schemaRepairPreview: function () { return call('schemaRepairPreview', {}); },
+    schemaRepair: function (payload, requestId) { return call('schemaRepair', payload || {}, requestId); },
     recordClientPerformance: function (payload, requestId) {
       return call('recordClientPerformance', payload || {}, requestId);
     }
