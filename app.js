@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.9.0A-HF7-management-usability';
+  var APP_BUILD = '7.9.0A-HF8-operations-control';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -79,6 +79,14 @@
     notificationFailedSelected: {},
     notificationSelectedEmployees: {},
     notificationPreview: null,
+    notificationLogResult: 'ALL',
+    notificationLogKeyword: '',
+    backgroundJobs: null,
+    backgroundJobsLoading: false,
+    backgroundJobsPage: 1,
+    schemaManagement: null,
+    schemaManagementLoading: false,
+    schemaRepairPreview: null,
     monthlyPlan: null,
     monthlyPlanLoading: false,
     monthlyPlanPage: 1,
@@ -143,6 +151,8 @@
     ensureNotificationManagementPanelV3_();
     ensureMonthlyPlanManagementPanelV3_();
     ensureEvaluationOutcomePanelV3_();
+    ensureBackgroundJobPanelV3_();
+    ensureSchemaManagementPanelV3_();
     ensureNotificationPreviewDialogV3_();
     ensureSystemManagementWorkspaceV3_();
     ensureContinuousReviewToolbar();
@@ -486,9 +496,61 @@
       '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>目前有待辦的人員</h4><p class="section-help">每頁固定10人；可勾選指定人員寄送，未設定Email者不可勾選。</p></div></div>' +
         '<div id="notificationRecipientList"></div><div id="notificationRecipientPagination" class="account-management-pagination" hidden>' +
         '<button id="notificationRecipientPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="notificationRecipientPageText">第1頁</strong><button id="notificationRecipientNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></section>' +
-      '<details id="notificationLogPanel" class="detail-section"><summary>查看最近通知紀錄</summary><p class="section-help">每頁固定10筆，不顯示完整Email。</p>' +
+      '<details id="notificationLogPanel" class="detail-section"><summary>查看最近通知紀錄</summary><p class="section-help">每頁固定10筆；可依結果或人員快速找出異常，不顯示完整Email。</p>' +
+        '<form id="notificationLogFilterForm" class="notification-log-filter"><label class="field-group"><span>寄送結果</span><select id="notificationLogResult"><option value="ALL">全部結果</option><option value="ABNORMAL">只看異常</option><option value="FAILED">失敗</option><option value="RETRY">等待重試</option><option value="SUCCESS">成功</option></select></label>' +
+        '<label class="field-group"><span>人員／Email／錯誤／批次</span><input id="notificationLogKeyword" type="search" maxlength="80" placeholder="輸入關鍵字"></label>' +
+        '<div class="test-dispatch-actions"><button id="notificationLogSearchButton" class="secondary-button" type="submit">查詢紀錄</button><button id="notificationLogResetButton" class="secondary-button" type="button">清除條件</button></div></form>' +
         '<div id="notificationLogList"></div><div id="notificationLogPagination" class="account-management-pagination" hidden>' +
         '<button id="notificationLogPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="notificationLogPageText">第1頁</strong><button id="notificationLogNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></details>';
+    systemPanel.appendChild(article);
+  }
+
+  function ensureBackgroundJobPanelV3_() {
+    if (document.getElementById('backgroundJobCard')) return;
+    var systemPanel = document.getElementById('systemPanel');
+    if (!systemPanel) return;
+    var article = document.createElement('article');
+    article.id = 'backgroundJobCard';
+    article.className = 'card test-dispatch-card background-job-card';
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
+      '<p class="step-label">統一作業監控｜7.9.0A-HF8</p><h3>背景工作中心</h3>' +
+      '<p>集中查看通知、PDF、派發與年度封存工作；實際修正仍回到各專用中心，避免誤操作。</p></div>' +
+      '<button id="backgroundJobRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+      '<form id="backgroundJobFilterForm" class="filter-grid background-job-filter">' +
+        '<label class="field-group"><span>工作類型</span><select id="backgroundJobType"><option value="ALL">全部類型</option><option value="NOTIFICATION">待辦通知</option><option value="PDF">PDF處理</option><option value="DISPATCH">月考核派發</option><option value="ARCHIVE">年度封存</option></select></label>' +
+        '<label class="field-group"><span>工作狀態</span><select id="backgroundJobStatus"><option value="ALL">全部狀態</option><option value="PENDING">等待中</option><option value="RUNNING">處理中</option><option value="SUCCESS">已完成</option><option value="FAILED">失敗</option><option value="WARNING">需注意</option></select></label>' +
+        '<label class="field-group background-job-keyword"><span>工作編號／人員／考核單號／錯誤</span><input id="backgroundJobKeyword" type="search" maxlength="80" placeholder="輸入關鍵字"></label>' +
+        '<div class="test-dispatch-actions"><button id="backgroundJobSearchButton" class="secondary-button" type="submit">查詢工作</button><button id="backgroundJobResetButton" class="secondary-button" type="button">清除條件</button></div>' +
+      '</form>' +
+      '<div id="backgroundJobMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
+      '<div id="backgroundJobSummary"></div>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>排程健康狀態</h4><p class="section-help">只顯示目前設定與最近狀態，不會自動變更排程。</p></div></div><div id="backgroundScheduleHealth" class="background-schedule-grid"></div></section>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>最近背景工作</h4><p class="section-help">每頁10筆；點選「前往處理」可直接開啟對應管理功能。</p></div></div>' +
+        '<div id="backgroundJobList"></div><div id="backgroundJobPagination" class="account-management-pagination" hidden><button id="backgroundJobPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="backgroundJobPageText">第1頁</strong><button id="backgroundJobNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></section>';
+    systemPanel.appendChild(article);
+  }
+
+  function ensureSchemaManagementPanelV3_() {
+    if (document.getElementById('schemaManagementCard')) return;
+    var systemPanel = document.getElementById('systemPanel');
+    if (!systemPanel) return;
+    var article = document.createElement('article');
+    article.id = 'schemaManagementCard';
+    article.className = 'card test-dispatch-card schema-management-card';
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
+      '<p class="step-label">介面控制試算表｜7.9.0A-HF8</p><h3>資料結構管理中心</h3>' +
+      '<p>教育中心可從介面檢查並安全補齊後台工作表；不需要直接打開Excel或Google試算表調整欄位。</p></div>' +
+      '<button id="schemaManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新檢查</button></div>' +
+      '<div id="schemaManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
+      '<div id="schemaManagementSummary"></div>' +
+      '<section class="detail-section schema-safety-section"><h4>安全規則</h4><div id="schemaSafetyRules" class="schema-safety-list"></div></section>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>工作表健康狀態</h4><p class="section-help">自訂欄位會保留；靜態參考表內容不一致時只提示人工確認。</p></div><button id="schemaRepairPreviewButton" class="secondary-button secondary-button--small" type="button">預覽安全補齊</button></div><div id="schemaSheetList"></div></section>' +
+      '<section id="schemaRepairPanel" class="detail-section schema-repair-panel" hidden><div id="schemaRepairPreviewContent"></div>' +
+        '<label class="field-group"><span>執行原因</span><textarea id="schemaRepairReason" rows="3" maxlength="300" placeholder="例如：依HF8版本安全補齊缺少工作表與欄位"></textarea></label>' +
+        '<label class="confirm-row"><input id="schemaRepairConfirm" type="checkbox"><span>我確認只建立缺少工作表、初始化空白表及在最右側補欄，不刪除、不清空、不改名、不重排既有資料。</span></label>' +
+        '<div class="test-dispatch-actions"><button id="schemaRepairCancelButton" class="secondary-button" type="button">取消</button><button id="schemaRepairRunButton" class="primary-button" type="button" disabled><span class="button-label">執行安全補齊</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
+        '<article id="schemaRepairResult" class="card admin-result-card" hidden></article></section>' +
+      '<details class="detail-section"><summary>查看最近資料結構版本紀錄</summary><div id="schemaVersionList"></div></details>';
     systemPanel.appendChild(article);
   }
 
@@ -512,13 +574,14 @@
       '<div class="system-management-mobile-select"><label for="systemManagementPageSelect">管理功能</label>' +
         '<select id="systemManagementPageSelect">' +
           '<option value="home">管理首頁</option>' +
-          '<optgroup label="每日作業"><option value="notification">待辦通知中心</option><option value="pdf">PDF處理中心</option></optgroup>' +
+          '<optgroup label="每日作業"><option value="jobs">背景工作中心</option><option value="notification">待辦通知中心</option><option value="pdf">PDF處理中心</option></optgroup>' +
           '<optgroup label="每月作業"><option value="monthlyPlan">下月考核名單</option><option value="dispatch">月考核派發</option><option value="outcomes">月考核成果分析</option></optgroup>' +
-          '<optgroup label="系統維護"><option value="accounts">帳號與登入</option><option value="archive">年度封存中心</option><option value="health">系統健檢</option></optgroup></select></div>' +
+          '<optgroup label="系統維護"><option value="accounts">帳號與登入</option><option value="schema">資料結構管理</option><option value="archive">年度封存中心</option><option value="health">系統健檢</option></optgroup></select></div>' +
       '<div class="system-management-layout">' +
         '<nav id="systemManagementNav" class="system-management-nav" aria-label="系統管理功能">' +
           systemManagementNavButtonV3_('home', '管理首頁', '功能總覽與入口') +
           systemManagementNavGroupV3_('每日作業') +
+          systemManagementNavButtonV3_('jobs', '背景工作中心', '通知、PDF、派發與封存') +
           systemManagementNavButtonV3_('notification', '待辦通知中心', '每日摘要與一鍵通知') +
           systemManagementNavButtonV3_('pdf', 'PDF處理中心', '產生狀態、失敗重試') +
           systemManagementNavGroupV3_('每月作業') +
@@ -527,6 +590,7 @@
           systemManagementNavButtonV3_('outcomes', '月考核成果分析', '分數趨勢與店區比較') +
           systemManagementNavGroupV3_('系統維護') +
           systemManagementNavButtonV3_('accounts', '帳號與登入', '帳密、解鎖與啟停') +
+          systemManagementNavButtonV3_('schema', '資料結構管理', '工作表健檢與安全補齊') +
           systemManagementNavButtonV3_('archive', '年度封存中心', '年度打包與安全清理') +
           systemManagementNavButtonV3_('health', '系統健檢', '連線、Session與異常檢查') +
         '</nav>' +
@@ -537,6 +601,8 @@
     var pages = workspace.querySelector('#systemManagementPages');
     var homePage = createSystemManagementPageV3_('home');
     var accountsPage = createSystemManagementPageV3_('accounts');
+    var jobsPage = createSystemManagementPageV3_('jobs');
+    var schemaPage = createSystemManagementPageV3_('schema');
     var monthlyPlanPage = createSystemManagementPageV3_('monthlyPlan');
     var dispatchPage = createSystemManagementPageV3_('dispatch');
     var outcomesPage = createSystemManagementPageV3_('outcomes');
@@ -545,7 +611,9 @@
     var archivePage = createSystemManagementPageV3_('archive');
     var healthPage = createSystemManagementPageV3_('health');
     pages.appendChild(homePage);
+    pages.appendChild(jobsPage);
     pages.appendChild(accountsPage);
+    pages.appendChild(schemaPage);
     pages.appendChild(monthlyPlanPage);
     pages.appendChild(dispatchPage);
     pages.appendChild(outcomesPage);
@@ -558,16 +626,20 @@
       '<div class="system-page-heading"><div><p class="step-label">管理首頁</p><h3>請選擇要處理的功能</h3>' +
       '<p>管理功能互相獨立，不會在進入系統管理時一次載入帳號、派發與PDF資料。</p></div></div>' +
       '<div class="system-home-grid">' +
+        systemHomeCardV3_('jobs', '背景工作中心', '一頁查看通知、PDF、派發與封存工作狀態。', '異常工作可直接前往對應中心處理，不在此刪除資料') +
         systemHomeCardV3_('accounts', '帳號與登入', '查詢單一或特定範圍人員；每頁10人，可切換15人。', '帳密查詢、解除鎖定、啟停帳號、強制登出') +
         systemHomeCardV3_('monthlyPlan', '下月考核名單', '逐月勾選需要考核的人員並指定考核表類型。', '鎖定後自動派發優先依此名單執行') +
         systemHomeCardV3_('dispatch', '月考核派發', '只在進入本頁時載入當月派發狀態。', '每月1～3日排程、人工派發、補派與派發分析') +
         systemHomeCardV3_('outcomes', '月考核成果分析', '依已結案資料查看分數趨勢與組織平均。', '一般與店副理進階月考核表分開分析') +
         systemHomeCardV3_('notification', '待辦通知中心', '每日摘要附系統網址，並提供教育中心一鍵通知。', '超過3天加強提醒，Email由背景工作器分批寄送') +
         systemHomeCardV3_('pdf', 'PDF處理中心', '集中處理PDF失敗、公開失敗與檔案檢查。', '單筆或逐筆重試，不刪除舊PDF') +
+        systemHomeCardV3_('schema', '資料結構管理', '從介面檢查工作表與必要欄位，不必直接碰後台試算表。', '只做非破壞式建立、初始化與最右側補欄') +
         systemHomeCardV3_('archive', '年度封存中心', '一鍵建立封存包，人工核對後完成封存。', '主系統清理需等待30天並再次確認') +
         systemHomeCardV3_('health', '系統健檢', '手動執行連線、登入狀態及系統異常檢查。', '不會進入頁面就自動執行') +
       '</div></section>';
 
+    var backgroundJobCard = document.getElementById('backgroundJobCard');
+    var schemaManagementCard = document.getElementById('schemaManagementCard');
     var accountCard = document.getElementById('accountManagementCard');
     var monthlyPlanCard = document.getElementById('monthlyPlanManagementCard');
     var dispatchCard = document.getElementById('dispatchManagementCard');
@@ -575,6 +647,8 @@
     var notificationCard = document.getElementById('notificationManagementCard');
     var pdfCard = document.getElementById('pdfManagementCard');
     var archiveCard = document.getElementById('annualArchiveCard');
+    if (backgroundJobCard) jobsPage.appendChild(backgroundJobCard);
+    if (schemaManagementCard) schemaPage.appendChild(schemaManagementCard);
     if (accountCard) accountsPage.appendChild(accountCard);
     if (monthlyPlanCard) monthlyPlanPage.appendChild(monthlyPlanCard);
     if (dispatchCard) dispatchPage.appendChild(dispatchCard);
@@ -934,13 +1008,13 @@
     elements.refreshProgressButton.disabled = true;
     try {
       var result = await window.V3WorkflowService.listProgress({
-        page: state.progressPage,
-        pageSize: state.progressPageSize,
-        month: String(elements.progressMonth.value || '').trim(),
-        employeeId: String(elements.progressEmployeeId.value || '').trim().toUpperCase(),
-        department: String(elements.progressDepartment.value || '').trim(),
-        area: String(elements.progressArea.value || '').trim(),
-        status: String(elements.progressStatus.value || '').trim()
+        page: normalizeManagementPageV3_(state.progressPage),
+        pageSize: normalizeManagementPageSizeV3_(state.progressPageSize, [10, 15], 10),
+        month: normalizeRocMonthSearchV3_(elements.progressMonth.value, '', false),
+        employeeId: normalizeManagementEmployeeIdV3_(elements.progressEmployeeId.value),
+        department: normalizeManagementSearchTextV3_(elements.progressDepartment.value, 40),
+        area: normalizeManagementSearchTextV3_(elements.progressArea.value, 40),
+        status: normalizeManagementSelectV3_(elements.progressStatus.value, '')
       });
       var data = result.data || {};
       var nextItems = Array.isArray(data.items) ? data.items : [];
@@ -969,13 +1043,13 @@
     if (!settings.quiet) elements.historyList.innerHTML = '<div class="loading-list">正在查詢歷史紀錄…</div>';
     try {
       var result = await window.V3WorkflowService.listHistory({
-        page: Number(state.historyPage || 1),
-        pageSize: Number(state.historyPageSize || 15),
-        month: String(elements.historyMonth.value || '').trim(),
-        employeeId: String(elements.historyEmployeeId.value || '').trim().toUpperCase(),
-        department: String(elements.historyDepartment.value || '').trim(),
-        area: String(elements.historyArea.value || '').trim(),
-        status: String(elements.historyStatus.value || '').trim()
+        page: normalizeManagementPageV3_(state.historyPage),
+        pageSize: normalizeManagementPageSizeV3_(state.historyPageSize, [10, 15], 15),
+        month: normalizeRocMonthSearchV3_(elements.historyMonth.value, '', false),
+        employeeId: normalizeManagementEmployeeIdV3_(elements.historyEmployeeId.value),
+        department: normalizeManagementSearchTextV3_(elements.historyDepartment.value, 40),
+        area: normalizeManagementSearchTextV3_(elements.historyArea.value, 40),
+        status: normalizeManagementSelectV3_(elements.historyStatus.value, '')
       });
       var nextItems = result.data && Array.isArray(result.data.items) ? result.data.items : [];
       var nextSignature = createListRenderSignature(nextItems, { total: result.data && result.data.total || nextItems.length });
@@ -990,6 +1064,50 @@
     } catch (error) {
       if (!settings.quiet) elements.historyList.innerHTML = emptyStateHtml('歷史查詢失敗', friendlyError(error));
     }
+  }
+
+
+  /**
+   * HF8｜全系統管理查詢共用規則。
+   * 統一處理空白、工號大小寫、民國年月格式、頁碼與關鍵字長度；
+   * 不改變無法判斷的使用者輸入，仍交由後端回傳明確錯誤。
+   */
+  function normalizeManagementSearchTextV3_(value, maxLength) {
+    var limit = Math.max(1, Number(maxLength || 80));
+    return String(value == null ? '' : value).replace(/\s+/g, ' ').trim().slice(0, limit);
+  }
+
+  function normalizeManagementEmployeeIdV3_(value) {
+    return normalizeManagementSearchTextV3_(value, 40).toUpperCase();
+  }
+
+  function normalizeManagementSelectV3_(value, fallback) {
+    var normalized = normalizeManagementSearchTextV3_(value, 40);
+    return normalized || String(fallback == null ? '' : fallback);
+  }
+
+  function normalizeManagementPageV3_(value) {
+    return Math.max(1, Math.floor(Number(value || 1) || 1));
+  }
+
+  function normalizeManagementPageSizeV3_(value, allowed, fallback) {
+    var number = Math.floor(Number(value || fallback) || Number(fallback || 10));
+    var choices = Array.isArray(allowed) ? allowed.map(Number) : [10];
+    return choices.indexOf(number) !== -1 ? number : Number(fallback || choices[0] || 10);
+  }
+
+  function normalizeRocMonthSearchV3_(value, fallback, includeDay) {
+    var raw = normalizeManagementSearchTextV3_(value, 12);
+    if (!raw) raw = String(fallback || '');
+    var normalized = raw.replace(/[０-９]/g, function(character) {
+      return String(character.charCodeAt(0) - 65248);
+    }).replace(/[.\-]/g, '/').replace(/\s/g, '');
+    var match = normalized.match(/^(\d{2,3})\/(\d{1,2})(?:\/(\d{1,2}))?$/);
+    if (!match) return raw;
+    var year = String(Math.max(1, Number(match[1] || 0))).padStart(3, '0');
+    var month = Math.min(12, Math.max(1, Number(match[2] || 1)));
+    var day = Math.min(31, Math.max(1, Number(match[3] || 1)));
+    return year + '/' + String(month).padStart(2, '0') + (includeDay ? '/' + String(day).padStart(2, '0') : '');
   }
 
   function createListRenderSignature(items, summary) {
@@ -3041,10 +3159,10 @@
     if (elements.monthlyPlanSearchButton) setButtonLoading(elements.monthlyPlanSearchButton, true, '查詢中');
     try {
       var response = await window.V3WorkflowService.monthlyPlanCenter({
-        evaluationMonth: String(elements.monthlyPlanMonth && elements.monthlyPlanMonth.value || nextRocMonthFirstDayV3_()).trim(),
-        keyword: String(elements.monthlyPlanKeyword && elements.monthlyPlanKeyword.value || '').trim(),
-        viewMode: String(elements.monthlyPlanViewMode && elements.monthlyPlanViewMode.value || 'ALL'),
-        page: Number(state.monthlyPlanPage || 1)
+        evaluationMonth: normalizeRocMonthSearchV3_(elements.monthlyPlanMonth && elements.monthlyPlanMonth.value, nextRocMonthFirstDayV3_(), true),
+        keyword: normalizeManagementSearchTextV3_(elements.monthlyPlanKeyword && elements.monthlyPlanKeyword.value, 80),
+        viewMode: normalizeManagementSelectV3_(elements.monthlyPlanViewMode && elements.monthlyPlanViewMode.value, 'ALL'),
+        page: normalizeManagementPageV3_(state.monthlyPlanPage)
       });
       state.monthlyPlan = response.data || {};
       state.monthlyPlanDraftMonth = String(state.monthlyPlan.evaluationMonth || '');
@@ -3260,9 +3378,11 @@
     if (elements.notificationRefreshButton) elements.notificationRefreshButton.disabled = true;
     try {
       var response = await window.V3WorkflowService.notificationManagementCenter({
-        recipientPage: Number(state.notificationRecipientPage || 1),
-        logPage: Number(state.notificationLogPage || 1),
-        failedPage: Number(state.notificationFailedPage || 1)
+        recipientPage: normalizeManagementPageV3_(state.notificationRecipientPage),
+        logPage: normalizeManagementPageV3_(state.notificationLogPage),
+        failedPage: normalizeManagementPageV3_(state.notificationFailedPage),
+        logResult: normalizeManagementSelectV3_(state.notificationLogResult, 'ALL').toUpperCase(),
+        logKeyword: normalizeManagementSearchTextV3_(state.notificationLogKeyword, 80)
       });
       state.notificationManagement = response.data || {};
       state.notificationRecipientPage = Number(state.notificationManagement.recipientPagination && state.notificationManagement.recipientPagination.page || 1);
@@ -3291,6 +3411,11 @@
     if (elements.notificationDailyHour) elements.notificationDailyHour.value = String(settings.dailyHour != null ? settings.dailyHour : 9);
     if (elements.notificationOverdueDays) elements.notificationOverdueDays.value = String(settings.overdueDays != null ? settings.overdueDays : 3);
     if (elements.notificationBatchSize) elements.notificationBatchSize.value = String(settings.batchSize != null ? settings.batchSize : 20);
+    var logFilters = source.logFilters || {};
+    state.notificationLogResult = String(logFilters.result || state.notificationLogResult || 'ALL');
+    state.notificationLogKeyword = String(logFilters.keyword || state.notificationLogKeyword || '');
+    if (elements.notificationLogResult) elements.notificationLogResult.value = state.notificationLogResult;
+    if (elements.notificationLogKeyword) elements.notificationLogKeyword.value = state.notificationLogKeyword;
 
     var summary = source.summary || {};
     var queue = source.queueSummary || {};
@@ -3491,14 +3616,20 @@
   function renderNotificationLogsV3_(rows, pagination) {
     if (!elements.notificationLogList) return;
     if (!rows.length) {
-      elements.notificationLogList.innerHTML = '<p class="section-help">目前尚無通知紀錄。</p>';
+      elements.notificationLogList.innerHTML = '<div class="empty-state compact-empty"><h3>沒有符合條件的通知紀錄</h3><p>可調整結果或關鍵字後重新查詢。</p></div>';
     } else {
-      elements.notificationLogList.innerHTML = '<div class="account-audit-grid"><div class="account-audit-row account-audit-row--header"><span>類型／結果</span><span>收件人</span><span>時間／筆數／錯誤</span></div>' + rows.map(function(row) {
-        return '<div class="account-audit-row"><span><strong>' + escapeHtml(row.type || '') + '</strong><br>' + escapeHtml(row.result || '') + '</span>' +
-          '<strong>' + escapeHtml(row.recipient || '系統批次') + '<small>' + escapeHtml(row.emailMasked || '') + '</small></strong>' +
-          '<small>' + escapeHtml(row.sentAt || '') + '<br>待辦：' + Number(row.pendingCount || 0) + '｜逾期：' + Number(row.overdueCount || 0) +
-          (row.error ? '<br>錯誤：' + escapeHtml(row.error) : '') + '</small></div>';
-      }).join('') + '</div>';
+      elements.notificationLogList.innerHTML = '<div class="management-data-table-wrap"><table class="management-data-table notification-log-table"><colgroup><col class="col-log-type"><col class="col-log-result"><col class="col-log-recipient"><col class="col-log-time"><col class="col-log-count"><col class="col-log-error"></colgroup><thead><tr><th>通知類型</th><th>結果</th><th>收件人</th><th>時間</th><th>待辦／逾期</th><th>錯誤／批次</th></tr></thead><tbody>' + rows.map(function(row) {
+        var result = String(row.result || '未知');
+        var group = /成功/.test(result) ? 'SUCCESS' : (/重試|等待/.test(result) ? 'PENDING' : (/失敗|錯誤/.test(result) ? 'FAILED' : 'WARNING'));
+        var tagClass = backgroundStatusTagClassV3_(group);
+        var error = row.error ? escapeHtml(row.error) : '—';
+        return '<tr><td data-label="通知類型"><strong>' + escapeHtml(row.type || '未標示') + '</strong></td>' +
+          '<td data-label="結果"><span class="tag ' + tagClass + '">' + escapeHtml(result) + '</span></td>' +
+          '<td data-label="收件人"><strong>' + escapeHtml(row.recipient || '系統批次') + '</strong><small>' + escapeHtml(row.emailMasked || '') + '</small></td>' +
+          '<td data-label="時間"><span>' + escapeHtml(row.sentAt || '—') + '</span></td>' +
+          '<td data-label="待辦／逾期"><span>待辦 ' + Number(row.pendingCount || 0) + '</span><small>逾期 ' + Number(row.overdueCount || 0) + '</small></td>' +
+          '<td data-label="錯誤／批次"><span class="table-error-text">' + error + '</span>' + (row.batchId ? '<small>批次：' + escapeHtml(row.batchId) + '</small>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
     }
     updateSimplePaginationV3_(elements.notificationLogPagination, elements.notificationLogPageText,
       elements.notificationLogPreviousButton, elements.notificationLogNextButton, pagination);
@@ -3708,9 +3839,9 @@
     try {
       var result = await window.V3WorkflowService.pdfManagementCenter({
         month: composePdfManagementMonthV3_(),
-        keyword: String(elements.pdfManagementKeyword && elements.pdfManagementKeyword.value || '').trim(),
-        status: String(elements.pdfManagementStatus && elements.pdfManagementStatus.value || 'ALL').trim(),
-        page: Number(state.pdfManagementPage || 1), pageSize: 10
+        keyword: normalizeManagementSearchTextV3_(elements.pdfManagementKeyword && elements.pdfManagementKeyword.value, 80),
+        status: normalizeManagementSelectV3_(elements.pdfManagementStatus && elements.pdfManagementStatus.value, 'ALL'),
+        page: normalizeManagementPageV3_(state.pdfManagementPage), pageSize: 10
       });
       state.pdfManagement = result.data || {};
       state.pdfManagementPage = Number(state.pdfManagement.page || 1);
@@ -4067,12 +4198,12 @@
     elements.accountManagementRefreshButton.disabled = true;
     try {
       var result = await window.V3WorkflowService.accountManagementCenter({
-        keyword: String(elements.accountManagementKeyword.value || '').trim(),
-        role: String(elements.accountManagementRole.value || ''),
-        employmentStatus: String(elements.accountManagementEmployment.value || ''),
-        accountStatus: String(elements.accountManagementStatus.value || ''),
-        loginIssue: String(elements.accountManagementLoginIssue && elements.accountManagementLoginIssue.value || ''),
-        page: state.accountManagementPage,
+        keyword: normalizeManagementSearchTextV3_(elements.accountManagementKeyword.value, 80),
+        role: normalizeManagementSelectV3_(elements.accountManagementRole.value, ''),
+        employmentStatus: normalizeManagementSelectV3_(elements.accountManagementEmployment.value, ''),
+        accountStatus: normalizeManagementSelectV3_(elements.accountManagementStatus.value, ''),
+        loginIssue: normalizeManagementSelectV3_(elements.accountManagementLoginIssue && elements.accountManagementLoginIssue.value, ''),
+        page: normalizeManagementPageV3_(state.accountManagementPage),
         pageSize: state.accountManagementPageSize,
         requireCriteria: true
       });
@@ -4371,6 +4502,9 @@
     ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationManagementCard','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendSelectedButton','notificationSendAllButton','notificationSendOverdueButton','notificationSelectVisibleButton','notificationClearSelectedButton','notificationSelectedCount','notificationRunWorkerButton','notificationScheduleConfirm','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText','notificationPreviewOverlay','notificationPreviewSummary','notificationPreviewList','notificationPreviewConfirm','notificationPreviewCancelButton','notificationPreviewRunButton','monthlyPlanManagementCard','monthlyPlanRefreshButton','monthlyPlanFilterForm','monthlyPlanMonth','monthlyPlanKeyword','monthlyPlanViewMode','monthlyPlanSearchButton','monthlyPlanMessage','monthlyPlanSummary','monthlyPlanLockStatus','monthlyPlanReason','monthlyPlanConfirm','monthlyPlanSaveButton','monthlyPlanLockButton','monthlyPlanReopenButton','monthlyPlanSelectPageButton','monthlyPlanClearPageButton','monthlyPlanRestorePageButton','monthlyPlanList','monthlyPlanPagination','monthlyPlanPreviousButton','monthlyPlanNextButton','monthlyPlanPageText','dispatchScheduleSection','dispatchScheduleRefreshButton','dispatchScheduleSummary','dispatchSchedulePlanStatus','dispatchScheduleHour','dispatchScheduleConfirm','dispatchScheduleInstallButton','dispatchScheduleDisableButton','outcomeAnalysisCard','outcomeRefreshButton','outcomeFilterForm','outcomeStartMonth','outcomeEndMonth','outcomeVersion','outcomeKeyword','outcomeStoreCode','outcomeArea','outcomeSearchButton','outcomeMessage','outcomeSummary','outcomeMonthlyTrend','outcomeVersionSummary','outcomeStoreRanking','outcomeAreaRanking','outcomeItemGroups','outcomeDetailList','outcomePagination','outcomePreviousButton','outcomeNextButton','outcomePageText','outcomeMetricOverlay','outcomeMetricTitle','outcomeMetricList','outcomeMetricPagination','outcomeMetricPreviousButton','outcomeMetricNextButton','outcomeMetricPageText','outcomeMetricCloseButton','notificationDeliveryStats','notificationFailureReasons','notificationFailedSelectedCount','notificationFailedSelectPageButton','notificationFailedClearButton','notificationFailedList','notificationFailedPagination','notificationFailedPreviousButton','notificationFailedNextButton','notificationFailedPageText','notificationFailedConfirm','notificationRetrySelectedButton','notificationRetryAllButton'].forEach(function(id) {
       elements[id] = document.getElementById(id);
     });
+    ['notificationLogFilterForm','notificationLogResult','notificationLogKeyword','notificationLogSearchButton','notificationLogResetButton','backgroundJobCard','backgroundJobFilterForm','backgroundJobType','backgroundJobStatus','backgroundJobKeyword','backgroundJobSearchButton','backgroundJobResetButton','backgroundJobRefreshButton','backgroundJobMessage','backgroundJobSummary','backgroundScheduleHealth','backgroundJobList','backgroundJobPagination','backgroundJobPreviousButton','backgroundJobNextButton','backgroundJobPageText','schemaManagementCard','schemaManagementRefreshButton','schemaManagementMessage','schemaManagementSummary','schemaSafetyRules','schemaSheetList','schemaRepairPreviewButton','schemaRepairPanel','schemaRepairPreviewContent','schemaRepairReason','schemaRepairConfirm','schemaRepairCancelButton','schemaRepairRunButton','schemaRepairResult','schemaVersionList'].forEach(function(id) {
+      elements[id] = document.getElementById(id);
+    });
   }
 
   function bindModificationEventsV3_() {
@@ -4459,6 +4593,21 @@
     if (elements.notificationRetryAllButton) elements.notificationRetryAllButton.addEventListener('click', function() { retryFailedNotificationsV3_(true); });
     if (elements.notificationFailedPreviousButton) elements.notificationFailedPreviousButton.addEventListener('click', function() { if (state.notificationFailedPage > 1) { state.notificationFailedPage -= 1; loadNotificationManagementCenterV3_({ quiet: true }); } });
     if (elements.notificationFailedNextButton) elements.notificationFailedNextButton.addEventListener('click', function() { var pages = Number(state.notificationManagement && state.notificationManagement.failedPagination && state.notificationManagement.failedPagination.totalPages || 1); if (state.notificationFailedPage < pages) { state.notificationFailedPage += 1; loadNotificationManagementCenterV3_({ quiet: true }); } });
+    if (elements.notificationLogFilterForm) elements.notificationLogFilterForm.addEventListener('submit', function(event) { event.preventDefault(); state.notificationLogResult = String(elements.notificationLogResult.value || 'ALL'); state.notificationLogKeyword = String(elements.notificationLogKeyword.value || '').trim(); state.notificationLogPage = 1; loadNotificationManagementCenterV3_(); });
+    if (elements.notificationLogResetButton) elements.notificationLogResetButton.addEventListener('click', function() { state.notificationLogResult = 'ALL'; state.notificationLogKeyword = ''; state.notificationLogPage = 1; if (elements.notificationLogResult) elements.notificationLogResult.value = 'ALL'; if (elements.notificationLogKeyword) elements.notificationLogKeyword.value = ''; loadNotificationManagementCenterV3_(); });
+    if (elements.backgroundJobFilterForm) elements.backgroundJobFilterForm.addEventListener('submit', function(event) { event.preventDefault(); state.backgroundJobsPage = 1; loadBackgroundJobCenterV3_(); });
+    if (elements.backgroundJobRefreshButton) elements.backgroundJobRefreshButton.addEventListener('click', function() { loadBackgroundJobCenterV3_(); });
+    if (elements.backgroundJobResetButton) elements.backgroundJobResetButton.addEventListener('click', resetBackgroundJobFiltersV3_);
+    if (elements.backgroundJobPreviousButton) elements.backgroundJobPreviousButton.addEventListener('click', function() { if (state.backgroundJobsPage > 1) { state.backgroundJobsPage -= 1; loadBackgroundJobCenterV3_({ quiet: true }); } });
+    if (elements.backgroundJobNextButton) elements.backgroundJobNextButton.addEventListener('click', function() { var pages = Number(state.backgroundJobs && state.backgroundJobs.pagination && state.backgroundJobs.pagination.totalPages || 1); if (state.backgroundJobsPage < pages) { state.backgroundJobsPage += 1; loadBackgroundJobCenterV3_({ quiet: true }); } });
+    if (elements.backgroundJobList) elements.backgroundJobList.addEventListener('click', function(event) { var button = event.target && event.target.closest ? event.target.closest('[data-background-target-page]') : null; if (button) switchSystemManagementPageV3_(button.getAttribute('data-background-target-page')); });
+    if (elements.backgroundJobSummary) elements.backgroundJobSummary.addEventListener('click', function(event) { var button = event.target && event.target.closest ? event.target.closest('[data-background-status]') : null; if (!button) return; if (elements.backgroundJobStatus) elements.backgroundJobStatus.value = button.getAttribute('data-background-status') || 'ALL'; state.backgroundJobsPage = 1; loadBackgroundJobCenterV3_({ quiet: true }); });
+    if (elements.schemaManagementRefreshButton) elements.schemaManagementRefreshButton.addEventListener('click', function() { loadSchemaManagementCenterV3_(); });
+    if (elements.schemaRepairPreviewButton) elements.schemaRepairPreviewButton.addEventListener('click', previewSchemaRepairV3_);
+    if (elements.schemaRepairReason) elements.schemaRepairReason.addEventListener('input', updateSchemaRepairActionStateV3_);
+    if (elements.schemaRepairConfirm) elements.schemaRepairConfirm.addEventListener('change', updateSchemaRepairActionStateV3_);
+    if (elements.schemaRepairCancelButton) elements.schemaRepairCancelButton.addEventListener('click', closeSchemaRepairPanelV3_);
+    if (elements.schemaRepairRunButton) elements.schemaRepairRunButton.addEventListener('click', runSchemaRepairV3_);
     if (elements.pdfManagementAbnormalButton) elements.pdfManagementAbnormalButton.addEventListener('click', function() { applyPdfAbnormalFilterV3_('ABNORMAL'); });
   }
 
@@ -4555,15 +4704,15 @@
     elements.dispatchManagementRefreshButton.disabled = true;
     try {
       var result = await window.V3WorkflowService.dispatchManagementCenter({
-        evaluationMonth: String(elements.dispatchManagementMonth.value || currentRocMonthFirstDay()).trim(),
-        keyword: String(elements.dispatchManagementKeyword.value || '').trim(),
-        resultCategory: String(elements.dispatchManagementCategory.value || 'ALL'),
-        storeCode: String(elements.dispatchManagementStore.value || ''),
-        area: String(elements.dispatchManagementArea.value || ''),
-        source: String(elements.dispatchManagementSource.value || ''),
-        personPage: Number(state.dispatchPersonPage || 1),
+        evaluationMonth: normalizeRocMonthSearchV3_(elements.dispatchManagementMonth.value, currentRocMonthFirstDay(), true),
+        keyword: normalizeManagementSearchTextV3_(elements.dispatchManagementKeyword.value, 80),
+        resultCategory: normalizeManagementSelectV3_(elements.dispatchManagementCategory.value, 'ALL'),
+        storeCode: normalizeManagementSearchTextV3_(elements.dispatchManagementStore.value, 20),
+        area: normalizeManagementSearchTextV3_(elements.dispatchManagementArea.value, 40),
+        source: normalizeManagementSearchTextV3_(elements.dispatchManagementSource.value, 40),
+        personPage: normalizeManagementPageV3_(state.dispatchPersonPage),
         personPageSize: 10,
-        attemptPage: Number(state.dispatchAttemptPage || 1),
+        attemptPage: normalizeManagementPageV3_(state.dispatchAttemptPage),
         attemptPageSize: 10
       });
       state.dispatchManagement = result.data || {};
@@ -5140,13 +5289,13 @@
     setButtonLoading(elements.outcomeSearchButton, true, '分析中');
     try {
       var response = await window.V3WorkflowService.evaluationOutcomeAnalysis({
-        startMonth: elements.outcomeStartMonth.value,
-        endMonth: elements.outcomeEndMonth.value,
-        evaluationVersion: elements.outcomeVersion.value,
-        keyword: elements.outcomeKeyword.value,
-        storeCode: elements.outcomeStoreCode.value,
-        area: elements.outcomeArea.value,
-        page: state.outcomeAnalysisPage
+        startMonth: normalizeRocMonthSearchV3_(elements.outcomeStartMonth.value, '', false),
+        endMonth: normalizeRocMonthSearchV3_(elements.outcomeEndMonth.value, '', false),
+        evaluationVersion: normalizeManagementSelectV3_(elements.outcomeVersion.value, 'ALL'),
+        keyword: normalizeManagementSearchTextV3_(elements.outcomeKeyword.value, 80),
+        storeCode: normalizeManagementSearchTextV3_(elements.outcomeStoreCode.value, 20),
+        area: normalizeManagementSearchTextV3_(elements.outcomeArea.value, 40),
+        page: normalizeManagementPageV3_(state.outcomeAnalysisPage)
       });
       state.outcomeAnalysis = response.data || {};
       state.outcomeAnalysisPage = Number(state.outcomeAnalysis.pagination && state.outcomeAnalysis.pagination.page || 1);
@@ -5159,6 +5308,198 @@
       state.outcomeAnalysisLoading = false;
       setManagementCardLoadingV3_(elements.outcomeAnalysisCard, false);
       setButtonLoading(elements.outcomeSearchButton, false, '產生成果分析');
+    }
+  }
+
+  async function loadBackgroundJobCenterV3_(options) {
+    var settings = options || {};
+    if (state.backgroundJobsLoading) return;
+    state.backgroundJobsLoading = true;
+    setManagementCardLoadingV3_(elements.backgroundJobCard, true, state.backgroundJobs ? '正在更新背景工作資料…' : '正在整理背景工作…');
+    if (!settings.quiet) showMessage(elements.backgroundJobMessage, 'info', '正在整理通知、PDF、派發與封存工作…');
+    try {
+      var response = await window.V3WorkflowService.backgroundJobCenter({
+        jobType: normalizeManagementSelectV3_(elements.backgroundJobType && elements.backgroundJobType.value, 'ALL').toUpperCase(),
+        status: normalizeManagementSelectV3_(elements.backgroundJobStatus && elements.backgroundJobStatus.value, 'ALL').toUpperCase(),
+        keyword: normalizeManagementSearchTextV3_(elements.backgroundJobKeyword && elements.backgroundJobKeyword.value, 80),
+        page: normalizeManagementPageV3_(state.backgroundJobsPage)
+      });
+      state.backgroundJobs = response.data || {};
+      state.backgroundJobsPage = Number(state.backgroundJobs.pagination && state.backgroundJobs.pagination.page || 1);
+      renderBackgroundJobCenterV3_(state.backgroundJobs);
+      if (!settings.quiet) showMessage(elements.backgroundJobMessage, 'success', '背景工作資料已更新。');
+    } catch (error) {
+      showMessage(elements.backgroundJobMessage, 'error', friendlyError(error));
+      if (!state.backgroundJobs && elements.backgroundJobList) elements.backgroundJobList.innerHTML = emptyStateHtml('背景工作載入失敗', friendlyError(error));
+    } finally {
+      state.backgroundJobsLoading = false;
+      setManagementCardLoadingV3_(elements.backgroundJobCard, false);
+    }
+  }
+
+  function resetBackgroundJobFiltersV3_() {
+    if (elements.backgroundJobFilterForm) elements.backgroundJobFilterForm.reset();
+    if (elements.backgroundJobType) elements.backgroundJobType.value = 'ALL';
+    if (elements.backgroundJobStatus) elements.backgroundJobStatus.value = 'ALL';
+    if (elements.backgroundJobKeyword) elements.backgroundJobKeyword.value = '';
+    state.backgroundJobsPage = 1;
+    loadBackgroundJobCenterV3_();
+  }
+
+  function renderBackgroundJobCenterV3_(data) {
+    var source = data || {};
+    var summary = source.summary || {};
+    if (elements.backgroundJobSummary) {
+      elements.backgroundJobSummary.innerHTML = '<div class="admin-result-grid management-metric-grid">' +
+        backgroundMetricButtonV3_('全部工作', summary.total || 0, 'ALL') +
+        backgroundMetricButtonV3_('等待中', summary.pending || 0, 'PENDING') +
+        backgroundMetricButtonV3_('處理中', summary.running || 0, 'RUNNING') +
+        backgroundMetricButtonV3_('已完成', summary.success || 0, 'SUCCESS') +
+        backgroundMetricButtonV3_('失敗', summary.failed || 0, 'FAILED') +
+        backgroundMetricButtonV3_('需注意', summary.warning || 0, 'WARNING') + '</div>';
+    }
+    renderBackgroundScheduleHealthV3_(source.scheduleHealth || {});
+    renderBackgroundJobListV3_(source.items || [], source.pagination || {});
+  }
+
+  function backgroundMetricButtonV3_(label, value, status) {
+    return '<button type="button" class="management-metric-button" data-background-status="' + escapeHtml(status) + '"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value || 0)) + '</strong><small>點擊篩選</small></button>';
+  }
+
+  function renderBackgroundScheduleHealthV3_(health) {
+    if (!elements.backgroundScheduleHealth) return;
+    var dispatch = health.dispatch || {};
+    var notification = health.notification || {};
+    var dispatchInstalled = Boolean(dispatch.installed || dispatch.enabled || dispatch.primaryInstalled || dispatch.mainInstalled);
+    var notificationInstalled = Boolean(notification.dailyInstalled || notification.workerInstalled);
+    elements.backgroundScheduleHealth.innerHTML = '<article class="background-schedule-card"><div><span>每月派發排程</span><strong>' + (dispatchInstalled ? '已設定' : '請確認') + '</strong></div><p>下次執行：' + escapeHtml(dispatch.nextRunAt || dispatch.nextExecution || dispatch.nextRun || '未提供') + '</p><small>最近結果：' + escapeHtml(dispatch.lastResult || dispatch.lastRunResult || dispatch.lastRunAt || '尚無資料') + '</small><button type="button" class="secondary-button secondary-button--small" data-background-target-page="dispatch">開啟派發管理</button></article>' +
+      '<article class="background-schedule-card"><div><span>待辦通知排程</span><strong>' + (notificationInstalled ? '已設定' : '請確認') + '</strong></div><p>每日摘要：' + escapeHtml(notification.dailyInstalled ? '已安裝' : '未安裝') + '</p><small>背景工作器：' + escapeHtml(notification.workerInstalled ? '已安裝' : '未安裝') + '</small><button type="button" class="secondary-button secondary-button--small" data-background-target-page="notification">開啟通知管理</button></article>';
+    Array.prototype.forEach.call(elements.backgroundScheduleHealth.querySelectorAll('[data-background-target-page]'), function(button) {
+      button.addEventListener('click', function() { switchSystemManagementPageV3_(button.getAttribute('data-background-target-page')); });
+    });
+  }
+
+  function renderBackgroundJobListV3_(rows, pagination) {
+    if (!elements.backgroundJobList) return;
+    if (!rows.length) {
+      elements.backgroundJobList.innerHTML = '<div class="empty-state compact-empty"><h3>沒有符合條件的背景工作</h3><p>可清除篩選條件後重新查詢。</p></div>';
+    } else {
+      elements.backgroundJobList.innerHTML = '<div class="management-data-table-wrap"><table class="management-data-table background-job-table"><colgroup><col class="col-job-time"><col class="col-job-type"><col class="col-job-owner"><col class="col-job-progress"><col class="col-job-status"><col class="col-job-action"></colgroup><thead><tr><th>建立／完成</th><th>工作類型</th><th>關聯對象</th><th>進度／錯誤</th><th>狀態</th><th>操作</th></tr></thead><tbody>' + rows.map(function(job) {
+        return '<tr><td data-label="建立／完成"><strong>' + escapeHtml(job.createdAt || '—') + '</strong><small>' + escapeHtml(job.finishedAt ? '完成：' + job.finishedAt : (job.startedAt ? '開始：' + job.startedAt : '尚未開始')) + (job.durationText ? '｜' + escapeHtml(job.durationText) : '') + '</small></td>' +
+          '<td data-label="工作類型"><strong>' + escapeHtml(job.jobTypeLabel || job.title || '') + '</strong><small>' + escapeHtml(job.title || '') + '<br>' + escapeHtml(job.jobId || '') + '</small></td>' +
+          '<td data-label="關聯對象"><span>' + escapeHtml(job.owner || job.relatedNo || '—') + '</span><small>來源：' + escapeHtml(job.source || '系統') + '</small></td>' +
+          '<td data-label="進度／錯誤"><span>' + escapeHtml(job.progressText || '—') + '</span>' + (job.error ? '<small class="table-error-text">' + escapeHtml(job.error) + '</small>' : '') + '</td>' +
+          '<td data-label="狀態"><span class="tag ' + backgroundStatusTagClassV3_(job.statusGroup) + '">' + escapeHtml(job.status || '未知') + '</span></td>' +
+          '<td data-label="操作"><button type="button" class="secondary-button secondary-button--small" data-background-target-page="' + escapeHtml(job.targetPage || 'home') + '">前往處理</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+    }
+    updateSimplePaginationV3_(elements.backgroundJobPagination, elements.backgroundJobPageText, elements.backgroundJobPreviousButton, elements.backgroundJobNextButton, pagination);
+  }
+
+  function backgroundStatusTagClassV3_(group) {
+    var value = String(group || '').toUpperCase();
+    if (value === 'SUCCESS') return 'tag-success';
+    if (value === 'FAILED') return 'tag-danger';
+    if (value === 'PENDING' || value === 'RUNNING') return 'tag-warning';
+    return 'tag-neutral';
+  }
+
+  async function loadSchemaManagementCenterV3_(options) {
+    var settings = options || {};
+    if (state.schemaManagementLoading) return;
+    state.schemaManagementLoading = true;
+    setManagementCardLoadingV3_(elements.schemaManagementCard, true, state.schemaManagement ? '正在重新檢查資料結構…' : '正在檢查工作表與必要欄位…');
+    if (!settings.quiet) showMessage(elements.schemaManagementMessage, 'info', '正在檢查資料結構；不會修改工作表。');
+    try {
+      var response = await window.V3WorkflowService.schemaManagementCenter();
+      state.schemaManagement = response.data || {};
+      renderSchemaManagementCenterV3_(state.schemaManagement);
+      if (!settings.quiet) showMessage(elements.schemaManagementMessage, 'success', '資料結構檢查完成。');
+    } catch (error) {
+      showMessage(elements.schemaManagementMessage, 'error', friendlyError(error));
+      if (!state.schemaManagement && elements.schemaSheetList) elements.schemaSheetList.innerHTML = emptyStateHtml('資料結構檢查失敗', friendlyError(error));
+    } finally {
+      state.schemaManagementLoading = false;
+      setManagementCardLoadingV3_(elements.schemaManagementCard, false);
+    }
+  }
+
+  function renderSchemaManagementCenterV3_(data) {
+    var source = data || {};
+    var summary = source.summary || {};
+    if (elements.schemaManagementSummary) elements.schemaManagementSummary.innerHTML = '<div class="admin-result-grid">' +
+      archiveSummaryCardV3_('全部工作表', summary.total || 0, '目前定義的資料表') + archiveSummaryCardV3_('正常', summary.ok || 0, '必要欄位完整') +
+      archiveSummaryCardV3_('缺少／空白', Number(summary.missing || 0) + Number(summary.empty || 0), '可安全建立或初始化') + archiveSummaryCardV3_('需處理', summary.mismatch || 0, '缺欄或需人工確認') +
+      archiveSummaryCardV3_('缺少欄位', summary.missingHeaders || 0, '只會附加到最右側') + '</div><p class="section-help">資料結構版本：<strong>' + escapeHtml(source.schemaVersion || '') + '</strong>｜檢查時間：' + escapeHtml(source.generatedAt || '') + '</p>';
+    if (elements.schemaSafetyRules) elements.schemaSafetyRules.innerHTML = (source.safetyRules || []).map(function(rule) { return '<div><span aria-hidden="true">✓</span><p>' + escapeHtml(rule) + '</p></div>'; }).join('');
+    renderSchemaSheetListV3_(source.sheets || []);
+    if (elements.schemaVersionList) elements.schemaVersionList.innerHTML = (source.recentVersions || []).length ? '<div class="management-data-table-wrap"><table class="management-data-table"><thead><tr><th>版本</th><th>時間／執行人</th><th>原因</th><th>結果</th></tr></thead><tbody>' + source.recentVersions.map(function(item) { return '<tr><td data-label="版本"><strong>' + escapeHtml(item.version || '') + '</strong></td><td data-label="時間／執行人"><span>' + escapeHtml(item.executedAt || '') + '</span><small>' + escapeHtml(item.executedBy || '') + '</small></td><td data-label="原因">' + escapeHtml(item.action || '') + '</td><td data-label="結果">' + escapeHtml(item.summary || '') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="section-help">尚無資料結構維護紀錄。</p>';
+  }
+
+  function renderSchemaSheetListV3_(rows) {
+    if (!elements.schemaSheetList) return;
+    elements.schemaSheetList.innerHTML = rows.length ? '<div class="management-data-table-wrap"><table class="management-data-table schema-table"><colgroup><col class="col-schema-name"><col class="col-schema-status"><col class="col-schema-size"><col class="col-schema-missing"><col class="col-schema-message"></colgroup><thead><tr><th>工作表</th><th>狀態</th><th>列／欄</th><th>缺少欄位</th><th>處理說明</th></tr></thead><tbody>' + rows.map(function(item) {
+      var group = item.status === 'OK' ? 'SUCCESS' : (item.status === 'MISSING' || item.status === 'EMPTY' ? 'PENDING' : 'FAILED');
+      return '<tr><td data-label="工作表"><strong>' + escapeHtml(item.sheetName || '') + '</strong></td><td data-label="狀態"><span class="tag ' + backgroundStatusTagClassV3_(group) + '">' + escapeHtml(item.statusLabel || item.status || '') + '</span></td><td data-label="列／欄">' + Number(item.rows || 0) + '／' + Number(item.columns || 0) + '</td><td data-label="缺少欄位"><span>' + (item.missingHeaders && item.missingHeaders.length ? escapeHtml(item.missingHeaders.join('、')) : '—') + '</span>' + (item.extraHeaders && item.extraHeaders.length ? '<small>保留自訂欄位：' + escapeHtml(item.extraHeaders.slice(0, 5).join('、')) + (item.extraHeaders.length > 5 ? '…' : '') + '</small>' : '') + '</td><td data-label="處理說明">' + escapeHtml(item.message || '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' : '<p class="section-help">沒有可檢查的工作表定義。</p>';
+  }
+
+  async function previewSchemaRepairV3_() {
+    setButtonLoading(elements.schemaRepairPreviewButton, true, '檢查中');
+    try {
+      var response = await window.V3WorkflowService.schemaRepairPreview();
+      state.schemaRepairPreview = response.data || {};
+      renderSchemaRepairPreviewV3_(state.schemaRepairPreview);
+      elements.schemaRepairPanel.hidden = false;
+      elements.schemaRepairReason.value = '';
+      elements.schemaRepairConfirm.checked = false;
+      elements.schemaRepairResult.hidden = true;
+      updateSchemaRepairActionStateV3_();
+      elements.schemaRepairPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (error) {
+      showMessage(elements.schemaManagementMessage, 'error', friendlyError(error));
+    } finally {
+      setButtonLoading(elements.schemaRepairPreviewButton, false, '預覽安全補齊');
+    }
+  }
+
+  function renderSchemaRepairPreviewV3_(data) {
+    var actions = data.actions || [];
+    elements.schemaRepairPreviewContent.innerHTML = '<h4>安全補齊預覽</h4><p class="section-help">' + escapeHtml(data.message || '') + '</p>' +
+      '<div class="schema-repair-summary"><span>可執行 <strong>' + Number(data.executableCount || 0) + '</strong>項</span><span>僅人工確認 <strong>' + Number(data.reviewOnlyCount || 0) + '</strong>項</span></div>' +
+      (actions.length ? '<div class="schema-action-list">' + actions.map(function(item) { return '<article><span class="tag ' + (item.action === 'REVIEW_ONLY' ? 'tag-warning' : 'tag-success') + '">' + escapeHtml(item.action === 'REVIEW_ONLY' ? '人工確認' : '安全補齊') + '</span><div><strong>' + escapeHtml(item.sheetName || '') + '</strong><p>' + escapeHtml(item.label || '') + '</p>' + (item.headers && item.headers.length ? '<small>' + escapeHtml(item.headers.join('、')) + '</small>' : '') + '</div></article>'; }).join('') + '</div>' : '<p class="section-help">目前沒有需要補齊的項目。</p>');
+  }
+
+  function updateSchemaRepairActionStateV3_() {
+    if (!elements.schemaRepairRunButton) return;
+    var preview = state.schemaRepairPreview || {};
+    var reason = String(elements.schemaRepairReason && elements.schemaRepairReason.value || '').trim();
+    var confirmed = Boolean(elements.schemaRepairConfirm && elements.schemaRepairConfirm.checked);
+    elements.schemaRepairRunButton.disabled = !(Number(preview.executableCount || 0) > 0 && reason.length >= 4 && confirmed);
+  }
+
+  function closeSchemaRepairPanelV3_() {
+    state.schemaRepairPreview = null;
+    if (elements.schemaRepairPanel) elements.schemaRepairPanel.hidden = true;
+  }
+
+  async function runSchemaRepairV3_() {
+    if (!elements.schemaRepairRunButton || elements.schemaRepairRunButton.disabled) return;
+    setButtonLoading(elements.schemaRepairRunButton, true, '補齊中');
+    try {
+      var response = await window.V3WorkflowService.schemaRepair({ reason: String(elements.schemaRepairReason.value || '').trim(), confirmed: true }, window.V3ApiClient.createRequestId());
+      var data = response.data || {};
+      elements.schemaRepairResult.hidden = false;
+      elements.schemaRepairResult.innerHTML = '<strong>安全補齊完成</strong><p>' + escapeHtml(data.message || '') + '</p><div class="admin-result-grid">' + archiveSummaryCardV3_('新增工作表', data.result && data.result.created && data.result.created.length || 0, '只建立原本不存在的工作表') + archiveSummaryCardV3_('初始化空白表', data.result && data.result.initialized && data.result.initialized.length || 0, '既有資料表不會清空') + archiveSummaryCardV3_('安全補欄表數', data.result && data.result.appended && data.result.appended.length || 0, '欄位附加於最右側') + archiveSummaryCardV3_('略過', data.result && data.result.skipped && data.result.skipped.length || 0, '需人工確認或無定義') + '</div>';
+      state.schemaRepairPreview = null;
+      await loadSchemaManagementCenterV3_({ quiet: true });
+      showGlobalNotice('success', '資料結構補齊完成', data.message || '未刪除或覆寫任何既有資料。', true);
+    } catch (error) {
+      elements.schemaRepairResult.hidden = false;
+      elements.schemaRepairResult.innerHTML = '<strong>安全補齊失敗</strong><p>' + escapeHtml(friendlyError(error)) + '</p>';
+    } finally {
+      setButtonLoading(elements.schemaRepairRunButton, false, '執行安全補齊');
+      updateSchemaRepairActionStateV3_();
     }
   }
 
@@ -5188,9 +5529,9 @@
     }
     var details = data.details || [];
     if (elements.outcomeDetailList) {
-      elements.outcomeDetailList.innerHTML = details.length ? '<div class="account-audit-grid"><div class="account-audit-row account-audit-row--header"><span>月份／考核表</span><span>受評人／店別</span><span>分數／結案時間</span></div>' + details.map(function(row) {
-        return '<div class="account-audit-row"><span><strong>' + escapeHtml(row.month || '') + '</strong><br>' + escapeHtml(row.evaluationType || '') + '</span><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) + '<small>' + escapeHtml(row.store || '') + '｜' + escapeHtml(row.area || '') + '</small></strong><small>總分：<strong>' + escapeHtml(row.score == null ? '—' : String(row.score)) + '</strong><br>教育中心：' + escapeHtml(row.educationScore == null ? '—' : String(row.educationScore)) + '｜區主管：' + escapeHtml(row.supervisorScore == null ? '—' : String(row.supervisorScore)) + '<br>' + escapeHtml(row.completedAt || '') + '</small></div>';
-      }).join('') + '</div>' : '<p class="section-help">目前篩選範圍沒有已結案考核。</p>';
+      elements.outcomeDetailList.innerHTML = details.length ? '<div class="management-data-table-wrap"><table class="management-data-table outcome-detail-table"><colgroup><col class="col-outcome-month"><col class="col-outcome-person"><col class="col-outcome-score"><col class="col-outcome-no"></colgroup><thead><tr><th>月份／考核表</th><th>受評人／店別</th><th>分數</th><th>結案時間／考核單號</th></tr></thead><tbody>' + details.map(function(row) {
+        return '<tr><td data-label="月份／考核表"><strong>' + escapeHtml(row.month || '') + '</strong><small>' + escapeHtml(row.evaluationType || '') + '</small></td><td data-label="受評人／店別"><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) + '</strong><small>' + escapeHtml(row.store || '') + '｜' + escapeHtml(row.area || '') + '</small></td><td data-label="分數"><strong>總分 ' + escapeHtml(row.score == null ? '—' : String(row.score)) + '</strong><small>教育中心 ' + escapeHtml(row.educationScore == null ? '—' : String(row.educationScore)) + '｜區主管 ' + escapeHtml(row.supervisorScore == null ? '—' : String(row.supervisorScore)) + '</small></td><td data-label="結案時間／考核單號"><span>' + escapeHtml(row.completedAt || '—') + '</span><small>' + escapeHtml(row.evaluationNo || '') + '</small></td></tr>';
+      }).join('') + '</tbody></table></div>' : '<p class="section-help">目前篩選範圍沒有已結案考核。</p>';
     }
     updateSimplePaginationV3_(elements.outcomePagination, elements.outcomePageText, elements.outcomePreviousButton, elements.outcomeNextButton, data.pagination || {});
   }
@@ -5244,9 +5585,9 @@
 
   function renderOutcomeMetricDetailsV3_(data) {
     var rows = data.items || [];
-    elements.outcomeMetricList.innerHTML = rows.length ? '<div class="account-audit-grid"><div class="account-audit-row account-audit-row--header"><span>月份／狀態</span><span>受評人／店別</span><span>分數／考核單號</span></div>' + rows.map(function(row) {
-      return '<div class="account-audit-row"><span><strong>' + escapeHtml(row.month || '') + '</strong><br>' + escapeHtml(row.status || row.evaluationType || '') + '</span><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) + '<small>' + escapeHtml(row.store || '') + '｜' + escapeHtml(row.area || '') + '</small></strong><small>總分：<strong>' + escapeHtml(row.score == null ? '—' : String(row.score)) + '</strong><br>' + escapeHtml(row.evaluationNo || '') + '<br>' + escapeHtml(row.completedAt || '') + '</small></div>';
-    }).join('') + '</div>' : '<p class="section-help">沒有符合此統計條件的資料。</p>';
+    elements.outcomeMetricList.innerHTML = rows.length ? '<div class="management-data-table-wrap"><table class="management-data-table outcome-metric-table"><colgroup><col class="col-metric-month"><col class="col-metric-person"><col class="col-metric-score"></colgroup><thead><tr><th>月份／狀態</th><th>受評人／店別</th><th>分數／考核單號</th></tr></thead><tbody>' + rows.map(function(row) {
+      return '<tr><td data-label="月份／狀態"><strong>' + escapeHtml(row.month || '') + '</strong><small>' + escapeHtml(row.status || row.evaluationType || '') + '</small></td><td data-label="受評人／店別"><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) + '</strong><small>' + escapeHtml(row.store || '') + '｜' + escapeHtml(row.area || '') + '</small></td><td data-label="分數／考核單號"><strong>總分：' + escapeHtml(row.score == null ? '尚未計算' : String(row.score)) + '</strong><small>' + escapeHtml(row.evaluationNo || '') + (row.completedAt ? '<br>' + escapeHtml(row.completedAt) : '') + '</small></td></tr>';
+    }).join('') + '</tbody></table></div>' : '<p class="section-help">沒有符合此統計條件的資料。</p>';
     updateSimplePaginationV3_(elements.outcomeMetricPagination, elements.outcomeMetricPageText, elements.outcomeMetricPreviousButton, elements.outcomeMetricNextButton, data.pagination || {});
   }
 
@@ -5804,7 +6145,8 @@
       if (batch.folderUrl) links += '<a class="secondary-button secondary-button--small" href="' + escapeHtml(batch.folderUrl) + '" target="_blank" rel="noopener">開啟雲端資料夾</a>';
       var action = '';
       if (batch.status === '待確認') action = '<button class="primary-button primary-button--small" type="button" data-archive-finalize="' + escapeHtml(batch.batchId) + '">確認完成封存</button>';
-      else if (batch.status === '已封存') action = '<button class="secondary-button secondary-button--small" type="button" data-archive-cleanup="' + escapeHtml(batch.batchId) + '"' + (batch.canCleanup ? '' : ' disabled') + '>' + (batch.canCleanup ? '清理主系統舊資料' : '等待30天後可清理') + '</button>';
+      else if (batch.status === '已封存') action = '<button class="secondary-button secondary-button--small" type="button" data-archive-cleanup="' + escapeHtml(batch.batchId) + '"' + (batch.canCleanup ? '' : ' disabled') + '>' + (batch.canCleanup ? '清理主系統舊資料' : '等待30天後可清理') + '</button>' + '<button class="secondary-button secondary-button--small" type="button" data-archive-restore="' + escapeHtml(batch.batchId) + '">預覽安全還原</button>';
+      else if (batch.status === '主系統已清理') action = '<button class="primary-button primary-button--small" type="button" data-archive-restore="' + escapeHtml(batch.batchId) + '">預覽安全還原</button>';
       return '<article class="archive-batch-card ' + statusClass + '"><div class="archive-batch-heading"><div><strong>' + escapeHtml(batch.batchId || '') + '</strong>' +
         '<span>' + escapeHtml(String(batch.year || '')) + '年度・' + escapeHtml(batch.status || '') + '</span></div><small>建立：' + escapeHtml(batch.createdAt || '') + ' ' + escapeHtml(batch.createdBy || '') + '</small></div>' +
         '<div class="archive-batch-stats"><span>年度總件數 <strong>' + escapeHtml(String(batch.totalCount || 0)) + '</strong></span><span>封存件數 <strong>' + escapeHtml(String(batch.eligibleCount || 0)) + '</strong></span><span>異常 <strong>' + escapeHtml(String(batch.issueCount || 0)) + '</strong></span></div>' +
@@ -5817,6 +6159,9 @@
     Array.prototype.slice.call(elements.annualArchiveBatchList.querySelectorAll('[data-archive-cleanup]')).forEach(function (button) {
       button.addEventListener('click', function () { if (!button.disabled) openAnnualArchiveActionV3_('CLEANUP', button.getAttribute('data-archive-cleanup')); });
     });
+    Array.prototype.slice.call(elements.annualArchiveBatchList.querySelectorAll('[data-archive-restore]')).forEach(function (button) {
+      button.addEventListener('click', function () { openAnnualArchiveActionV3_('RESTORE', button.getAttribute('data-archive-restore')); });
+    });
   }
 
   function findAnnualArchiveBatchV3_(batchId) {
@@ -5824,21 +6169,49 @@
     return batches.filter(function (item) { return String(item.batchId || '') === String(batchId || ''); })[0] || null;
   }
 
-  function openAnnualArchiveActionV3_(type, batchId) {
+  async function openAnnualArchiveActionV3_(type, batchId) {
     var batch = findAnnualArchiveBatchV3_(batchId);
     if (!batch) return;
-    state.archiveAction = { type: type, batchId: batchId };
+    state.archiveAction = { type: type, batchId: batchId, restorePreview: null };
     elements.annualArchiveActionPanel.hidden = false;
+    elements.annualArchiveActionResult.hidden = true;
+    elements.annualArchiveActionReason.value = '';
+    elements.annualArchiveActionConfirm.checked = false;
+    var reasonLabel = elements.annualArchiveActionReasonGroup && elements.annualArchiveActionReasonGroup.querySelector('span');
+    if (type === 'RESTORE') {
+      elements.annualArchiveActionContent.innerHTML = '<h4>安全還原主系統資料</h4><p><strong>' + escapeHtml(batchId) + '</strong></p><div class="empty-state compact-empty"><h3>正在比對封存包與主系統…</h3><p>只會找出主系統目前不存在的考核單號。</p></div>';
+      elements.annualArchiveActionReasonGroup.hidden = false;
+      if (reasonLabel) reasonLabel.textContent = '還原原因';
+      elements.annualArchiveActionConfirmLabel.textContent = '我確認只還原主系統目前不存在的考核資料，不覆寫既有資料、不刪除封存包與PDF。';
+      updateAnnualArchiveActionStateV3_();
+      elements.annualArchiveActionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      try {
+        var response = await window.V3WorkflowService.archiveRestorePreview(batchId);
+        if (!state.archiveAction || state.archiveAction.batchId !== batchId || state.archiveAction.type !== 'RESTORE') return;
+        var preview = response.data || {};
+        state.archiveAction.restorePreview = preview;
+        elements.annualArchiveActionContent.innerHTML = '<h4>安全還原主系統資料</h4><p><strong>' + escapeHtml(batchId) + '</strong>｜' + escapeHtml(String(preview.year || '')) + '年度</p><div class="admin-result-grid">' + archiveSummaryCardV3_('可還原考核', preview.restorableEvaluationCount || 0, '主系統目前不存在') + archiveSummaryCardV3_('主系統已有', preview.existingEvaluationCount || 0, '不覆寫、不重複匯入') + '</div><p class="section-help">' + escapeHtml(preview.message || '') + '</p>' + renderArchiveRestoreSheetCountsV3_(preview.sheetCounts || []) + (preview.sampleEvaluationNos && preview.sampleEvaluationNos.length ? '<p class="section-help">考核單號範例：' + escapeHtml(preview.sampleEvaluationNos.join('、')) + '</p>' : '');
+        updateAnnualArchiveActionStateV3_();
+      } catch (error) {
+        elements.annualArchiveActionContent.innerHTML = '<h4>無法預覽安全還原</h4><p class="table-error-text">' + escapeHtml(friendlyError(error)) + '</p>';
+        state.archiveAction.restorePreview = { canRestore: false };
+        updateAnnualArchiveActionStateV3_();
+      }
+      return;
+    }
     elements.annualArchiveActionContent.innerHTML = '<h4>' + (type === 'CLEANUP' ? '清理主系統舊資料' : '確認完成封存') + '</h4>' +
       '<p><strong>' + escapeHtml(batchId) + '</strong></p><p class="section-help">' +
       (type === 'CLEANUP' ? '只清理已完整封存在年度封存包內的主系統舊資料；封存試算表與雲端PDF不會刪除。' : '確認後建立封存索引，但主系統原資料仍保留30天。') + '</p>';
     elements.annualArchiveActionReasonGroup.hidden = type !== 'CLEANUP';
-    elements.annualArchiveActionReason.value = '';
-    elements.annualArchiveActionConfirm.checked = false;
+    if (reasonLabel) reasonLabel.textContent = '清理原因';
     elements.annualArchiveActionConfirmLabel.textContent = type === 'CLEANUP' ? '我已確認清理主系統舊資料的影響。' : '我已確認完成年度封存的影響。';
-    elements.annualArchiveActionResult.hidden = true;
     updateAnnualArchiveActionStateV3_();
     elements.annualArchiveActionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderArchiveRestoreSheetCountsV3_(rows) {
+    if (!rows.length) return '<p class="section-help">封存包沒有可顯示的工作表明細。</p>';
+    return '<div class="management-data-table-wrap"><table class="management-data-table"><thead><tr><th>工作表</th><th>封存列數</th><th>可還原列數</th><th>檢查結果</th></tr></thead><tbody>' + rows.map(function(item) { return '<tr><td data-label="工作表"><strong>' + escapeHtml(item.sheetName || '') + '</strong></td><td data-label="封存列數">' + Number(item.archivedRows || 0) + '</td><td data-label="可還原列數">' + Number(item.restorableRows || 0) + '</td><td data-label="檢查結果">' + escapeHtml(item.missingSheet ? '封存包缺少工作表' : (item.missingKey ? '缺少關聯欄位' : '可比對')) + '</td></tr>'; }).join('') + '</tbody></table></div>';
   }
 
   function updateAnnualArchiveActionStateV3_() {
@@ -5846,10 +6219,12 @@
     var action = state.archiveAction;
     if (!action) { elements.annualArchiveActionRunButton.disabled = true; return; }
     var confirmed = Boolean(elements.annualArchiveActionConfirm && elements.annualArchiveActionConfirm.checked);
-    var reasonOk = action.type !== 'CLEANUP' || String(elements.annualArchiveActionReason.value || '').trim().length >= 4;
-    elements.annualArchiveActionRunButton.disabled = !(confirmed && reasonOk);
+    var needsReason = action.type === 'CLEANUP' || action.type === 'RESTORE';
+    var reasonOk = !needsReason || String(elements.annualArchiveActionReason.value || '').trim().length >= 4;
+    var previewOk = action.type !== 'RESTORE' || Boolean(action.restorePreview && action.restorePreview.canRestore);
+    elements.annualArchiveActionRunButton.disabled = !(confirmed && reasonOk && previewOk);
     var label = elements.annualArchiveActionRunButton.querySelector('.button-label');
-    if (label) label.textContent = action.type === 'CLEANUP' ? '確認清理主系統' : '確認完成封存';
+    if (label) label.textContent = action.type === 'CLEANUP' ? '確認清理主系統' : (action.type === 'RESTORE' ? '確認安全還原' : '確認完成封存');
   }
 
   function closeAnnualArchiveActionV3_() {
@@ -5867,11 +6242,15 @@
       if (action.type === 'CLEANUP') {
         payload.reason = String(elements.annualArchiveActionReason.value || '').trim();
         result = await window.V3WorkflowService.archiveCleanup(payload, window.V3ApiClient.createRequestId());
+      } else if (action.type === 'RESTORE') {
+        payload.reason = String(elements.annualArchiveActionReason.value || '').trim();
+        result = await window.V3WorkflowService.archiveRestore(payload, window.V3ApiClient.createRequestId());
       } else {
         result = await window.V3WorkflowService.archiveFinalize(payload, window.V3ApiClient.createRequestId());
       }
       elements.annualArchiveActionResult.hidden = false;
-      elements.annualArchiveActionResult.innerHTML = '<strong>處理完成</strong><p>' + (action.type === 'CLEANUP' ? '主系統舊資料已清理，年度封存包與雲端PDF仍保留。' : '封存已確認完成；主系統資料將繼續保留30天。') + '</p>';
+      var resultData = result && result.data || {};
+      elements.annualArchiveActionResult.innerHTML = '<strong>處理完成</strong><p>' + escapeHtml(resultData.message || (action.type === 'CLEANUP' ? '主系統舊資料已清理，年度封存包與雲端PDF仍保留。' : (action.type === 'RESTORE' ? '封存資料已安全還原；既有資料與封存包均未刪除。' : '封存已確認完成；主系統資料將繼續保留30天。'))) + '</p>';
       state.archiveAction = null;
       await loadAnnualArchiveCenterV3_({ quiet: true });
       window.setTimeout(closeAnnualArchiveActionV3_, 1200);
@@ -5918,13 +6297,13 @@
   }
 
   function resolveSystemManagementPageFromHashV3_() {
-    var match = String(window.location.hash || '').match(/^#system\/(home|accounts|monthlyPlan|dispatch|outcomes|notification|pdf|archive|health)$/);
+    var match = String(window.location.hash || '').match(/^#system\/(home|jobs|accounts|schema|monthlyPlan|dispatch|outcomes|notification|pdf|archive|health)$/);
     return match ? match[1] : (state.activeSystemPage || 'home');
   }
 
   function switchSystemManagementPageV3_(page, options) {
     var settings = options || {};
-    var allowed = ['home', 'accounts', 'monthlyPlan', 'dispatch', 'outcomes', 'notification', 'pdf', 'archive', 'health'];
+    var allowed = ['home', 'jobs', 'accounts', 'schema', 'monthlyPlan', 'dispatch', 'outcomes', 'notification', 'pdf', 'archive', 'health'];
     var target = allowed.indexOf(String(page || '')) !== -1 ? String(page) : 'home';
     state.activeSystemPage = target;
     (elements.systemPagePanels || Array.prototype.slice.call(document.querySelectorAll('[data-system-page-panel]'))).forEach(function (panel) {
@@ -5938,6 +6317,8 @@
     if (!settings.skipHash && window.history && window.history.replaceState) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search + '#system/' + target);
     }
+    if (!settings.skipLoad && target === 'jobs' && !state.backgroundJobs) loadBackgroundJobCenterV3_({ quiet: true });
+    if (!settings.skipLoad && target === 'schema' && !state.schemaManagement) loadSchemaManagementCenterV3_({ quiet: true });
     if (!settings.skipLoad && target === 'monthlyPlan' && !state.monthlyPlan) loadMonthlyPlanCenterV3_({ quiet: true });
     if (!settings.skipLoad && target === 'dispatch') { if (!state.dispatchManagement) loadDispatchManagementCenter({ quiet: true }); if (!state.dispatchSchedule) loadDispatchScheduleStatusV3_({ quiet: true }); }
     if (!settings.skipLoad && target === 'outcomes' && !state.outcomeAnalysis) loadOutcomeAnalysisV3_({ quiet: true });
