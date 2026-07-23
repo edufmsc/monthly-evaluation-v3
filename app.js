@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.9.0A-HF6-priority-operations';
+  var APP_BUILD = '7.9.0A-HF7-management-usability';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -82,6 +82,10 @@
     monthlyPlan: null,
     monthlyPlanLoading: false,
     monthlyPlanPage: 1,
+    monthlyPlanDrafts: {},
+    monthlyPlanDraftMonth: '',
+    outcomeMetric: null,
+    outcomeMetricPage: 1,
     forceClosePreview: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
@@ -214,8 +218,9 @@
       '<section id="dispatchScheduleSection" class="detail-section dispatch-schedule-section"><div class="test-dispatch-heading"><div><h4>每月1～3日自動派發排程</h4><p class="section-help">顯示主派發、補跑、下次執行、最近結果與月份名單是否已鎖定。</p></div><button id="dispatchScheduleRefreshButton" class="secondary-button secondary-button--small" type="button">更新排程狀態</button></div>' +
         '<div id="dispatchScheduleSummary" class="admin-result-grid"><div class="empty-state compact-empty"><h3>尚未讀取排程狀態</h3></div></div>' +
         '<div id="dispatchSchedulePlanStatus" class="dispatch-schedule-plan-grid"></div>' +
-        '<label class="confirm-row"><input id="dispatchScheduleConfirm" type="checkbox"><span>我已確認本次安裝、更新或停用每月派發排程。</span></label>' +
-        '<div class="test-dispatch-actions"><button id="dispatchScheduleInstallButton" class="secondary-button" type="button" disabled>安裝／更新排程</button><button id="dispatchScheduleDisableButton" class="secondary-button" type="button" disabled>停用排程</button></div>' +
+        '<div class="dispatch-schedule-settings"><label class="field-group"><span>每月1～3日執行時段</span><select id="dispatchScheduleHour">' + Array.from({length:24}, function(_, hour) { return '<option value="' + hour + '">' + String(hour).padStart(2, '0') + ':00 前後約15分鐘</option>'; }).join('') + '</select></label><p class="section-help">日期固定為每月1日主派發、2日與3日安全補跑；可在此調整執行小時。</p></div>' +
+        '<label class="confirm-row"><input id="dispatchScheduleConfirm" type="checkbox"><span>我已確認本次排程時間與安裝、更新或停用操作。</span></label>' +
+        '<div class="test-dispatch-actions"><button id="dispatchScheduleInstallButton" class="secondary-button" type="button" disabled>套用時間並更新排程</button><button id="dispatchScheduleDisableButton" class="secondary-button" type="button" disabled>停用排程</button></div>' +
       '</section>' +
       '<section class="detail-section dispatch-month-analysis-top"><div class="test-dispatch-heading"><div><h4>月份整體分析</h4>' +
         '<p class="section-help">先選月份再產生分析；不會在登入時自動掃描所有月份。</p></div>' +
@@ -347,18 +352,18 @@
       '<form id="monthlyPlanFilterForm" class="filter-grid monthly-plan-filter">' +
         '<label class="field-group"><span>考核月份</span><input id="monthlyPlanMonth" type="text" placeholder="115/08/01" required></label>' +
         '<label class="field-group monthly-plan-keyword"><span>工號／姓名／店號／店別</span><input id="monthlyPlanKeyword" type="text" maxlength="80"></label>' +
-        '<label class="field-group"><span>名單分類</span><select id="monthlyPlanViewMode"><option value="ALL">全部（依考核表分組）</option><option value="B">店副理進階月考核表</option><option value="A">一般月考核表</option><option value="NONE">本月不考核</option></select></label>' +
+        '<label class="field-group"><span>名單分類</span><select id="monthlyPlanViewMode"><option value="ALL">全部（依考核表分組）</option><option value="EVALUATE">本月需要考核</option><option value="B">店副理進階月考核表</option><option value="A">一般月考核表</option><option value="NONE">本月不考核</option></select></label>' +
         '<div class="test-dispatch-actions"><button id="monthlyPlanSearchButton" class="secondary-button" type="submit"><span class="button-label">查詢名單</span><span class="button-spinner"></span></button></div>' +
       '</form>' +
       '<div id="monthlyPlanMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
       '<div id="monthlyPlanSummary"></div>' +
-      '<section class="detail-section monthly-plan-actions"><div class="test-dispatch-heading monthly-plan-heading-line"><div><h4>月份計畫控制</h4><p class="section-help">先儲存設定再鎖定，鎖定後才會成為正式自動派發依據。</p></div><strong id="monthlyPlanLockStatus">尚未鎖定</strong></div>' +
+      '<section class="detail-section monthly-plan-actions"><div class="test-dispatch-heading monthly-plan-heading-line"><div><h4>月份計畫控制</h4><p class="section-help">可跨頁修改；未儲存變更會保留在本次瀏覽器操作中，最後一次儲存全部變更後再鎖定。</p></div><strong id="monthlyPlanLockStatus">尚未鎖定</strong></div>' +
         '<div class="monthly-plan-control-line"><label class="field-group monthly-plan-reason-field"><span>處理原因</span><input id="monthlyPlanReason" type="text" maxlength="300" placeholder="例如：完成下月考核名單確認"></label>' +
         '<label class="confirm-row monthly-plan-confirm-inline"><input id="monthlyPlanConfirm" type="checkbox"><span>我已確認此月份名單與考核表類型。</span></label>' +
-        '<div class="test-dispatch-actions monthly-plan-main-actions"><button id="monthlyPlanSaveButton" class="secondary-button" type="button"><span class="button-label">儲存本頁</span><span class="button-spinner"></span></button>' +
+        '<div class="test-dispatch-actions monthly-plan-main-actions"><button id="monthlyPlanSaveButton" class="secondary-button" type="button"><span class="button-label">儲存全部變更</span><span class="button-spinner"></span></button>' +
         '<button id="monthlyPlanLockButton" class="primary-button" type="button" disabled><span class="button-label">鎖定名單</span><span class="button-spinner"></span></button>' +
         '<button id="monthlyPlanReopenButton" class="secondary-button" type="button" disabled><span class="button-label">解除鎖定</span><span class="button-spinner"></span></button></div></div></section>' +
-      '<section class="detail-section"><div class="test-dispatch-heading monthly-plan-list-heading"><div><h4>受評人員名單</h4><p class="section-help">店副理進階、一般月考核、本月不考核依序分組；每組內再依店號、工號排列。</p></div>' +
+      '<section class="detail-section"><div class="test-dispatch-heading monthly-plan-list-heading"><div><h4>受評人員名單</h4><p class="section-help">店副理進階、一般月考核、本月不考核依序分組；跨頁修改會保留，完成後再一次儲存。</p></div>' +
         '<div class="test-dispatch-actions monthly-plan-page-actions"><button id="monthlyPlanSelectPageButton" class="secondary-button secondary-button--small" type="button">本頁全選</button>' +
         '<button id="monthlyPlanClearPageButton" class="secondary-button secondary-button--small" type="button">本頁取消</button>' +
         '<button id="monthlyPlanRestorePageButton" class="secondary-button secondary-button--small" type="button">恢復預設</button></div></div>' +
@@ -385,7 +390,7 @@
         '<label class="field-group"><span>工號／姓名／考核單號</span><input id="outcomeKeyword" type="text" maxlength="80"></label>' +
         '<label class="field-group"><span>店號</span><input id="outcomeStoreCode" type="text" maxlength="20"></label>' +
         '<label class="field-group"><span>區域</span><input id="outcomeArea" type="text" maxlength="40"></label>' +
-        '<div class="test-dispatch-actions"><button id="outcomeSearchButton" class="primary-button" type="submit"><span class="button-label">產生成果分析</span><span class="button-spinner"></span></button></div>' +
+        '<div class="test-dispatch-actions outcome-search-actions"><button id="outcomeSearchButton" class="primary-button" type="submit"><span class="button-label">產生成果分析</span><span class="button-spinner"></span></button></div>' +
       '</form>' +
       '<div id="outcomeMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
       '<div id="outcomeSummary"></div>' +
@@ -397,6 +402,19 @@
       '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>已結案考核明細</h4><p class="section-help">每頁固定10筆。</p></div></div><div id="outcomeDetailList"></div>' +
         '<div id="outcomePagination" class="account-management-pagination" hidden><button id="outcomePreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="outcomePageText">第1頁</strong><button id="outcomeNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></section>';
     systemPanel.appendChild(article);
+    ensureOutcomeMetricDialogV3_();
+  }
+
+  function ensureOutcomeMetricDialogV3_() {
+    if (document.getElementById('outcomeMetricOverlay')) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'outcomeMetricOverlay';
+    overlay.className = 'management-confirm-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML = '<section class="management-confirm-dialog outcome-metric-dialog"><div class="test-dispatch-heading"><div><p class="step-label">月考核成果分析明細</p><h2 id="outcomeMetricTitle">統計內容</h2></div><button id="outcomeMetricCloseButton" class="secondary-button secondary-button--small" type="button">關閉</button></div><div id="outcomeMetricList"></div><div id="outcomeMetricPagination" class="account-management-pagination" hidden><button id="outcomeMetricPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="outcomeMetricPageText">第1頁</strong><button id="outcomeMetricNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></section>';
+    document.body.appendChild(overlay);
   }
 
   function ensureNotificationPreviewDialogV3_() {
@@ -2968,9 +2986,55 @@
     }
   }
 
+  function monthlyPlanDraftBucketV3_(month) {
+    var key = String(month || '').trim();
+    if (!key) return {};
+    if (!state.monthlyPlanDrafts[key]) state.monthlyPlanDrafts[key] = {};
+    return state.monthlyPlanDrafts[key];
+  }
+
+  function captureMonthlyPlanVisibleDraftsV3_() {
+    if (!elements.monthlyPlanList || !state.monthlyPlan || state.monthlyPlan.locked) return;
+    var month = String(state.monthlyPlan.evaluationMonth || elements.monthlyPlanMonth && elements.monthlyPlanMonth.value || '').trim();
+    if (!month) return;
+    var bucket = monthlyPlanDraftBucketV3_(month);
+    Array.prototype.slice.call(elements.monthlyPlanList.querySelectorAll('[data-monthly-plan-row]')).forEach(function(row) {
+      var checkbox = row.querySelector('.monthly-plan-evaluate');
+      var select = row.querySelector('.monthly-plan-version');
+      var subjectRole = String(row.getAttribute('data-subject-role') || '');
+      var item = { employeeId: String(row.getAttribute('data-employee-id') || '').trim(), shouldEvaluate: checkbox && checkbox.checked ? '是' : '否', evaluationVersion: checkbox && checkbox.checked ? (subjectRole === '門市店主管' ? 'B' : String(select && select.value || 'A')) : 'A' };
+      var originalShould = String(row.getAttribute('data-original-should-evaluate') || '否');
+      var originalVersion = String(row.getAttribute('data-original-version') || 'A');
+      if (item.shouldEvaluate === originalShould && (item.shouldEvaluate !== '是' || item.evaluationVersion === originalVersion)) delete bucket[item.employeeId];
+      else bucket[item.employeeId] = item;
+    });
+    updateMonthlyPlanDraftHintV3_();
+  }
+
+  function getMonthlyPlanDraftItemsV3_(month) {
+    var bucket = monthlyPlanDraftBucketV3_(month);
+    return Object.keys(bucket).map(function(key) { return bucket[key]; });
+  }
+
+  function clearMonthlyPlanDraftsV3_(month) {
+    delete state.monthlyPlanDrafts[String(month || '').trim()];
+    updateMonthlyPlanDraftHintV3_();
+  }
+
+  function updateMonthlyPlanDraftHintV3_() {
+    var month = String(elements.monthlyPlanMonth && elements.monthlyPlanMonth.value || state.monthlyPlan && state.monthlyPlan.evaluationMonth || '').trim();
+    var count = getMonthlyPlanDraftItemsV3_(month).length;
+    if (elements.monthlyPlanSaveButton) {
+      var label = elements.monthlyPlanSaveButton.querySelector('.button-label');
+      if (label) label.textContent = count ? '儲存全部變更（' + count + '人）' : '儲存全部變更';
+      elements.monthlyPlanSaveButton.disabled = Boolean(state.monthlyPlan && state.monthlyPlan.locked) || count === 0;
+    }
+  }
+
   async function loadMonthlyPlanCenterV3_(options) {
     var settings = options || {};
     if (state.monthlyPlanLoading || !elements.monthlyPlanList) return;
+    if (!settings.skipCapture) captureMonthlyPlanVisibleDraftsV3_();
     state.monthlyPlanLoading = true;
     setManagementCardLoadingV3_(elements.monthlyPlanManagementCard, true, state.monthlyPlan ? '正在更新月份考核名單，現有資料會保留。' : '正在載入月份考核名單…');
     if (elements.monthlyPlanRefreshButton) elements.monthlyPlanRefreshButton.disabled = true;
@@ -2983,6 +3047,7 @@
         page: Number(state.monthlyPlanPage || 1)
       });
       state.monthlyPlan = response.data || {};
+      state.monthlyPlanDraftMonth = String(state.monthlyPlan.evaluationMonth || '');
       state.monthlyPlanPage = Number(state.monthlyPlan.pagination && state.monthlyPlan.pagination.page || 1);
       if (elements.monthlyPlanMonth) elements.monthlyPlanMonth.value = state.monthlyPlan.evaluationMonth || elements.monthlyPlanMonth.value;
       if (elements.monthlyPlanViewMode) elements.monthlyPlanViewMode.value = state.monthlyPlan.viewMode || elements.monthlyPlanViewMode.value || 'ALL';
@@ -3002,12 +3067,12 @@
   function renderMonthlyPlanCenterV3_(data) {
     var summary = data.summary || {};
     if (elements.monthlyPlanSummary) {
-      elements.monthlyPlanSummary.innerHTML = '<div class="admin-result-grid">' +
-        metaItem('名單人數', Number(summary.total || 0)) +
-        metaItem('需要考核', Number(summary.evaluateCount || 0)) +
-        metaItem('一般月考核表', Number(summary.versionACount || 0)) +
-        metaItem('店副理進階月考核表', Number(summary.versionBCount || 0)) +
-        metaItem('本月不考核', Number(summary.notEvaluateCount || 0)) +
+      elements.monthlyPlanSummary.innerHTML = '<div class="admin-result-grid management-metric-grid">' +
+        managementMetricButtonV3_('名單人數', Number(summary.total || 0), 'ALL', 'monthly-plan') +
+        managementMetricButtonV3_('需要考核', Number(summary.evaluateCount || 0), 'EVALUATE', 'monthly-plan') +
+        managementMetricButtonV3_('一般月考核表', Number(summary.versionACount || 0), 'A', 'monthly-plan') +
+        managementMetricButtonV3_('店副理進階月考核表', Number(summary.versionBCount || 0), 'B', 'monthly-plan') +
+        managementMetricButtonV3_('本月不考核', Number(summary.notEvaluateCount || 0), 'NONE', 'monthly-plan') +
       '</div>';
     }
     if (elements.monthlyPlanLockStatus) {
@@ -3022,9 +3087,10 @@
     } else {
       var currentGroup = '';
       var listHtml = rows.map(function(item) {
-        var checked = item.shouldEvaluate === '是';
+        var draft = monthlyPlanDraftBucketV3_(data.evaluationMonth || '')[String(item.employeeId || '')] || null;
+        var checked = draft ? draft.shouldEvaluate === '是' : item.shouldEvaluate === '是';
         var isManagerSubject = String(item.systemRole || '').trim() === '門市店主管';
-        var selectedVersion = isManagerSubject ? 'B' : String(item.evaluationVersion || 'A').toUpperCase();
+        var selectedVersion = isManagerSubject ? 'B' : String(draft ? draft.evaluationVersion : (item.evaluationVersion || 'A')).toUpperCase();
         var disabled = data.locked ? ' disabled' : '';
         var groupKey = !checked ? 'NONE' : (selectedVersion === 'B' ? 'B' : 'A');
         var groupLabel = groupKey === 'B' ? '店副理進階月考核表' : (groupKey === 'A' ? '一般月考核表' : '本月不考核');
@@ -3033,7 +3099,7 @@
           currentGroup = groupKey;
           groupHeader = '<div class="monthly-plan-group-header monthly-plan-group-header--' + groupKey.toLowerCase() + '"><strong>' + escapeHtml(groupLabel) + '</strong><span>' + (groupKey === 'NONE' ? '未勾選名單' : '已勾選名單') + '</span></div>';
         }
-        return groupHeader + '<article class="monthly-plan-row monthly-plan-row--' + groupKey.toLowerCase() + '" data-monthly-plan-row data-plan-group="' + groupKey + '" data-employee-id="' + escapeHtml(item.employeeId) + '" data-subject-role="' + escapeHtml(item.systemRole || '') + '" data-master-needs-evaluation="' + escapeHtml(item.masterNeedsEvaluation || '否') + '">' +
+        return groupHeader + '<article class="monthly-plan-row monthly-plan-row--' + groupKey.toLowerCase() + (draft ? ' is-draft' : '') + '" data-monthly-plan-row data-plan-group="' + groupKey + '" data-employee-id="' + escapeHtml(item.employeeId) + '" data-subject-role="' + escapeHtml(item.systemRole || '') + '" data-master-needs-evaluation="' + escapeHtml(item.masterNeedsEvaluation || '否') + '" data-original-should-evaluate="' + escapeHtml(item.shouldEvaluate || '否') + '" data-original-version="' + escapeHtml(item.evaluationVersion || 'A') + '">' +
           '<label class="monthly-plan-check"><input class="monthly-plan-evaluate" type="checkbox"' + (checked ? ' checked' : '') + disabled + '><span>本月需要考核</span></label>' +
           '<div class="monthly-plan-person"><strong>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '｜' + escapeHtml(joinText(item.area, item.department)) + '</small>' +
             '<span class="monthly-plan-role-tag">' + escapeHtml(item.systemRole || '未設定角色') + '</span></div>' +
@@ -3048,7 +3114,7 @@
     }
     updateSimplePaginationV3_(elements.monthlyPlanPagination, elements.monthlyPlanPageText,
       elements.monthlyPlanPreviousButton, elements.monthlyPlanNextButton, data.pagination || {});
-    if (elements.monthlyPlanSaveButton) elements.monthlyPlanSaveButton.disabled = Boolean(data.locked);
+    updateMonthlyPlanDraftHintV3_();
     [elements.monthlyPlanSelectPageButton, elements.monthlyPlanClearPageButton, elements.monthlyPlanRestorePageButton].forEach(function(button) { if (button) button.disabled = Boolean(data.locked); });
     if (elements.monthlyPlanLockButton) elements.monthlyPlanLockButton.hidden = Boolean(data.locked);
     if (elements.monthlyPlanReopenButton) elements.monthlyPlanReopenButton.hidden = !data.locked;
@@ -3070,6 +3136,7 @@
         select.disabled = !checked || managerSubject;
       }
     });
+    captureMonthlyPlanVisibleDraftsV3_();
   }
 
   function collectMonthlyPlanVisibleItemsV3_() {
@@ -3089,24 +3156,33 @@
   }
 
   async function saveMonthlyPlanPageV3_() {
-    var items = collectMonthlyPlanVisibleItemsV3_();
-    if (!items.length) return setMonthlyPlanMessageV3_('error', '本頁沒有可儲存的人員。');
+    captureMonthlyPlanVisibleDraftsV3_();
+    var month = String(elements.monthlyPlanMonth.value || '').trim();
+    var items = getMonthlyPlanDraftItemsV3_(month);
+    if (!items.length) return setMonthlyPlanMessageV3_('info', '目前沒有未儲存變更。');
     setButtonLoading(elements.monthlyPlanSaveButton, true, '儲存中');
     try {
-      var response = await window.V3WorkflowService.monthlyPlanSave({
-        evaluationMonth: String(elements.monthlyPlanMonth.value || '').trim(),
-        items: items,
-        reason: String(elements.monthlyPlanReason && elements.monthlyPlanReason.value || '').trim() || '教育中心更新月份考核名單'
-      }, window.V3ApiClient.createRequestId());
-      var message = response.data && response.data.message || '本頁設定已儲存。';
+      var totalSaved = 0;
+      for (var offset = 0; offset < items.length; offset += 50) {
+        var batch = items.slice(offset, offset + 50);
+        var response = await window.V3WorkflowService.monthlyPlanSave({
+          evaluationMonth: month,
+          items: batch,
+          reason: String(elements.monthlyPlanReason && elements.monthlyPlanReason.value || '').trim() || '教育中心更新月份考核名單'
+        }, window.V3ApiClient.createRequestId());
+        totalSaved += Number(response.data && response.data.savedCount || batch.length);
+      }
+      clearMonthlyPlanDraftsV3_(month);
+      var message = '已儲存跨頁累積的 ' + totalSaved + ' 位人員設定。';
       setMonthlyPlanMessageV3_('success', message);
       showGlobalNotice('success', '月份名單儲存成功', message, true);
-      await loadMonthlyPlanCenterV3_({ quiet: true });
+      await loadMonthlyPlanCenterV3_({ quiet: true, skipCapture: true });
     } catch (error) {
       setMonthlyPlanMessageV3_('error', friendlyError(error));
       showGlobalNotice('error', '月份名單儲存失敗', friendlyError(error), true);
     } finally {
-      setButtonLoading(elements.monthlyPlanSaveButton, false, '儲存本頁');
+      setButtonLoading(elements.monthlyPlanSaveButton, false, '儲存全部變更');
+      updateMonthlyPlanDraftHintV3_();
     }
   }
 
@@ -3123,14 +3199,16 @@
     state.monthlyPlanLoading = true;
     setButtonLoading(elements.monthlyPlanLockButton, true, '鎖定中');
     try {
-      var visibleItems = collectMonthlyPlanVisibleItemsV3_();
-      if (visibleItems.length) {
+      captureMonthlyPlanVisibleDraftsV3_();
+      var draftItems = getMonthlyPlanDraftItemsV3_(elements.monthlyPlanMonth.value);
+      for (var draftOffset = 0; draftOffset < draftItems.length; draftOffset += 50) {
         await window.V3WorkflowService.monthlyPlanSave({
           evaluationMonth: elements.monthlyPlanMonth.value,
-          items: visibleItems,
+          items: draftItems.slice(draftOffset, draftOffset + 50),
           reason: String(elements.monthlyPlanReason.value || '').trim()
         }, window.V3ApiClient.createRequestId());
       }
+      clearMonthlyPlanDraftsV3_(elements.monthlyPlanMonth.value);
       var response = await window.V3WorkflowService.monthlyPlanLock({
         evaluationMonth: elements.monthlyPlanMonth.value,
         reason: String(elements.monthlyPlanReason.value || '').trim(),
@@ -3138,7 +3216,7 @@
       }, window.V3ApiClient.createRequestId());
       showGlobalNotice('success', '月份考核名單已鎖定', response.data && response.data.message || '正式派發將依此名單執行。', true);
       elements.monthlyPlanConfirm.checked = false;
-      await loadMonthlyPlanCenterV3_({ quiet: true });
+      await loadMonthlyPlanCenterV3_({ quiet: true, skipCapture: true });
     } catch (error) {
       showGlobalNotice('error', '鎖定月份考核名單失敗', friendlyError(error), true);
     } finally {
@@ -3160,7 +3238,7 @@
       var message = response.data && response.data.message || '月份名單已解除鎖定。';
       showGlobalNotice('success', '已解除鎖定', message, true);
       setMonthlyPlanMessageV3_('success', message);
-      await loadMonthlyPlanCenterV3_({ quiet: true });
+      await loadMonthlyPlanCenterV3_({ quiet: true, skipCapture: true });
     } catch (error) {
       showGlobalNotice('error', '解除鎖定失敗', friendlyError(error), true);
       setMonthlyPlanMessageV3_('error', friendlyError(error));
@@ -3217,15 +3295,15 @@
     var summary = source.summary || {};
     var queue = source.queueSummary || {};
     if (elements.notificationSummary) {
-      elements.notificationSummary.innerHTML = '<div class="admin-result-grid">' +
-        metaItem('有待辦人數', summary.recipientCount || 0) +
-        metaItem('待辦案件', summary.pendingCount || 0) +
-        metaItem('逾期人數', summary.overdueRecipientCount || 0) +
-        metaItem('逾期案件', summary.overdueCount || 0) +
-        metaItem('未設定Email', summary.missingEmailCount || 0) +
-        metaItem('待寄送', queue.pending || 0) +
-        metaItem('寄送中', queue.processing || 0) +
-        metaItem('寄送失敗', queue.failed || 0) +
+      elements.notificationSummary.innerHTML = '<div class="admin-result-grid management-metric-grid">' +
+        managementMetricButtonV3_('有待辦人數', summary.recipientCount || 0, 'RECIPIENTS', 'notification') +
+        managementMetricButtonV3_('待辦案件', summary.pendingCount || 0, 'RECIPIENTS', 'notification') +
+        managementMetricButtonV3_('逾期人數', summary.overdueRecipientCount || 0, 'RECIPIENTS', 'notification') +
+        managementMetricButtonV3_('逾期案件', summary.overdueCount || 0, 'RECIPIENTS', 'notification') +
+        managementMetricButtonV3_('未設定Email', summary.missingEmailCount || 0, 'RECIPIENTS', 'notification') +
+        managementMetricButtonV3_('待寄送', queue.pending || 0, 'ACTIONS', 'notification') +
+        managementMetricButtonV3_('寄送中', queue.processing || 0, 'ACTIONS', 'notification') +
+        managementMetricButtonV3_('寄送失敗', queue.failed || 0, 'FAILURES', 'notification') +
       '</div>';
     }
 
@@ -3240,18 +3318,27 @@
     renderNotificationLogsV3_(source.logs || [], source.logPagination || {});
   }
 
+  function handleNotificationMetricClickV3_(event) {
+    var button = event.target && event.target.closest ? event.target.closest('[data-management-scope="notification"]') : null;
+    if (!button) return;
+    var metric = button.getAttribute('data-management-metric');
+    var target = metric === 'FAILURES' ? elements.notificationFailedList : (metric === 'LOGS' ? elements.notificationLogPanel : (metric === 'ACTIONS' ? elements.notificationSendAllButton : elements.notificationRecipientList));
+    if (metric === 'LOGS' && elements.notificationLogPanel) elements.notificationLogPanel.open = true;
+    if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   function renderNotificationDeliveryStatsV3_(stats) {
     var source = stats || {};
     var today = source.today || {};
     var week = source.last7Days || {};
     if (elements.notificationDeliveryStats) {
-      elements.notificationDeliveryStats.innerHTML = '<div class="admin-result-grid">' +
-        metaItem('今日寄送成功', Number(today.success || 0)) +
-        metaItem('今日寄送失敗', Number(today.failed || 0)) +
-        metaItem('今日成功率', Number(today.successRate || 0).toFixed(1) + '%') +
-        metaItem('近7日成功', Number(week.success || 0)) +
-        metaItem('近7日失敗', Number(week.failed || 0)) +
-        metaItem('近7日成功率', Number(week.successRate || 0).toFixed(1) + '%') +
+      elements.notificationDeliveryStats.innerHTML = '<div class="admin-result-grid management-metric-grid">' +
+        managementMetricButtonV3_('今日寄送成功', Number(today.success || 0), 'LOGS', 'notification') +
+        managementMetricButtonV3_('今日寄送失敗', Number(today.failed || 0), 'FAILURES', 'notification') +
+        managementMetricButtonV3_('今日成功率', Number(today.successRate || 0).toFixed(1) + '%', 'LOGS', 'notification') +
+        managementMetricButtonV3_('近7日成功', Number(week.success || 0), 'LOGS', 'notification') +
+        managementMetricButtonV3_('近7日失敗', Number(week.failed || 0), 'FAILURES', 'notification') +
+        managementMetricButtonV3_('近7日成功率', Number(week.successRate || 0).toFixed(1) + '%', 'LOGS', 'notification') +
       '</div>';
     }
     if (elements.notificationFailureReasons) {
@@ -4281,7 +4368,7 @@
   }
 
   function cacheModificationElementsV3_() {
-    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationManagementCard','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendSelectedButton','notificationSendAllButton','notificationSendOverdueButton','notificationSelectVisibleButton','notificationClearSelectedButton','notificationSelectedCount','notificationRunWorkerButton','notificationScheduleConfirm','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText','notificationPreviewOverlay','notificationPreviewSummary','notificationPreviewList','notificationPreviewConfirm','notificationPreviewCancelButton','notificationPreviewRunButton','monthlyPlanManagementCard','monthlyPlanRefreshButton','monthlyPlanFilterForm','monthlyPlanMonth','monthlyPlanKeyword','monthlyPlanViewMode','monthlyPlanSearchButton','monthlyPlanMessage','monthlyPlanSummary','monthlyPlanLockStatus','monthlyPlanReason','monthlyPlanConfirm','monthlyPlanSaveButton','monthlyPlanLockButton','monthlyPlanReopenButton','monthlyPlanSelectPageButton','monthlyPlanClearPageButton','monthlyPlanRestorePageButton','monthlyPlanList','monthlyPlanPagination','monthlyPlanPreviousButton','monthlyPlanNextButton','monthlyPlanPageText','dispatchScheduleSection','dispatchScheduleRefreshButton','dispatchScheduleSummary','dispatchSchedulePlanStatus','dispatchScheduleConfirm','dispatchScheduleInstallButton','dispatchScheduleDisableButton','outcomeAnalysisCard','outcomeRefreshButton','outcomeFilterForm','outcomeStartMonth','outcomeEndMonth','outcomeVersion','outcomeKeyword','outcomeStoreCode','outcomeArea','outcomeSearchButton','outcomeMessage','outcomeSummary','outcomeMonthlyTrend','outcomeVersionSummary','outcomeStoreRanking','outcomeAreaRanking','outcomeItemGroups','outcomeDetailList','outcomePagination','outcomePreviousButton','outcomeNextButton','outcomePageText','notificationDeliveryStats','notificationFailureReasons','notificationFailedSelectedCount','notificationFailedSelectPageButton','notificationFailedClearButton','notificationFailedList','notificationFailedPagination','notificationFailedPreviousButton','notificationFailedNextButton','notificationFailedPageText','notificationFailedConfirm','notificationRetrySelectedButton','notificationRetryAllButton'].forEach(function(id) {
+    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationManagementCard','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendSelectedButton','notificationSendAllButton','notificationSendOverdueButton','notificationSelectVisibleButton','notificationClearSelectedButton','notificationSelectedCount','notificationRunWorkerButton','notificationScheduleConfirm','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText','notificationPreviewOverlay','notificationPreviewSummary','notificationPreviewList','notificationPreviewConfirm','notificationPreviewCancelButton','notificationPreviewRunButton','monthlyPlanManagementCard','monthlyPlanRefreshButton','monthlyPlanFilterForm','monthlyPlanMonth','monthlyPlanKeyword','monthlyPlanViewMode','monthlyPlanSearchButton','monthlyPlanMessage','monthlyPlanSummary','monthlyPlanLockStatus','monthlyPlanReason','monthlyPlanConfirm','monthlyPlanSaveButton','monthlyPlanLockButton','monthlyPlanReopenButton','monthlyPlanSelectPageButton','monthlyPlanClearPageButton','monthlyPlanRestorePageButton','monthlyPlanList','monthlyPlanPagination','monthlyPlanPreviousButton','monthlyPlanNextButton','monthlyPlanPageText','dispatchScheduleSection','dispatchScheduleRefreshButton','dispatchScheduleSummary','dispatchSchedulePlanStatus','dispatchScheduleHour','dispatchScheduleConfirm','dispatchScheduleInstallButton','dispatchScheduleDisableButton','outcomeAnalysisCard','outcomeRefreshButton','outcomeFilterForm','outcomeStartMonth','outcomeEndMonth','outcomeVersion','outcomeKeyword','outcomeStoreCode','outcomeArea','outcomeSearchButton','outcomeMessage','outcomeSummary','outcomeMonthlyTrend','outcomeVersionSummary','outcomeStoreRanking','outcomeAreaRanking','outcomeItemGroups','outcomeDetailList','outcomePagination','outcomePreviousButton','outcomeNextButton','outcomePageText','outcomeMetricOverlay','outcomeMetricTitle','outcomeMetricList','outcomeMetricPagination','outcomeMetricPreviousButton','outcomeMetricNextButton','outcomeMetricPageText','outcomeMetricCloseButton','notificationDeliveryStats','notificationFailureReasons','notificationFailedSelectedCount','notificationFailedSelectPageButton','notificationFailedClearButton','notificationFailedList','notificationFailedPagination','notificationFailedPreviousButton','notificationFailedNextButton','notificationFailedPageText','notificationFailedConfirm','notificationRetrySelectedButton','notificationRetryAllButton'].forEach(function(id) {
       elements[id] = document.getElementById(id);
     });
   }
@@ -4346,7 +4433,7 @@
     if (elements.monthlyPlanRestorePageButton) elements.monthlyPlanRestorePageButton.addEventListener('click', function() { setMonthlyPlanVisibleSelectionV3_('restore'); });
     if (elements.monthlyPlanPreviousButton) elements.monthlyPlanPreviousButton.addEventListener('click', function() { if (state.monthlyPlanPage > 1) { state.monthlyPlanPage -= 1; loadMonthlyPlanCenterV3_(); } });
     if (elements.monthlyPlanNextButton) elements.monthlyPlanNextButton.addEventListener('click', function() { var pages = Number(state.monthlyPlan && state.monthlyPlan.pagination && state.monthlyPlan.pagination.totalPages || 1); if (state.monthlyPlanPage < pages) { state.monthlyPlanPage += 1; loadMonthlyPlanCenterV3_(); } });
-    if (elements.monthlyPlanList) elements.monthlyPlanList.addEventListener('change', function(event) { var row = event.target && event.target.closest ? event.target.closest('[data-monthly-plan-row]') : null; if (!row) return; var checkbox = row.querySelector('.monthly-plan-evaluate'); var select = row.querySelector('.monthly-plan-version'); var managerSubject = String(row.getAttribute('data-subject-role') || '') === '門市店主管'; if (select) { if (managerSubject) select.value = 'B'; else if (!checkbox.checked) select.value = 'A'; select.disabled = !checkbox.checked || Boolean(state.monthlyPlan && state.monthlyPlan.locked) || managerSubject; } });
+    if (elements.monthlyPlanList) elements.monthlyPlanList.addEventListener('change', function(event) { var row = event.target && event.target.closest ? event.target.closest('[data-monthly-plan-row]') : null; if (!row) return; var checkbox = row.querySelector('.monthly-plan-evaluate'); var select = row.querySelector('.monthly-plan-version'); var managerSubject = String(row.getAttribute('data-subject-role') || '') === '門市店主管'; if (select) { if (managerSubject) select.value = 'B'; else if (!checkbox.checked) select.value = 'A'; select.disabled = !checkbox.checked || Boolean(state.monthlyPlan && state.monthlyPlan.locked) || managerSubject; } captureMonthlyPlanVisibleDraftsV3_(); });
     if (elements.dispatchScheduleRefreshButton) elements.dispatchScheduleRefreshButton.addEventListener('click', function() { loadDispatchScheduleStatusV3_(); });
     if (elements.dispatchScheduleConfirm) elements.dispatchScheduleConfirm.addEventListener('change', updateDispatchScheduleButtonsV3_);
     if (elements.dispatchScheduleInstallButton) elements.dispatchScheduleInstallButton.addEventListener('click', function() { changeDispatchScheduleV3_('install'); });
@@ -4355,6 +4442,15 @@
     if (elements.outcomeRefreshButton) elements.outcomeRefreshButton.addEventListener('click', function() { loadOutcomeAnalysisV3_(); });
     if (elements.outcomePreviousButton) elements.outcomePreviousButton.addEventListener('click', function() { if (state.outcomeAnalysisPage > 1) { state.outcomeAnalysisPage -= 1; loadOutcomeAnalysisV3_({ quiet: true }); } });
     if (elements.outcomeNextButton) elements.outcomeNextButton.addEventListener('click', function() { var pages = Number(state.outcomeAnalysis && state.outcomeAnalysis.pagination && state.outcomeAnalysis.pagination.totalPages || 1); if (state.outcomeAnalysisPage < pages) { state.outcomeAnalysisPage += 1; loadOutcomeAnalysisV3_({ quiet: true }); } });
+    if (elements.outcomeSummary) elements.outcomeSummary.addEventListener('click', function(event) { var button = event.target && event.target.closest ? event.target.closest('[data-management-scope="outcome"]') : null; if (button) openOutcomeMetricV3_(button.getAttribute('data-management-metric'), 1); });
+    if (elements.monthlyPlanSummary) elements.monthlyPlanSummary.addEventListener('click', function(event) { var button = event.target && event.target.closest ? event.target.closest('[data-management-scope="monthly-plan"]') : null; if (!button) return; var metric = button.getAttribute('data-management-metric'); elements.monthlyPlanViewMode.value = metric; state.monthlyPlanPage = 1; loadMonthlyPlanCenterV3_({ quiet: true }); });
+    if (elements.outcomeMetricCloseButton) elements.outcomeMetricCloseButton.addEventListener('click', closeOutcomeMetricV3_);
+    if (elements.outcomeMetricOverlay) elements.outcomeMetricOverlay.addEventListener('click', function(event) { if (event.target === elements.outcomeMetricOverlay) closeOutcomeMetricV3_(); });
+    if (elements.outcomeMetricPreviousButton) elements.outcomeMetricPreviousButton.addEventListener('click', function() { if (state.outcomeMetricPage > 1) openOutcomeMetricV3_(state.outcomeMetric, state.outcomeMetricPage - 1); });
+    if (elements.outcomeMetricNextButton) elements.outcomeMetricNextButton.addEventListener('click', function() { openOutcomeMetricV3_(state.outcomeMetric, state.outcomeMetricPage + 1); });
+    if (elements.notificationSummary) elements.notificationSummary.addEventListener('click', handleNotificationMetricClickV3_);
+    if (elements.notificationDeliveryStats) elements.notificationDeliveryStats.addEventListener('click', handleNotificationMetricClickV3_);
+    if (elements.dispatchManagementSummary) elements.dispatchManagementSummary.addEventListener('click', function(event) { var button = event.target && event.target.closest ? event.target.closest('[data-management-scope="dispatch"]') : null; if (!button) return; var metric = button.getAttribute('data-management-metric'); if (metric === 'SCHEDULE') { elements.dispatchScheduleSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; } elements.dispatchManagementCategory.value = metric || 'ALL'; state.dispatchPersonPage = 1; loadDispatchManagementCenter({ quiet: true }); });
     if (elements.notificationFailedList) elements.notificationFailedList.addEventListener('change', function(event) { var checkbox = event.target && event.target.closest ? event.target.closest('.notification-failed-checkbox') : null; if (!checkbox) return; var jobId = String(checkbox.getAttribute('data-job-id') || ''); if (!jobId) return; if (checkbox.checked) state.notificationFailedSelected[jobId] = true; else delete state.notificationFailedSelected[jobId]; updateNotificationFailedActionStateV3_(); });
     if (elements.notificationFailedSelectPageButton) elements.notificationFailedSelectPageButton.addEventListener('click', selectVisibleFailedNotificationsV3_);
     if (elements.notificationFailedClearButton) elements.notificationFailedClearButton.addEventListener('click', clearFailedNotificationSelectionV3_);
@@ -4504,15 +4600,15 @@
     var summary = data.summary || {};
     var filtered = data.filteredSummary || summary;
     var schedule = data.schedule || {};
-    elements.dispatchManagementSummary.innerHTML = '<div class="admin-result-grid">' +
-      metaItem('應派發／有紀錄人數', summary.candidateCount) +
-      metaItem('已建立R0', summary.createdCount) +
-      metaItem('重複跳過', summary.duplicateCount) +
-      metaItem('路線異常', summary.routeErrorCount) +
-      metaItem('系統失敗', summary.failedCount) +
-      metaItem('尚未派發', summary.unprocessedCount) +
-      metaItem('主排程', Number(schedule.mainTriggerCount || 0) + '／1') +
-      metaItem('安全補跑', Number(schedule.retryTriggerCount || 0) + '／2') +
+    elements.dispatchManagementSummary.innerHTML = '<div class="admin-result-grid management-metric-grid">' +
+      managementMetricButtonV3_('應派發／有紀錄人數', summary.candidateCount, 'ALL', 'dispatch') +
+      managementMetricButtonV3_('已建立R0', summary.createdCount, 'CREATED', 'dispatch') +
+      managementMetricButtonV3_('重複跳過', summary.duplicateCount, 'DUPLICATE', 'dispatch') +
+      managementMetricButtonV3_('路線異常', summary.routeErrorCount, 'ROUTE_ERROR', 'dispatch') +
+      managementMetricButtonV3_('系統失敗', summary.failedCount, 'SYSTEM_FAILED', 'dispatch') +
+      managementMetricButtonV3_('尚未派發', summary.unprocessedCount, 'UNPROCESSED', 'dispatch') +
+      managementMetricButtonV3_('主排程', Number(schedule.mainTriggerCount || 0) + '／1', 'SCHEDULE', 'dispatch') +
+      managementMetricButtonV3_('安全補跑', Number(schedule.retryTriggerCount || 0) + '／2', 'SCHEDULE', 'dispatch') +
       '</div><p class="section-help">' + escapeHtml(data.scopeNote || '') +
       (filtered.candidateCount !== summary.candidateCount ? '｜目前篩選顯示 ' + escapeHtml(filtered.candidateCount) + ' 人。' : '') + '</p>';
     updateDispatchManagementFilterOptions(data.filterOptions || {});
@@ -4984,6 +5080,7 @@
         metaItem('最近結果', attempt ? (attempt.success ? '完成' : '失敗') : '尚無紀錄') +
         metaItem('最近成功／跳過／失敗', attempt ? [attempt.createdCount || 0, attempt.skippedCount || 0, attempt.failedCount || 0].join('／') : '—');
     }
+    if (elements.dispatchScheduleHour) elements.dispatchScheduleHour.value = String(Number(source.hour == null ? 3 : source.hour));
     if (elements.dispatchSchedulePlanStatus) {
       var plans = [source.currentPlan, source.nextPlan].filter(Boolean);
       elements.dispatchSchedulePlanStatus.innerHTML = plans.map(function(plan) {
@@ -5008,7 +5105,7 @@
     try {
       var response = mode === 'disable'
         ? await window.V3WorkflowService.dispatchScheduleDisable({ confirmed: true })
-        : await window.V3WorkflowService.dispatchScheduleInstall({ confirmed: true });
+        : await window.V3WorkflowService.dispatchScheduleInstall({ confirmed: true, hour: Number(elements.dispatchScheduleHour && elements.dispatchScheduleHour.value || 3) });
       state.dispatchSchedule = response.data && response.data.schedule || {};
       renderDispatchScheduleStatusV3_(state.dispatchSchedule);
       var message = response.data && response.data.message || '排程設定已更新。';
@@ -5020,7 +5117,7 @@
       showDispatchManagementMessage('error', friendlyError(error));
     } finally {
       state.dispatchScheduleLoading = false;
-      setButtonLoading(button, false, mode === 'disable' ? '停用排程' : '安裝／更新排程');
+      setButtonLoading(button, false, mode === 'disable' ? '停用排程' : '套用時間並更新排程');
       updateDispatchScheduleButtonsV3_();
     }
   }
@@ -5065,21 +5162,25 @@
     }
   }
 
+  function managementMetricButtonV3_(label, value, metric, scope) {
+    return '<button type="button" class="management-metric-button" data-management-metric="' + escapeHtml(metric || '') + '" data-management-scope="' + escapeHtml(scope || '') + '"><span>' + escapeHtml(label || '') + '</span><strong>' + escapeHtml(value == null ? '0' : String(value)) + '</strong><small>點擊查看內容</small></button>';
+  }
+
   function renderOutcomeAnalysisV3_(data) {
     var summary = data.summary || {};
-    if (elements.outcomeSummary) elements.outcomeSummary.innerHTML = '<div class="admin-result-grid">' +
-      metaItem('已結案考核', Number(summary.completedCount || 0)) +
-      metaItem('平均分數', Number(summary.averageScore || 0).toFixed(1)) +
-      metaItem('最高分', Number(summary.highestScore || 0).toFixed(1)) +
-      metaItem('最低分', Number(summary.lowestScore || 0).toFixed(1)) +
-      metaItem('低於60分', Number(summary.below60Count || 0)) +
-      metaItem('低於70分', Number(summary.below70Count || 0)) +
-      metaItem('未結案未納入', Number(summary.excludedIncompleteCount || 0)) + '</div>' +
+    if (elements.outcomeSummary) elements.outcomeSummary.innerHTML = '<div class="admin-result-grid management-metric-grid">' +
+      managementMetricButtonV3_('已結案考核', Number(summary.completedCount || 0), 'COMPLETED', 'outcome') +
+      managementMetricButtonV3_('平均分數', Number(summary.averageScore || 0).toFixed(1), 'COMPLETED', 'outcome') +
+      managementMetricButtonV3_('最高分', Number(summary.highestScore || 0).toFixed(1), 'HIGHEST', 'outcome') +
+      managementMetricButtonV3_('最低分', Number(summary.lowestScore || 0).toFixed(1), 'LOWEST', 'outcome') +
+      managementMetricButtonV3_('低於60分', Number(summary.below60Count || 0), 'BELOW60', 'outcome') +
+      managementMetricButtonV3_('低於70分', Number(summary.below70Count || 0), 'BELOW70', 'outcome') +
+      managementMetricButtonV3_('未結案未納入', Number(summary.excludedIncompleteCount || 0), 'INCOMPLETE', 'outcome') + '</div>' +
       '<p class="section-help">' + escapeHtml(data.cacheHit ? '本次使用3分鐘分析快取。' : '本次重新讀取並計算既有考核紀錄。') + '</p>';
-    renderOutcomeBarsV3_(elements.outcomeMonthlyTrend, data.monthlyTrend || [], '月');
-    renderOutcomeBarsV3_(elements.outcomeVersionSummary, data.versionSummary || [], '類型');
-    renderOutcomeBarsV3_(elements.outcomeStoreRanking, data.storeRanking || [], '店別');
-    renderOutcomeBarsV3_(elements.outcomeAreaRanking, data.areaRanking || [], '區域');
+    renderOutcomeBarsV3_(elements.outcomeMonthlyTrend, (data.monthlyTrend || []).slice(-6), { total: (data.monthlyTrend || []).length, label: '最近6個月' });
+    renderOutcomeBarsV3_(elements.outcomeVersionSummary, data.versionSummary || [], { total: (data.versionSummary || []).length });
+    renderOutcomeBarsV3_(elements.outcomeStoreRanking, (data.storeRanking || []).slice(0, 10), { total: (data.storeRanking || []).length, label: '前10名' });
+    renderOutcomeBarsV3_(elements.outcomeAreaRanking, (data.areaRanking || []).slice(0, 10), { total: (data.areaRanking || []).length, label: '前10名' });
     if (elements.outcomeItemGroups) {
       elements.outcomeItemGroups.innerHTML = (data.itemGroups || []).filter(function(group) { return group.items && group.items.length; }).map(function(group) {
         return '<section class="outcome-item-group"><h5>' + escapeHtml(group.label || '') + '</h5>' + outcomeBarsHtmlV3_(group.items || []) + '</section>';
@@ -5094,9 +5195,11 @@
     updateSimplePaginationV3_(elements.outcomePagination, elements.outcomePageText, elements.outcomePreviousButton, elements.outcomeNextButton, data.pagination || {});
   }
 
-  function renderOutcomeBarsV3_(element, rows) {
+  function renderOutcomeBarsV3_(element, rows, options) {
     if (!element) return;
-    element.innerHTML = rows.length ? outcomeBarsHtmlV3_(rows) : '<p class="section-help">目前沒有資料。</p>';
+    var settings = options || {};
+    var note = Number(settings.total || 0) > rows.length ? '<p class="section-help outcome-limit-note">目前顯示' + escapeHtml(settings.label || String(rows.length) + '項') + '，其餘可從下方明細查詢。</p>' : '';
+    element.innerHTML = rows.length ? outcomeBarsHtmlV3_(rows) + note : '<p class="section-help">目前沒有資料。</p>';
   }
 
   function outcomeBarsHtmlV3_(rows) {
@@ -5106,6 +5209,49 @@
       var width = Math.max(2, Math.min(100, average / max * 100));
       return '<div class="outcome-bar-row"><span>' + escapeHtml(row.label || row.key || '') + '</span><div><i style="width:' + width.toFixed(1) + '%"></i></div><strong>' + average.toFixed(1) + '<small>（' + Number(row.count || 0) + '筆）</small></strong></div>';
     }).join('') + '</div>';
+  }
+
+  function outcomeCurrentFiltersV3_() {
+    return {
+      startMonth: elements.outcomeStartMonth.value,
+      endMonth: elements.outcomeEndMonth.value,
+      evaluationVersion: elements.outcomeVersion.value,
+      keyword: elements.outcomeKeyword.value,
+      storeCode: elements.outcomeStoreCode.value,
+      area: elements.outcomeArea.value
+    };
+  }
+
+  async function openOutcomeMetricV3_(metric, page) {
+    state.outcomeMetric = String(metric || 'COMPLETED');
+    state.outcomeMetricPage = Number(page || 1);
+    if (!elements.outcomeMetricOverlay) return;
+    elements.outcomeMetricOverlay.hidden = false;
+    elements.outcomeMetricList.innerHTML = '<div class="empty-state compact-empty"><h3>明細載入中…</h3></div>';
+    try {
+      var payload = outcomeCurrentFiltersV3_();
+      payload.metric = state.outcomeMetric;
+      payload.page = state.outcomeMetricPage;
+      var response = await window.V3WorkflowService.evaluationOutcomeMetricDetails(payload);
+      var data = response.data || {};
+      state.outcomeMetricPage = Number(data.pagination && data.pagination.page || 1);
+      if (elements.outcomeMetricTitle) elements.outcomeMetricTitle.textContent = data.title || '統計內容';
+      renderOutcomeMetricDetailsV3_(data);
+    } catch (error) {
+      elements.outcomeMetricList.innerHTML = emptyStateHtml('明細載入失敗', friendlyError(error));
+    }
+  }
+
+  function renderOutcomeMetricDetailsV3_(data) {
+    var rows = data.items || [];
+    elements.outcomeMetricList.innerHTML = rows.length ? '<div class="account-audit-grid"><div class="account-audit-row account-audit-row--header"><span>月份／狀態</span><span>受評人／店別</span><span>分數／考核單號</span></div>' + rows.map(function(row) {
+      return '<div class="account-audit-row"><span><strong>' + escapeHtml(row.month || '') + '</strong><br>' + escapeHtml(row.status || row.evaluationType || '') + '</span><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) + '<small>' + escapeHtml(row.store || '') + '｜' + escapeHtml(row.area || '') + '</small></strong><small>總分：<strong>' + escapeHtml(row.score == null ? '—' : String(row.score)) + '</strong><br>' + escapeHtml(row.evaluationNo || '') + '<br>' + escapeHtml(row.completedAt || '') + '</small></div>';
+    }).join('') + '</div>' : '<p class="section-help">沒有符合此統計條件的資料。</p>';
+    updateSimplePaginationV3_(elements.outcomeMetricPagination, elements.outcomeMetricPageText, elements.outcomeMetricPreviousButton, elements.outcomeMetricNextButton, data.pagination || {});
+  }
+
+  function closeOutcomeMetricV3_() {
+    if (elements.outcomeMetricOverlay) elements.outcomeMetricOverlay.hidden = true;
   }
 
   function showDispatchManagementMessage(type, text) { showMessage(elements.dispatchManagementMessage, type, text); }
