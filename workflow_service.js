@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.9.0A-HF8-operations-control */
+/* 數位月考核系統｜正式版本：1.0 */
 (function () {
   'use strict';
 
@@ -21,6 +21,12 @@
     listProgress: function (filters) { return call('listProgress', filters || {}); },
     listHistory: function (filters) { return call('listHistory', filters || {}); },
     getEvaluation: function (evaluationNo) { return call('getEvaluation', { evaluationNo: evaluationNo }); },
+    reassignmentCandidates: function (evaluationNo) {
+      return call('reassignmentCandidates', { evaluationNo: String(evaluationNo || '') });
+    },
+    reassignEvaluation: function (payload, requestId) { return call('reassignEvaluation', payload || {}, requestId); },
+    voidEvaluation: function (payload, requestId) { return call('voidEvaluation', payload || {}, requestId); },
+    createRevision: function (payload, requestId) { return call('createRevision', payload || {}, requestId); },
     getMutationStatus: function (evaluationNo, requestId, expectedVersion) {
       return call('getMutationStatus', { evaluationNo: evaluationNo, requestId: requestId, expectedVersion: expectedVersion });
     },
