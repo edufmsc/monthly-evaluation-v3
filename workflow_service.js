@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.9.0A-HF7-management-usability */
+/* 月考核系統 V3｜版本：7.9.0A-HF8-operations-control */
 (function () {
   'use strict';
 
@@ -53,6 +53,7 @@
     accountUnlock: function (payload, requestId) { return call('accountUnlock', payload || {}, requestId); },
     accountSetStatus: function (payload, requestId) { return call('accountSetStatus', payload || {}, requestId); },
     accountSetEvaluationRequirement: function (payload, requestId) { return call('accountSetEvaluationRequirement', payload || {}, requestId); },
+    accountSetDefaultEvaluationVersion: function (payload, requestId) { return call('accountSetDefaultEvaluationVersion', payload || {}, requestId); },
     accountSetNotificationEmail: function (payload, requestId) { return call('accountSetNotificationEmail', payload || {}, requestId); },
     accountForceLogout: function (payload, requestId) { return call('accountForceLogout', payload || {}, requestId); },
     accountCredentialLookup: function (query, employeeId, requestId) {
@@ -79,6 +80,7 @@
     dispatchScheduleDisable: function (payload) { return call('dispatchScheduleDisable', payload || {}); },
     evaluationOutcomeAnalysis: function (filters) { return call('evaluationOutcomeAnalysis', filters || {}); },
     evaluationOutcomeMetricDetails: function (filters) { return call('evaluationOutcomeMetricDetails', filters || {}); },
+    evaluationOutcomeComparison: function (filters) { return call('evaluationOutcomeComparison', filters || {}); },
     monthlyPlanCenter: function (filters) { return call('monthlyPlanCenter', filters || {}); },
     monthlyPlanSave: function (payload, requestId) { return call('monthlyPlanSave', payload || {}, requestId); },
     monthlyPlanLock: function (payload, requestId) { return call('monthlyPlanLock', payload || {}, requestId); },
@@ -100,6 +102,7 @@
     notificationDisableSchedule: function (payload) { return call('notificationDisableSchedule', payload || {}); },
     notificationRunWorker: function () { return call('notificationRunWorker', {}); },
     notificationRetryFailed: function (payload, requestId) { return call('notificationRetryFailed', payload || {}, requestId); },
+    notificationFixEmailAndRetry: function (payload, requestId) { return call('notificationFixEmailAndRetry', payload || {}, requestId); },
     pdfManagementCenter: function (filters) {
       return call('pdfManagementCenter', filters || {});
     },
@@ -135,6 +138,15 @@
     archiveBuild: function (payload, requestId) { return call('archiveBuild', payload || {}, requestId); },
     archiveFinalize: function (payload, requestId) { return call('archiveFinalize', payload || {}, requestId); },
     archiveCleanup: function (payload, requestId) { return call('archiveCleanup', payload || {}, requestId); },
+    archiveRestorePreview: function (batchId) { return call('archiveRestorePreview', { batchId: String(batchId || '') }); },
+    archiveRestore: function (payload, requestId) { return call('archiveRestore', payload || {}, requestId); },
+    backgroundJobCenter: function (filters) { return call('backgroundJobCenter', filters || {}); },
+    backgroundJobDetails: function (payload) { return call('backgroundJobDetails', payload || {}); },
+    backgroundJobRetry: function (payload, requestId) { return call('backgroundJobRetry', payload || {}, requestId); },
+    backgroundJobCancel: function (payload, requestId) { return call('backgroundJobCancel', payload || {}, requestId); },
+    schemaManagementCenter: function () { return call('schemaManagementCenter', {}); },
+    schemaRepairPreview: function () { return call('schemaRepairPreview', {}); },
+    schemaRepair: function (payload, requestId) { return call('schemaRepair', payload || {}, requestId); },
     recordClientPerformance: function (payload, requestId) {
       return call('recordClientPerformance', payload || {}, requestId);
     }
