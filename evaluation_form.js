@@ -89,11 +89,14 @@
 
   var ACTION_LABELS = {
     manager_submit: '送交教育中心',
+    b_area_assess_submit: '完成區主管初評並送教育中心',
     edu_submit: '送交教育中心主管',
     edu_supervisor_approve: '簽核通過並送區主管',
     edu_supervisor_return_member: '退回教育中心成員',
     edu_supervisor_return_manager: '退回門市店主管',
     area_approve: '簽核通過並送受評人員',
+    b_area_final_approve: '區主管最終簽核並送總經理',
+    b_area_final_return_employee: '退回受評人員確認',
     area_return_member: '退回教育中心成員',
     area_return_supervisor: '退回教育中心主管',
     employee_confirm: '確認並送營業處主管',
@@ -103,6 +106,7 @@
     gm_approve: '核准並結案',
     gm_return_department_executive: '退回營業處主管',
     gm_return_education: '退回教育中心例外處理',
+    gm_return_b_area: '退回區主管最終簽核',
     force_transition: '教育中心判斷後強制轉單'
   };
 
@@ -111,6 +115,11 @@
     if (action === 'edu_submit' && status === '待教育中心成員修改') {
       return '修改完成，送教育中心主管重新簽核';
     }
+    var special = String(value(record, '考核流程版本') || '').trim() === 'B_STORE_MANAGER_V1';
+    if (special && action === 'edu_supervisor_approve') return '簽核通過並送受評人員';
+    if (special && action === 'employee_confirm') return '確認並送區主管最終簽核';
+    if (special && action === 'edu_supervisor_return_manager') return '退回區主管初評';
+    if (special && action === 'employee_return_manager') return '提出疑慮並退回區主管初評';
     return ACTION_LABELS[action] || action;
   }
 
@@ -143,9 +152,11 @@
     return '<input type="hidden" name="evaluationVersion" value="' + (isVersionB(record) ? 'B' : 'A') + '">';
   }
 
-  function renderBManagerForm(record) {
+  function renderBManagerForm(record, options) {
+    var opts = options || {};
+    var heading = opts.heading || '門市店主管評分';
     var html = versionHiddenInput(record) + '<div class="form-section manager-evaluation-section b-manager-evaluation-section">' +
-      '<div class="section-title-row"><div><p class="step-label">店副理進階月考核表</p><h3>門市店主管評分</h3>' +
+      '<div class="section-title-row"><div><p class="step-label">店副理進階月考核表</p><h3>' + escapeHtml(heading) + '</h3>' +
       '<p class="section-help">請先閱讀職能定義與A～D標準，再點選評等。系統會自動換算A＝10、B＝8、C＝6、D＝0分。</p></div>' +
       '<div class="score-total-badge"><span>店主管小計</span><strong data-b-manager-total>0／60</strong></div></div>' +
       '<div class="b-manager-criteria-list">';
@@ -168,7 +179,15 @@
           ' placeholder="請具體說明達到A級表現的事實或案例。">' + escapeHtml(currentGrade === 'A' ? currentExplanation : '') + '</textarea></label></article>';
     });
 
-    html += '</div>' + textareaField('comment', '門市店主管評語', value(record, '門市店主管評語'), true, '') + '</div>' + signatureBlock();
+    html += '</div>';
+    if (opts.includeAreaScore) {
+      var areaCurrent = value(record, 'B版區主管評分') === '' ? 0 : value(record, 'B版區主管評分');
+      html += plainNumberField('areaScore', '區主管評分（0～20）', areaCurrent, 0, 20, true);
+    }
+    var commentField = opts.commentField || '門市店主管評語';
+    var commentLabel = opts.commentLabel || '門市店主管評語';
+    html += textareaField('comment', commentLabel, value(record, commentField), true, '') + '</div>';
+    if (opts.includeSignature !== false) html += signatureBlock();
     return html;
   }
 
@@ -304,7 +323,8 @@
       area_approve: ['區主管評語', '區主管評語'],
       employee_confirm: ['確認備註', '受評人員確認備註'],
       department_executive_approve: ['營業處主管評語', '營業處主管評語'],
-      gm_approve: ['總經理評語', '總經理評語']
+      gm_approve: ['總經理評語', '總經理評語'],
+      b_area_final_approve: ['區主管最終簽核備註', '區主管評語']
     };
     var pair = labels[action] || ['評語', ''];
     var commentRequired = action === 'area_approve';
@@ -326,7 +346,9 @@
       html += '<h3>' + escapeHtml(ACTION_LABELS[action] || '簽核') + '</h3>';
     }
     if (action === 'employee_confirm') {
-      html += '<p class="section-help approval-only-note">確認時不需要填寫評語；只有選擇退回店主管時，系統才會要求輸入疑慮說明。</p>';
+      html += '<p class="section-help approval-only-note">確認時不需要填寫評語；選擇退回時，系統會要求輸入疑慮說明。</p>';
+    } else if (action === 'b_area_final_approve') {
+      html += '<p class="section-help approval-only-note">請確認六大評核、區主管0～20分、教育中心評分與受評人簽名均正確。本階段只做最終簽核，不重複修改分數。</p>';
     } else {
       html += textareaField('comment', pair[0], approvalCommentValue(record, action, pair[1]), commentRequired, '');
     }
@@ -376,8 +398,9 @@
   function renderActionForm(record, action) {
     if (action === 'force_transition') return renderForceTransitionForm(record);
     if (action === 'manager_submit') return isVersionB(record) ? renderBManagerForm(record) : renderManagerForm(record);
+    if (action === 'b_area_assess_submit') return renderBManagerForm(record, { heading: '區主管填寫六大評核與區主管評分', includeAreaScore: true, commentField: '區主管評語', commentLabel: '區主管評語', includeSignature: false });
     if (action === 'edu_submit') return isVersionB(record) ? renderBEducationForm(record) : renderEducationForm(record);
-    if (action === 'edu_supervisor_approve' || action === 'area_approve' || action === 'employee_confirm' || action === 'department_executive_approve' || action === 'gm_approve') {
+    if (action === 'edu_supervisor_approve' || action === 'area_approve' || action === 'employee_confirm' || action === 'department_executive_approve' || action === 'gm_approve' || action === 'b_area_final_approve') {
       return renderSimpleApprovalForm(record, action);
     }
     return renderReturnForm(record, action);
@@ -417,7 +440,12 @@
     var payload = { action: action };
     var evaluationVersion = String(data.get('evaluationVersion') || 'A').trim().toUpperCase();
     payload.evaluationVersion = evaluationVersion === 'B' ? 'B' : 'A';
-    if (action === 'manager_submit') {
+    if (action === 'b_area_assess_submit') {
+      payload.grades = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerGrade' + index) || '').trim().toUpperCase(); });
+      payload.explanations = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerExplanation' + index) || '').trim(); });
+      payload.areaScore = Number(data.get('areaScore'));
+      payload.comment = String(data.get('comment') || '').trim();
+    } else if (action === 'manager_submit') {
       if (payload.evaluationVersion === 'B') {
         payload.grades = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerGrade' + index) || '').trim().toUpperCase(); });
         payload.explanations = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerExplanation' + index) || '').trim(); });
@@ -452,6 +480,9 @@
       payload.comment = String(data.get('comment') || '').trim();
       payload.signature = signatureController.getSignaturePayload();
     } else if (action === 'employee_confirm') {
+      payload.comment = '';
+      payload.signature = signatureController.getSignaturePayload();
+    } else if (action === 'b_area_final_approve') {
       payload.comment = '';
       payload.signature = signatureController.getSignaturePayload();
     } else if (action === 'edu_supervisor_approve' || action === 'department_executive_approve' || action === 'gm_approve') {
