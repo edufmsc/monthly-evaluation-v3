@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.9.0A-HF1-b-manager-executive-flow';
+  var APP_BUILD = '7.9.0A-HF2-schema-plan-layout';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -336,14 +336,16 @@
       '</form>' +
       '<div id="monthlyPlanMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
       '<div id="monthlyPlanSummary"></div>' +
-      '<section class="detail-section monthly-plan-actions"><div class="test-dispatch-heading"><div><h4>月份計畫控制</h4>' +
-        '<p class="section-help">先儲存各頁設定，再勾選確認鎖定；鎖定後才會成為正式自動派發依據。</p></div><strong id="monthlyPlanLockStatus">尚未鎖定</strong></div>' +
-        '<label class="field-group"><span>處理原因</span><textarea id="monthlyPlanReason" rows="2" maxlength="300" placeholder="例如：完成下月考核名單確認"></textarea></label>' +
-        '<label class="confirm-row"><input id="monthlyPlanConfirm" type="checkbox"><span>我已確認此月份考核人員與考核表類型設定。</span></label>' +
-        '<div class="test-dispatch-actions"><button id="monthlyPlanSaveButton" class="secondary-button" type="button"><span class="button-label">儲存本頁設定</span><span class="button-spinner"></span></button>' +
-        '<button id="monthlyPlanLockButton" class="primary-button" type="button" disabled><span class="button-label">鎖定月份名單</span><span class="button-spinner"></span></button>' +
-        '<button id="monthlyPlanReopenButton" class="secondary-button" type="button" disabled><span class="button-label">解除鎖定</span><span class="button-spinner"></span></button></div></section>' +
-      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>受評人員名單</h4><p class="section-help">每頁固定10人；取消勾選代表該月份不建立考核表。</p></div></div>' +
+      '<section class="detail-section monthly-plan-actions"><div class="test-dispatch-heading monthly-plan-heading-line"><div><h4>月份計畫控制</h4><p class="section-help">先儲存設定再鎖定，鎖定後才會成為正式自動派發依據。</p></div><strong id="monthlyPlanLockStatus">尚未鎖定</strong></div>' +
+        '<div class="monthly-plan-control-line"><label class="field-group monthly-plan-reason-field"><span>處理原因</span><input id="monthlyPlanReason" type="text" maxlength="300" placeholder="例如：完成下月考核名單確認"></label>' +
+        '<label class="confirm-row monthly-plan-confirm-inline"><input id="monthlyPlanConfirm" type="checkbox"><span>我已確認此月份名單與考核表類型。</span></label>' +
+        '<div class="test-dispatch-actions monthly-plan-main-actions"><button id="monthlyPlanSaveButton" class="secondary-button" type="button"><span class="button-label">儲存本頁</span><span class="button-spinner"></span></button>' +
+        '<button id="monthlyPlanLockButton" class="primary-button" type="button" disabled><span class="button-label">鎖定名單</span><span class="button-spinner"></span></button>' +
+        '<button id="monthlyPlanReopenButton" class="secondary-button" type="button" disabled><span class="button-label">解除鎖定</span><span class="button-spinner"></span></button></div></div></section>' +
+      '<section class="detail-section"><div class="test-dispatch-heading monthly-plan-list-heading"><div><h4>受評人員名單</h4><p class="section-help">已勾選人員優先排列；每頁10人。</p></div>' +
+        '<div class="test-dispatch-actions monthly-plan-page-actions"><button id="monthlyPlanSelectPageButton" class="secondary-button secondary-button--small" type="button">本頁全選</button>' +
+        '<button id="monthlyPlanClearPageButton" class="secondary-button secondary-button--small" type="button">本頁取消</button>' +
+        '<button id="monthlyPlanRestorePageButton" class="secondary-button secondary-button--small" type="button">恢復預設</button></div></div>' +
         '<div id="monthlyPlanList"></div><div id="monthlyPlanPagination" class="account-management-pagination" hidden>' +
         '<button id="monthlyPlanPreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="monthlyPlanPageText">第1頁</strong><button id="monthlyPlanNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></section>';
     systemPanel.appendChild(article);
@@ -2914,7 +2916,7 @@
         var isManagerSubject = String(item.systemRole || '').trim() === '門市店主管';
         var selectedVersion = isManagerSubject ? 'B' : String(item.evaluationVersion || 'A').toUpperCase();
         var disabled = data.locked ? ' disabled' : '';
-        return '<article class="monthly-plan-row" data-monthly-plan-row data-employee-id="' + escapeHtml(item.employeeId) + '" data-subject-role="' + escapeHtml(item.systemRole || '') + '">' +
+        return '<article class="monthly-plan-row" data-monthly-plan-row data-employee-id="' + escapeHtml(item.employeeId) + '" data-subject-role="' + escapeHtml(item.systemRole || '') + '" data-master-needs-evaluation="' + escapeHtml(item.masterNeedsEvaluation || '否') + '">' +
           '<label class="monthly-plan-check"><input class="monthly-plan-evaluate" type="checkbox"' + (checked ? ' checked' : '') + disabled + '><span>本月需要考核</span></label>' +
           '<div class="monthly-plan-person"><strong>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '｜' + escapeHtml(joinText(item.area, item.department)) + '</small>' +
             '<span class="monthly-plan-role-tag">' + escapeHtml(item.systemRole || '未設定角色') + '</span></div>' +
@@ -2929,10 +2931,27 @@
     updateSimplePaginationV3_(elements.monthlyPlanPagination, elements.monthlyPlanPageText,
       elements.monthlyPlanPreviousButton, elements.monthlyPlanNextButton, data.pagination || {});
     if (elements.monthlyPlanSaveButton) elements.monthlyPlanSaveButton.disabled = Boolean(data.locked);
+    [elements.monthlyPlanSelectPageButton, elements.monthlyPlanClearPageButton, elements.monthlyPlanRestorePageButton].forEach(function(button) { if (button) button.disabled = Boolean(data.locked); });
     if (elements.monthlyPlanLockButton) elements.monthlyPlanLockButton.hidden = Boolean(data.locked);
     if (elements.monthlyPlanReopenButton) elements.monthlyPlanReopenButton.hidden = !data.locked;
     if (elements.monthlyPlanConfirm) elements.monthlyPlanConfirm.checked = false;
     updateMonthlyPlanActionStateV3_();
+  }
+
+  function setMonthlyPlanVisibleSelectionV3_(mode) {
+    if (!elements.monthlyPlanList || Boolean(state.monthlyPlan && state.monthlyPlan.locked)) return;
+    Array.prototype.slice.call(elements.monthlyPlanList.querySelectorAll('[data-monthly-plan-row]')).forEach(function(row) {
+      var checkbox = row.querySelector('.monthly-plan-evaluate');
+      var select = row.querySelector('.monthly-plan-version');
+      var managerSubject = String(row.getAttribute('data-subject-role') || '') === '門市店主管';
+      var masterDefault = String(row.getAttribute('data-master-needs-evaluation') || '') === '是';
+      var checked = mode === 'select' ? true : (mode === 'clear' ? false : masterDefault);
+      if (checkbox) checkbox.checked = checked;
+      if (select) {
+        select.value = managerSubject && checked ? 'B' : 'A';
+        select.disabled = !checked || managerSubject;
+      }
+    });
   }
 
   function collectMonthlyPlanVisibleItemsV3_() {
@@ -2969,7 +2988,7 @@
       setMonthlyPlanMessageV3_('error', friendlyError(error));
       showGlobalNotice('error', '月份名單儲存失敗', friendlyError(error), true);
     } finally {
-      setButtonLoading(elements.monthlyPlanSaveButton, false, '儲存本頁設定');
+      setButtonLoading(elements.monthlyPlanSaveButton, false, '儲存本頁');
     }
   }
 
@@ -4040,7 +4059,7 @@
   }
 
   function cacheModificationElementsV3_() {
-    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendSelectedButton','notificationSendAllButton','notificationSendOverdueButton','notificationSelectVisibleButton','notificationClearSelectedButton','notificationSelectedCount','notificationRunWorkerButton','notificationScheduleConfirm','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText','notificationPreviewOverlay','notificationPreviewSummary','notificationPreviewList','notificationPreviewConfirm','notificationPreviewCancelButton','notificationPreviewRunButton','monthlyPlanManagementCard','monthlyPlanRefreshButton','monthlyPlanFilterForm','monthlyPlanMonth','monthlyPlanKeyword','monthlyPlanSearchButton','monthlyPlanMessage','monthlyPlanSummary','monthlyPlanLockStatus','monthlyPlanReason','monthlyPlanConfirm','monthlyPlanSaveButton','monthlyPlanLockButton','monthlyPlanReopenButton','monthlyPlanList','monthlyPlanPagination','monthlyPlanPreviousButton','monthlyPlanNextButton','monthlyPlanPageText'].forEach(function(id) {
+    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendSelectedButton','notificationSendAllButton','notificationSendOverdueButton','notificationSelectVisibleButton','notificationClearSelectedButton','notificationSelectedCount','notificationRunWorkerButton','notificationScheduleConfirm','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText','notificationPreviewOverlay','notificationPreviewSummary','notificationPreviewList','notificationPreviewConfirm','notificationPreviewCancelButton','notificationPreviewRunButton','monthlyPlanManagementCard','monthlyPlanRefreshButton','monthlyPlanFilterForm','monthlyPlanMonth','monthlyPlanKeyword','monthlyPlanSearchButton','monthlyPlanMessage','monthlyPlanSummary','monthlyPlanLockStatus','monthlyPlanReason','monthlyPlanConfirm','monthlyPlanSaveButton','monthlyPlanLockButton','monthlyPlanReopenButton','monthlyPlanSelectPageButton','monthlyPlanClearPageButton','monthlyPlanRestorePageButton','monthlyPlanList','monthlyPlanPagination','monthlyPlanPreviousButton','monthlyPlanNextButton','monthlyPlanPageText'].forEach(function(id) {
       elements[id] = document.getElementById(id);
     });
   }
@@ -4099,6 +4118,9 @@
     if (elements.monthlyPlanReason) elements.monthlyPlanReason.addEventListener('input', updateMonthlyPlanActionStateV3_);
     if (elements.monthlyPlanLockButton) elements.monthlyPlanLockButton.addEventListener('click', lockMonthlyPlanV3_);
     if (elements.monthlyPlanReopenButton) elements.monthlyPlanReopenButton.addEventListener('click', reopenMonthlyPlanV3_);
+    if (elements.monthlyPlanSelectPageButton) elements.monthlyPlanSelectPageButton.addEventListener('click', function() { setMonthlyPlanVisibleSelectionV3_('select'); });
+    if (elements.monthlyPlanClearPageButton) elements.monthlyPlanClearPageButton.addEventListener('click', function() { setMonthlyPlanVisibleSelectionV3_('clear'); });
+    if (elements.monthlyPlanRestorePageButton) elements.monthlyPlanRestorePageButton.addEventListener('click', function() { setMonthlyPlanVisibleSelectionV3_('restore'); });
     if (elements.monthlyPlanPreviousButton) elements.monthlyPlanPreviousButton.addEventListener('click', function() { if (state.monthlyPlanPage > 1) { state.monthlyPlanPage -= 1; loadMonthlyPlanCenterV3_(); } });
     if (elements.monthlyPlanNextButton) elements.monthlyPlanNextButton.addEventListener('click', function() { var pages = Number(state.monthlyPlan && state.monthlyPlan.pagination && state.monthlyPlan.pagination.totalPages || 1); if (state.monthlyPlanPage < pages) { state.monthlyPlanPage += 1; loadMonthlyPlanCenterV3_(); } });
     if (elements.monthlyPlanList) elements.monthlyPlanList.addEventListener('change', function(event) { var row = event.target && event.target.closest ? event.target.closest('[data-monthly-plan-row]') : null; if (!row) return; var checkbox = row.querySelector('.monthly-plan-evaluate'); var select = row.querySelector('.monthly-plan-version'); var managerSubject = String(row.getAttribute('data-subject-role') || '') === '門市店主管'; if (select) { if (managerSubject) select.value = 'B'; else if (!checkbox.checked) select.value = 'A'; select.disabled = !checkbox.checked || Boolean(state.monthlyPlan && state.monthlyPlan.locked) || managerSubject; } });
