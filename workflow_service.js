@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.9.0A-b-manager-workflow-performance */
+/* 月考核系統 V3｜版本：7.9.0A-HF6-priority-operations */
 (function () {
   'use strict';
 
@@ -74,6 +74,10 @@
     dispatchMonthAnalysis: function (evaluationMonth) {
       return call('dispatchMonthAnalysis', { evaluationMonth: String(evaluationMonth || '') });
     },
+    dispatchScheduleStatus: function () { return call('dispatchScheduleStatus', {}); },
+    dispatchScheduleInstall: function (payload) { return call('dispatchScheduleInstall', payload || {}); },
+    dispatchScheduleDisable: function (payload) { return call('dispatchScheduleDisable', payload || {}); },
+    evaluationOutcomeAnalysis: function (filters) { return call('evaluationOutcomeAnalysis', filters || {}); },
     monthlyPlanCenter: function (filters) { return call('monthlyPlanCenter', filters || {}); },
     monthlyPlanSave: function (payload, requestId) { return call('monthlyPlanSave', payload || {}, requestId); },
     monthlyPlanLock: function (payload, requestId) { return call('monthlyPlanLock', payload || {}, requestId); },
@@ -94,6 +98,7 @@
     notificationInstallSchedule: function (payload) { return call('notificationInstallSchedule', payload || {}); },
     notificationDisableSchedule: function (payload) { return call('notificationDisableSchedule', payload || {}); },
     notificationRunWorker: function () { return call('notificationRunWorker', {}); },
+    notificationRetryFailed: function (payload, requestId) { return call('notificationRetryFailed', payload || {}, requestId); },
     pdfManagementCenter: function (filters) {
       return call('pdfManagementCenter', filters || {});
     },
