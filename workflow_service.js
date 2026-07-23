@@ -1,4 +1,4 @@
-/* 月考核系統 V3｜版本：7.8.0A-management-completion */
+/* 月考核系統 V3｜版本：7.9.0A-b-manager-workflow-performance */
 (function () {
   'use strict';
 
@@ -14,7 +14,10 @@
 
   window.V3WorkflowService = Object.freeze({
     bootstrap: function (limit) { return call('bootstrap', { limit: Number(limit || 50) }); },
-    listPending: function (limit) { return call('listPending', { limit: Number(limit || 100) }); },
+    listPending: function (filters) {
+      if (typeof filters === 'number') filters = { page: 1, pageSize: filters };
+      return call('listPending', filters || { page: 1, pageSize: 10 });
+    },
     listProgress: function (filters) { return call('listProgress', filters || {}); },
     listHistory: function (filters) { return call('listHistory', filters || {}); },
     getEvaluation: function (evaluationNo) { return call('getEvaluation', { evaluationNo: evaluationNo }); },
