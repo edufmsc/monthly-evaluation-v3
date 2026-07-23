@@ -2074,3 +2074,39 @@ body.idle-warning-open {
   font-size: .78rem;
   font-weight: 700;
 }
+
+
+/* 7.9.0A-HF2｜月份名單單列操作與精簡版面 */
+.monthly-plan-heading-line,
+.monthly-plan-list-heading { align-items: center; }
+.monthly-plan-control-line {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.3fr) minmax(300px, 1.4fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.monthly-plan-reason-field { margin: 0; }
+.monthly-plan-reason-field input { min-height: 46px; }
+.monthly-plan-confirm-inline {
+  min-height: 46px;
+  margin: 0;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+.monthly-plan-main-actions,
+.monthly-plan-page-actions { flex-wrap: nowrap; }
+.monthly-plan-main-actions button,
+.monthly-plan-page-actions button { white-space: nowrap; }
+@media (max-width: 1080px) {
+  .monthly-plan-control-line { grid-template-columns: 1fr 1fr; }
+  .monthly-plan-main-actions { grid-column: 1 / -1; justify-content: flex-end; }
+}
+@media (max-width: 720px) {
+  .monthly-plan-control-line { grid-template-columns: 1fr; }
+  .monthly-plan-main-actions { grid-column: auto; display: grid; grid-template-columns: 1fr; }
+  .monthly-plan-main-actions button,
+  .monthly-plan-page-actions button { width: 100%; }
+  .monthly-plan-list-heading { align-items: stretch; }
+  .monthly-plan-page-actions { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+  .monthly-plan-confirm-inline { white-space: normal; }
+}
