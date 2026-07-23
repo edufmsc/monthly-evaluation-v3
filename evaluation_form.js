@@ -89,7 +89,7 @@
 
   var ACTION_LABELS = {
     manager_submit: '送交教育中心',
-    b_area_assess_submit: '完成區主管初評並送教育中心',
+    b_area_assess_submit: '完成區主管評核並送教育中心',
     edu_submit: '送交教育中心主管',
     edu_supervisor_approve: '簽核通過並送區主管',
     edu_supervisor_return_member: '退回教育中心成員',
@@ -117,7 +117,7 @@
     }
     var special = String(value(record, '考核流程版本') || '').trim() === 'B_STORE_MANAGER_V1';
     if (special && action === 'edu_supervisor_approve') return '簽核通過並送受評人員';
-    if (special && action === 'employee_confirm') return '確認並送區主管最終簽核';
+    if (special && action === 'employee_confirm') return '確認並送營業處主管';
     if (special && action === 'edu_supervisor_return_manager') return '退回區主管初評';
     if (special && action === 'employee_return_manager') return '提出疑慮並退回區主管初評';
     return ACTION_LABELS[action] || action;
@@ -158,7 +158,7 @@
     var html = versionHiddenInput(record) + '<div class="form-section manager-evaluation-section b-manager-evaluation-section">' +
       '<div class="section-title-row"><div><p class="step-label">店副理進階月考核表</p><h3>' + escapeHtml(heading) + '</h3>' +
       '<p class="section-help">請先閱讀職能定義與A～D標準，再點選評等。系統會自動換算A＝10、B＝8、C＝6、D＝0分。</p></div>' +
-      '<div class="score-total-badge"><span>店主管小計</span><strong data-b-manager-total>0／60</strong></div></div>' +
+      '<div class="score-total-badge"><span>' + escapeHtml(opts.totalLabel || '店主管小計') + '</span><strong data-b-manager-total>0／60</strong></div></div>' +
       '<div class="b-manager-criteria-list">';
 
     B_MANAGER_ITEMS.forEach(function(item, index) {
@@ -398,7 +398,7 @@
   function renderActionForm(record, action) {
     if (action === 'force_transition') return renderForceTransitionForm(record);
     if (action === 'manager_submit') return isVersionB(record) ? renderBManagerForm(record) : renderManagerForm(record);
-    if (action === 'b_area_assess_submit') return renderBManagerForm(record, { heading: '區主管填寫六大評核與區主管評分', includeAreaScore: true, commentField: '區主管評語', commentLabel: '區主管評語', includeSignature: false });
+    if (action === 'b_area_assess_submit') return renderBManagerForm(record, { heading: '區主管填寫六大評核、區主管評分與簽名', totalLabel: '六大評核小計', includeAreaScore: true, commentField: '區主管評語', commentLabel: '區主管評語', includeSignature: true });
     if (action === 'edu_submit') return isVersionB(record) ? renderBEducationForm(record) : renderEducationForm(record);
     if (action === 'edu_supervisor_approve' || action === 'area_approve' || action === 'employee_confirm' || action === 'department_executive_approve' || action === 'gm_approve' || action === 'b_area_final_approve') {
       return renderSimpleApprovalForm(record, action);
@@ -445,6 +445,7 @@
       payload.explanations = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerExplanation' + index) || '').trim(); });
       payload.areaScore = Number(data.get('areaScore'));
       payload.comment = String(data.get('comment') || '').trim();
+      payload.signature = signatureController.getSignaturePayload();
     } else if (action === 'manager_submit') {
       if (payload.evaluationVersion === 'B') {
         payload.grades = B_MANAGER_ITEMS.map(function (_, index) { return String(data.get('bManagerGrade' + index) || '').trim().toUpperCase(); });
