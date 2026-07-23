@@ -2110,3 +2110,40 @@ body.idle-warning-open {
   .monthly-plan-page-actions { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
   .monthly-plan-confirm-inline { white-space: normal; }
 }
+
+/* 7.9.0A-HF4｜下月考核名單依考核表類型分組 */
+.monthly-plan-filter {
+  grid-template-columns: minmax(145px, .75fr) minmax(210px, 1.25fr) minmax(210px, 1fr) auto;
+}
+.monthly-plan-grouped-grid { gap: 10px; }
+.monthly-plan-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 11px 14px;
+  border: 1px solid #cfe0ef;
+  border-radius: 13px;
+  background: #eef6fc;
+  color: #245b86;
+}
+.monthly-plan-group-header:first-child { margin-top: 0; }
+.monthly-plan-group-header strong { font-size: .98rem; }
+.monthly-plan-group-header span { font-size: .78rem; font-weight: 700; }
+.monthly-plan-group-header--none {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.monthly-plan-row--b { border-left: 4px solid #4a83ad; }
+.monthly-plan-row--a { border-left: 4px solid #8ab0cc; }
+.monthly-plan-row--none { border-left: 4px solid #c9c2bc; opacity: .9; }
+@media (max-width: 1080px) {
+  .monthly-plan-filter { grid-template-columns: 1fr 1fr; }
+  .monthly-plan-filter .test-dispatch-actions { grid-column: 1 / -1; }
+}
+@media (max-width: 620px) {
+  .monthly-plan-filter { grid-template-columns: 1fr; }
+  .monthly-plan-group-header { align-items: flex-start; flex-direction: column; gap: 3px; }
+}
