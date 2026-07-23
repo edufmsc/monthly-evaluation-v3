@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.9.0A-HF10-logic-fix-default-form';
+  var APP_BUILD = '1.0';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -102,6 +102,7 @@
     backgroundJobSelected: {},
     backgroundJobDetails: null,
     forceClosePreview: null,
+    reassignmentCandidates: null,
     lastAutoRefreshAt: 0,
     deferredAutoRefresh: false,
     activeTab: 'pending',
@@ -141,6 +142,11 @@
   };
 
   var NORMAL_ACTIONS = Object.keys(window.V3EvaluationForm ? window.V3EvaluationForm.ACTION_LABELS : {});
+  var MANAGEMENT_ACTIONS = ['reassign', 'void', 'create_revision'];
+
+  function isManagementActionUi_(action) {
+    return MANAGEMENT_ACTIONS.indexOf(String(action || '').trim()) !== -1;
+  }
 
   document.addEventListener('DOMContentLoaded', initialize);
 
@@ -231,7 +237,7 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">正式營運工具｜7.9.0A</p><h3>月考核派發管理中心</h3>' +
+      '<p class="step-label">正式營運工具｜1.0</p><h3>月考核派發管理中心</h3>' +
       '<p>教育中心共用人工派發入口；可派發與需處理人員優先排列，已存在R0不重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<section id="dispatchScheduleSection" class="detail-section dispatch-schedule-section"><div class="test-dispatch-heading"><div><h4>每月1～3日自動派發排程</h4><p class="section-help">顯示主派發、補跑、下次執行、最近結果與月份名單是否已鎖定。</p></div><button id="dispatchScheduleRefreshButton" class="secondary-button secondary-button--small" type="button">更新排程狀態</button></div>' +
@@ -276,7 +282,7 @@
     var article = document.createElement('article');
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.9.0A</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜1.0</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<details id="accountCreatePanel" class="detail-section account-create-section"><summary>新增帳號／密碼</summary><form id="accountCreateForm" class="account-create-grid">' +
         '<label class="field-group"><span>員工工號</span><input id="accountCreateEmployeeId" required maxlength="40" autocomplete="off" placeholder="例如：0001"></label>' +
         '<label class="field-group"><span>4碼登入密碼</span><input id="accountCreatePassword" required inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="例如：0123"></label>' +
@@ -366,7 +372,7 @@
     article.id = 'monthlyPlanManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">每月作業｜7.9.0A</p><h3>下月考核名單</h3>' +
+      '<p class="step-label">每月作業｜1.0</p><h3>下月考核名單</h3>' +
       '<p>教育中心可逐月確認誰需要考核，並指定一般月考核表或店副理進階月考核表；鎖定後正式派發會依此名單執行。</p></div>' +
       '<button id="monthlyPlanRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<form id="monthlyPlanFilterForm" class="filter-grid monthly-plan-filter">' +
@@ -400,7 +406,7 @@
     article.id = 'outcomeAnalysisCard';
     article.className = 'card test-dispatch-card outcome-analysis-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">每月作業｜7.9.0A</p><h3>月考核成果分析</h3>' +
+      '<p class="step-label">每月作業｜1.0</p><h3>月考核成果分析</h3>' +
       '<p>依既有已結案考核資料即時計算，不新增考核紀錄欄位；一般與店副理進階考核分開分析。</p></div>' +
       '<button id="outcomeRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<form id="outcomeFilterForm" class="filter-grid outcome-filter-grid">' +
@@ -496,7 +502,7 @@
       hourOptions.push('<option value="' + hour + '"' + (hour === 9 ? ' selected' : '') + '>' + String(hour).padStart(2, '0') + ':00</option>');
     }
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">待辦Email通知｜7.9.0A</p><h3>待辦通知中心</h3>' +
+      '<p class="step-label">待辦Email通知｜1.0</p><h3>待辦通知中心</h3>' +
       '<p>每日摘要會附上可直接開啟的月考核系統網址；待辦超過3天時加強逾期提醒。</p></div>' +
       '<button id="notificationRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<form id="notificationSettingsForm" class="notification-settings-grid">' +
@@ -551,7 +557,7 @@
     article.id = 'backgroundJobCard';
     article.className = 'card test-dispatch-card background-job-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">統一作業監控｜7.9.0A-HF10</p><h3>背景工作中心</h3>' +
+      '<p class="step-label">統一作業監控｜1.0</p><h3>背景工作中心</h3>' +
       '<p>集中查看通知、PDF、派發與年度封存工作；可查看完整步驟，並對支援的等待／失敗工作進行安全取消或重新執行。</p></div>' +
       '<button id="backgroundJobRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<form id="backgroundJobFilterForm" class="filter-grid background-job-filter">' +
@@ -576,7 +582,7 @@
     article.id = 'schemaManagementCard';
     article.className = 'card test-dispatch-card schema-management-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">介面控制試算表｜7.9.0A-HF10.1</p><h3>資料結構管理中心</h3>' +
+      '<p class="step-label">介面控制試算表｜1.0</p><h3>資料結構管理中心</h3>' +
       '<p>教育中心可從介面檢查並安全補齊後台工作表；不需要直接打開Excel或Google試算表調整欄位。</p></div>' +
       '<button id="schemaManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新檢查</button></div>' +
       '<div id="schemaManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
@@ -584,7 +590,7 @@
       '<section class="detail-section schema-safety-section"><h4>安全規則</h4><div id="schemaSafetyRules" class="schema-safety-list"></div></section>' +
       '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>工作表健康狀態</h4><p class="section-help">自訂欄位會保留；已確認同義的舊欄名可安全標準化，其餘靜態參考表差異仍只提示人工確認。</p></div><button id="schemaRepairPreviewButton" class="secondary-button secondary-button--small" type="button">預覽安全補齊</button></div><div id="schemaSheetList"></div></section>' +
       '<section id="schemaRepairPanel" class="detail-section schema-repair-panel" hidden><div id="schemaRepairPreviewContent"></div>' +
-        '<label class="field-group"><span>執行原因</span><textarea id="schemaRepairReason" rows="3" maxlength="300" placeholder="例如：依HF9版本安全補齊缺少工作表與欄位"></textarea></label>' +
+        '<label class="field-group"><span>執行原因</span><textarea id="schemaRepairReason" rows="3" maxlength="300" placeholder="例如：依正式版本安全補齊缺少工作表與欄位"></textarea></label>' +
         '<label class="confirm-row"><input id="schemaRepairConfirm" type="checkbox"><span>我確認只建立缺少工作表、初始化空白表、在最右側補欄，並將已確認同義的「副總簽核」更新為「營業處主管簽核」；不刪除、不清空、不移動既有資料。</span></label>' +
         '<div class="test-dispatch-actions"><button id="schemaRepairCancelButton" class="secondary-button" type="button">取消</button><button id="schemaRepairRunButton" class="primary-button" type="button" disabled><span class="button-label">執行安全補齊</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
         '<article id="schemaRepairResult" class="card admin-result-card" hidden></article></section>' +
@@ -2257,7 +2263,8 @@
 
   function closeEvaluation(options) {
     var settings = options || {};
-    if (settings.saveDraft !== false && !state.isSubmitting && !(state.evaluationOpenContext && state.evaluationOpenContext.source === 'outcome')) saveLocalDraft();
+    if (settings.saveDraft !== false && !state.isSubmitting && !isManagementActionUi_(state.currentAction) &&
+        !(state.evaluationOpenContext && state.evaluationOpenContext.source === 'outcome')) saveLocalDraft();
     clearDraftTimers();
     elements.evaluationOverlay.hidden = true;
     document.body.classList.remove('is-locked');
@@ -2518,7 +2525,8 @@
       if (action === 'force_transition') {
         return isEducationPdfManagerUi() && String(record['流程狀態'] || '').trim() !== '作廢';
       }
-      return NORMAL_ACTIONS.indexOf(action) !== -1 && ['reassign', 'void', 'create_revision'].indexOf(action) === -1;
+      if (isManagementActionUi_(action)) return isEducationPdfManagerUi();
+      return NORMAL_ACTIONS.indexOf(action) !== -1;
     });
     if (canShowForceClose(record) && actions.indexOf('force_close') === -1) actions.push('force_close');
     if (!actions.length) {
@@ -2541,13 +2549,16 @@
   function getActionLabelUi(record, action) {
     if (action === 'force_close') return '特殊權限：強制結案';
     if (action === 'force_transition') return '特殊權限：強制轉單／流轉';
+    if (action === 'reassign') return '案件管理：重新指派承辦人';
+    if (action === 'void') return '案件管理：作廢案件';
+    if (action === 'create_revision') return '案件管理：建立R修訂版';
     return window.V3EvaluationForm.getActionLabel(record || {}, action) || action || '送出';
   }
 
   function getSubmitButtonLabelUi(record, action) {
     var label = getActionLabelUi(record || {}, action);
     if (state.continuousReview && state.continuousReview.active && isContinuousReviewEligibleUi() &&
-        action !== 'force_close' && action !== 'force_transition') {
+        action !== 'force_close' && action !== 'force_transition' && !isManagementActionUi_(action)) {
       return label + '並開啟下一張';
     }
     return label;
@@ -2559,12 +2570,20 @@
     state.signatureController = null;
     state.draftLoaded = false;
     state.forceClosePreview = null;
-    elements.saveDraftButton.hidden = action === 'force_close';
-    elements.draftStatus.textContent = action === 'force_close' ? '強制結案不建立草稿' : '尚未儲存草稿';
+    state.reassignmentCandidates = null;
+    var managementAction = isManagementActionUi_(action);
+    elements.saveDraftButton.hidden = action === 'force_close' || managementAction;
+    elements.draftStatus.textContent = action === 'force_close'
+      ? '強制結案不建立草稿'
+      : (managementAction ? '案件管理操作不建立草稿' : '尚未儲存草稿');
     elements.submitEvaluationButton.querySelector('.button-label').textContent = getSubmitButtonLabelUi(state.currentDetail || {}, action);
 
     if (action === 'force_close') {
       await renderForceCloseAction();
+      return;
+    }
+    if (managementAction) {
+      await renderManagementActionV3_(action);
       return;
     }
 
@@ -2574,6 +2593,86 @@
     initializeSignatureIfNeeded();
     await loadDraftForCurrentAction();
     window.V3EvaluationForm.refreshInteractiveControls(elements.evaluationActionForm);
+  }
+
+  async function renderManagementActionV3_(action) {
+    var record = state.currentDetail || {};
+    elements.submitEvaluationButton.disabled = true;
+    if (action === 'reassign') {
+      elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>案件管理：重新指派承辦人</h3>' +
+        '<p class="section-help">正在讀取目前流程階段可接手的人員…</p></section>';
+      try {
+        var result = await window.V3WorkflowService.reassignmentCandidates(record['考核單號']);
+        if (state.currentAction !== 'reassign' || !state.currentDetail ||
+            String(state.currentDetail['考核單號'] || '') !== String(record['考核單號'] || '')) return;
+        state.reassignmentCandidates = result.data || {};
+        var candidates = Array.isArray(state.reassignmentCandidates.candidates) ? state.reassignmentCandidates.candidates : [];
+        var options = candidates.map(function(item) {
+          var organization = [item.department, item.area, joinStore(item.storeCode, item.storeName)].filter(Boolean).join('｜');
+          return '<option value="' + escapeHtml(item.employeeId) + '">' +
+            escapeHtml(item.employeeId + '｜' + item.employeeName + (organization ? '｜' + organization : '')) + '</option>';
+        }).join('');
+        elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>案件管理：重新指派承辦人</h3>' +
+          '<p class="section-help">只會變更目前承辦人，不會改變流程狀態、分數或已完成簽名。</p>' +
+          '<div class="admin-result-grid">' +
+            metaItem('目前處理角色', state.reassignmentCandidates.assignedRole) +
+            metaItem('目前承辦人', joinText(state.reassignmentCandidates.currentAssigneeId, state.reassignmentCandidates.currentAssigneeName)) +
+          '</div>' +
+          (candidates.length
+            ? '<label class="field-group"><span>新的承辦人 <strong aria-hidden="true">*</strong></span><select name="targetEmployeeId" required><option value="">請選擇</option>' + options + '</select></label>'
+            : '<div class="form-message form-message--error">目前沒有其他符合角色、在職且帳號啟用的人員可接手。請先至帳號管理中心確認人員設定。</div>') +
+          managementReasonFieldV3_('請說明重新指派原因，例如：原承辦人請假或組織異動。') +
+          managementConfirmFieldV3_('我已確認新承辦人的角色與案件目前階段相符。') +
+        '</section>';
+        elements.submitEvaluationButton.disabled = !candidates.length;
+      } catch (error) {
+        if (state.currentAction !== 'reassign') return;
+        elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>案件管理：重新指派承辦人</h3>' +
+          '<div class="form-message form-message--error">' + escapeHtml(friendlyError(error)) + '</div></section>';
+        elements.submitEvaluationButton.disabled = true;
+      }
+      return;
+    }
+
+    if (action === 'void') {
+      var hasPdf = Boolean(String(record['PDF檔案ID'] || '').trim());
+      elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>案件管理：作廢案件</h3>' +
+        '<p class="section-help">作廢後案件不可繼續送出；原內容與稽核紀錄仍保留唯讀查看。</p>' +
+        '<div class="admin-result-grid">' + metaItem('考核單號', record['考核單號']) +
+          metaItem('目前狀態', record['流程狀態']) + metaItem('既有PDF', hasPdf ? '會標示為已作廢' : '尚未產生') + '</div>' +
+        '<div class="preview-alert-list preview-alert-list--error"><strong>作廢影響</strong><ul>' +
+          '<li>清除目前待辦指派，案件移入歷史紀錄。</li><li>不刪除任何分數、評語、簽名或PDF紀錄。</li>' +
+          '<li>如需重新辦理，請作廢後再建立R修訂版。</li></ul></div>' +
+        managementReasonFieldV3_('請具體說明作廢原因，例如：重複建立或資料對象錯誤。') +
+        managementConfirmFieldV3_('我已確認此案件應停止流程並保留為作廢紀錄。') +
+      '</section>';
+      elements.submitEvaluationButton.disabled = false;
+      return;
+    }
+
+    if (action === 'create_revision') {
+      var evaluationVersion = String(record['考核版本'] || 'A').trim().toUpperCase() === 'B' ? 'B' : 'A';
+      elements.evaluationActionForm.innerHTML = '<section class="detail-section"><h3>案件管理：建立R修訂版</h3>' +
+        '<p class="section-help">系統會建立全新的R版本，不覆蓋作廢案件，也不複製舊分數與簽名。</p>' +
+        '<div class="admin-result-grid">' + metaItem('來源作廢單號', record['考核單號']) +
+          metaItem('考核表類型', evaluationVersion === 'B' ? '店副理進階月考核表' : '一般月考核表') +
+          metaItem('新版本', '系統自動取得下一個R編號') +
+          metaItem('重新開始階段', evaluationVersion === 'B' ? '區主管初評' : '門市店主管填寫') + '</div>' +
+        managementReasonFieldV3_('請說明建立修訂版原因。') +
+        managementConfirmFieldV3_('我已確認新R版本會重新走完整流程，原作廢案件保持唯讀。') +
+      '</section>';
+      elements.submitEvaluationButton.disabled = false;
+    }
+  }
+
+  function managementReasonFieldV3_(placeholder) {
+    return '<label class="field-group"><span>操作原因 <strong aria-hidden="true">*</strong></span>' +
+      '<textarea name="managementReason" rows="4" maxlength="1000" required placeholder="' + escapeHtml(placeholder || '請填寫操作原因') + '"></textarea></label>';
+  }
+
+  function managementConfirmFieldV3_(label) {
+    return '<label class="confirm-row"><input name="managementConfirmed" type="checkbox" required>' +
+      '<span>' + escapeHtml(label || '我已確認本次操作內容與影響。') + '</span></label>';
   }
 
   async function renderForceCloseAction() {
@@ -2644,7 +2743,7 @@
   }
 
   async function loadDraftForCurrentAction() {
-    if (!state.currentDetail || state.currentAction === 'force_close') return;
+    if (!state.currentDetail || state.currentAction === 'force_close' || isManagementActionUi_(state.currentAction)) return;
     var evaluationNo = state.currentDetail['考核單號'];
     var version = Number(state.currentDetail.dataVersion || 0);
     var status = String(state.currentDetail['流程狀態'] || '');
@@ -2667,7 +2766,7 @@
   }
 
   function scheduleDraftSave() {
-    if (state.currentAction === 'force_close' || !state.draftLoaded || !state.currentDetail || !state.currentAction) return;
+    if (state.currentAction === 'force_close' || isManagementActionUi_(state.currentAction) || !state.draftLoaded || !state.currentDetail || !state.currentAction) return;
     window.clearTimeout(state.draftTimer);
     window.clearTimeout(state.draftServerTimer);
     state.draftTimer = window.setTimeout(saveLocalDraft, 400);
@@ -2676,7 +2775,7 @@
   }
 
   function saveLocalDraft() {
-    if (state.currentAction === 'force_close' || !state.currentDetail || !state.currentAction || !elements.evaluationActionForm || state.isSubmitting) return;
+    if (state.currentAction === 'force_close' || isManagementActionUi_(state.currentAction) || !state.currentDetail || !state.currentAction || !elements.evaluationActionForm || state.isSubmitting) return;
     try {
       var version = Number(state.currentDetail.dataVersion || 0);
       var content = window.V3EvaluationForm.formToDraft(elements.evaluationActionForm, state.currentAction);
@@ -2688,7 +2787,7 @@
   }
 
   async function saveCurrentDraft(showMessage) {
-    if (state.currentAction === 'force_close' || !state.currentDetail || !state.currentAction) return;
+    if (state.currentAction === 'force_close' || isManagementActionUi_(state.currentAction) || !state.currentDetail || !state.currentAction) return;
     saveLocalDraft();
     elements.saveDraftButton.disabled = true;
     try {
@@ -2723,6 +2822,7 @@
     var action = state.currentAction;
     var version = Number(state.currentDetail.dataVersion || 0);
     var workflowStatus = String(state.currentDetail['流程狀態'] || '');
+    var managementAction = isManagementActionUi_(action);
     var payload;
     var label = getActionLabelUi(state.currentDetail || {}, action);
 
@@ -2750,6 +2850,37 @@
         secondConfirmed: true,
         confirmed: true
       };
+    } else if (managementAction) {
+      var managementReason = String(form.querySelector('[name="managementReason"]') && form.querySelector('[name="managementReason"]').value || '').trim();
+      var managementConfirmed = form.querySelector('[name="managementConfirmed"]');
+      if (!managementReason) {
+        showGlobalNotice('error', '資料尚未完成', '請填寫操作原因。');
+        return;
+      }
+      if (!managementConfirmed || !managementConfirmed.checked) {
+        showGlobalNotice('error', '尚未完成二次確認', '請勾選操作確認聲明。');
+        return;
+      }
+      payload = {
+        evaluationNo: evaluationNo,
+        expectedVersion: version,
+        reason: managementReason,
+        secondConfirmed: true,
+        confirmed: true
+      };
+      if (action === 'reassign') {
+        payload.targetEmployeeId = String(form.querySelector('[name="targetEmployeeId"]') && form.querySelector('[name="targetEmployeeId"]').value || '').trim();
+        if (!payload.targetEmployeeId) {
+          showGlobalNotice('error', '資料尚未完成', '請選擇新的承辦人。');
+          return;
+        }
+      }
+      var managementWarning = action === 'void'
+        ? '\n\n作廢後不可繼續送出，但原資料不會刪除。'
+        : action === 'create_revision'
+          ? '\n\n新R版本會從第一個評核階段重新開始。'
+          : '\n\n目前承辦人將立即變更。';
+      if (!window.confirm('確定要「' + label + '」嗎？' + managementWarning)) return;
     } else {
       try {
         payload = window.V3EvaluationForm.collectActionPayload(form, action, state.signatureController);
@@ -2769,48 +2900,79 @@
     elements.closeEvaluationButton.disabled = true;
     setButtonLoading(elements.submitEvaluationButton, true, '處理中，請勿重複點擊');
     try {
+      var mutationResult;
       if (action === 'force_close') {
-        await window.V3WorkflowService.forceCloseEvaluation(payload, requestId);
+        mutationResult = await window.V3WorkflowService.forceCloseEvaluation(payload, requestId);
       } else if (action === 'force_transition') {
-        await window.V3WorkflowService.forceTransition(payload, requestId);
+        mutationResult = await window.V3WorkflowService.forceTransition(payload, requestId);
+      } else if (action === 'reassign') {
+        mutationResult = await window.V3WorkflowService.reassignEvaluation(payload, requestId);
+      } else if (action === 'void') {
+        mutationResult = await window.V3WorkflowService.voidEvaluation(payload, requestId);
+      } else if (action === 'create_revision') {
+        mutationResult = await window.V3WorkflowService.createRevision(payload, requestId);
       } else {
-        await window.V3WorkflowService.submitAction(payload, requestId);
+        mutationResult = await window.V3WorkflowService.submitAction(payload, requestId);
       }
-      await finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label);
+      if (managementAction) {
+        await finishManagementMutationV3_(evaluationNo, action, label, mutationResult && mutationResult.data || {});
+      } else {
+        await finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label);
+      }
     } catch (error) {
       if (error && (error.code === 'REQUEST_TIMEOUT' || error.code === 'NETWORK_ERROR')) {
         showGlobalNotice('processing', '正在確認送出結果', '連線暫時中斷，但後端可能仍在完成送出。系統正在自動確認，請不要重複點擊。', false);
         var recovery = await recoverMutationResult(evaluationNo, requestId, version);
         if (recovery.processed) {
           closeGlobalNotice();
-          await finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label);
+          if (managementAction) await finishManagementMutationV3_(evaluationNo, action, label, {});
+          else await finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label);
           return;
         }
         if (recovery.changed) {
           resetContinuousReviewState(false);
           closeEvaluation({ saveDraft: false });
           await refreshAllAccessibleLists();
-          showGlobalNotice('warning', '表單已更新', '此考核表在送出期間已發生更新。連續簽核已暫停，請重新開啟表單確認最新狀態。');
+          showGlobalNotice('warning', '表單已更新', '此考核表在送出期間已發生更新。請重新開啟表單確認最新狀態。');
           resetSubmissionUi(label);
           return;
         }
         resetContinuousReviewState(false);
         closeEvaluation({ saveDraft: false });
         await refreshAllAccessibleLists();
-        showGlobalNotice('warning', '送出結果仍在同步', '系統已暫時鎖定這張考核表，連續簽核已暫停。請等待約10秒後重新整理並確認最新流程。');
+        showGlobalNotice('warning', '送出結果仍在同步', '系統已暫時鎖定這張考核表。請等待約10秒後重新整理並確認最新流程。');
         window.setTimeout(function () { refreshAllAccessibleLists(); }, 10000);
       } else if (error && (error.code === 'VERSION_CONFLICT' || error.code === 'DUPLICATE_REQUEST')) {
         releasePendingMutation(evaluationNo);
         resetContinuousReviewState(false);
         await refreshAllAccessibleLists();
-        showGlobalNotice('warning', '表單已更新', friendlyError(error) + ' 連續簽核已暫停。');
+        showGlobalNotice('warning', '表單已更新', friendlyError(error));
       } else {
         releasePendingMutation(evaluationNo);
         await refreshAllAccessibleLists();
-        showGlobalNotice('error', '送出失敗', friendlyError(error));
+        showGlobalNotice('error', managementAction ? '案件管理操作失敗' : '送出失敗', friendlyError(error));
       }
       resetSubmissionUi(label);
     }
+  }
+
+  async function finishManagementMutationV3_(evaluationNo, action, label, data) {
+    clearDraftTimers();
+    resetContinuousReviewState(false);
+    closeEvaluation({ saveDraft: false });
+    releasePendingMutation(evaluationNo);
+    await refreshAllAccessibleLists();
+    var detail = '';
+    if (action === 'create_revision' && data && data.evaluationNo) {
+      detail = '新考核單號：' + data.evaluationNo + '；起始階段：' + (data.startStatus || '已建立') + '。';
+    } else if (action === 'reassign') {
+      detail = '目前承辦人已更新，待辦與流程狀態已同步。';
+    } else if (action === 'void') {
+      detail = '原案件已保留於歷史紀錄，可再由該作廢案件建立R修訂版。';
+    }
+    setDashboardMessage('success', label + '完成。' + detail);
+    showGlobalNotice('success', label + '完成', detail || '案件資料已更新。');
+    resetSubmissionUi(label);
   }
 
   async function finishSuccessfulSubmission(evaluationNo, action, version, workflowStatus, label) {
