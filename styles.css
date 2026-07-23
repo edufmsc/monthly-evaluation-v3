@@ -2147,3 +2147,43 @@ body.idle-warning-open {
   .monthly-plan-filter { grid-template-columns: 1fr; }
   .monthly-plan-group-header { align-items: flex-start; flex-direction: column; gap: 3px; }
 }
+
+
+/* 7.9.0A-HF5｜管理頁就地載入提示：保留既有資料，不再整頁清空。 */
+.management-loading-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 248, 240, 0.96);
+  color: var(--text);
+  position: sticky;
+  top: 8px;
+  z-index: 6;
+  box-shadow: 0 8px 20px rgba(91, 50, 22, 0.08);
+}
+.management-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(154, 57, 15, 0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+.is-management-updating > :not(.management-loading-banner) {
+  transition: opacity 0.15s ease;
+}
+.is-management-updating .route-list,
+.is-management-updating .notification-recipient-grid,
+.is-management-updating .monthly-plan-grid,
+.is-management-updating .account-management-desktop-table,
+.is-management-updating .account-management-mobile-cards,
+.is-management-updating .pdf-management-list,
+.is-management-updating .archive-batch-list {
+  opacity: 0.72;
+}
