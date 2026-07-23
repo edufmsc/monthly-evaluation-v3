@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.9.0A-HF4-monthly-plan-grouping';
+  var APP_BUILD = '7.9.0A-HF5-exact-roster-loading';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -41,6 +41,7 @@
     dispatchAttemptPageSize: 10,
     batchDispatchRepairPreview: null,
     batchDispatchSelectedEmployees: {},
+    batchDispatchSelectionRequirements: {},
     dispatchManagementSelectionMonth: '',
     dispatchMonthAnalysis: null,
     accountManagement: null,
@@ -217,7 +218,7 @@
       '</form>' +
       '<div id="dispatchManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div><div id="dispatchManagementSummary"></div>' +
       '<section id="batchDispatchTools" class="detail-section"><div class="test-dispatch-heading"><div><h4>人工派發／補派</h4><p class="section-help">勾選1人或多人，先選擇考核表類型再預覽；建立後考核表類型即鎖定。</p></div><strong id="batchDispatchSelectedCount">已選0人</strong></div>' +
-        '<div class="batch-dispatch-version-row"><label class="field-group"><span>考核表類型</span><select id="batchDispatchEvaluationVersion"><option value="A">一般月考核表</option><option value="B">店副理進階月考核表</option></select></label><p class="section-help">店副理進階月考核表沿用一般月考核表的完整簽核流程，只更換考核內容、評分方式與PDF範本。</p></div>' +
+        '<div class="batch-dispatch-version-row"><label class="field-group"><span>考核表類型</span><select id="batchDispatchEvaluationVersion"><option value="A">一般月考核表</option><option value="B">店副理進階月考核表</option></select></label><p class="section-help">店副理進階月考核表會依受評人角色套用對應流程；門市店主管作為受評人時使用店長受評專用流程。</p></div>' +
         '<div class="test-dispatch-actions"><button id="batchDispatchSelectVisibleButton" class="secondary-button secondary-button--small" type="button">勾選目前可派發人員</button><button id="batchDispatchClearButton" class="secondary-button secondary-button--small" type="button">清除勾選</button><button id="batchDispatchPreviewButton" class="primary-button" type="button" disabled><span class="button-label">預覽人工派發</span><span class="button-spinner" aria-hidden="true"></span></button></div></section>' +
       '<section id="dispatchManagementPersons" class="test-dispatch-preview"></section>' +
       '<details id="dispatchManagementAttemptsPanel" class="detail-section"><summary>查看本月份派發嘗試紀錄</summary><p class="section-help">每頁固定顯示10筆，可使用上一頁／下一頁切換。</p><div id="dispatchManagementAttempts"></div></details>' +
@@ -645,7 +646,23 @@
     if (elements.batchDispatchSelectVisibleButton) elements.batchDispatchSelectVisibleButton.addEventListener('click', selectVisibleBatchDispatchEmployees);
     if (elements.batchDispatchClearButton) elements.batchDispatchClearButton.addEventListener('click', clearBatchDispatchSelection);
     if (elements.batchDispatchPreviewButton) elements.batchDispatchPreviewButton.addEventListener('click', previewBatchDispatchRepair);
-    if (elements.batchDispatchEvaluationVersion) elements.batchDispatchEvaluationVersion.addEventListener('change', closeBatchDispatchRepairPanel);
+    if (elements.batchDispatchEvaluationVersion) elements.batchDispatchEvaluationVersion.addEventListener('change', function() {
+      closeBatchDispatchRepairPanel();
+      if (elements.batchDispatchEvaluationVersion.value === 'A') {
+        var removed = 0;
+        Object.keys(state.batchDispatchSelectedEmployees || {}).forEach(function(employeeId) {
+          if (state.batchDispatchSelectionRequirements[employeeId] === 'B') {
+            delete state.batchDispatchSelectedEmployees[employeeId];
+            removed += 1;
+          }
+        });
+        if (removed && elements.dispatchManagementPersons) {
+          Array.prototype.forEach.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch][data-required-version="B"]'), function(input) { input.checked = false; });
+          showDispatchManagementMessage('info', '已取消' + removed + '位門市店主管；門市店主管只能使用店副理進階月考核表。');
+          updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
+        }
+      }
+    });
     if (elements.batchDispatchRepairReason) elements.batchDispatchRepairReason.addEventListener('input', updateBatchDispatchRunState);
     if (elements.batchDispatchRepairConfirm) elements.batchDispatchRepairConfirm.addEventListener('change', updateBatchDispatchRunState);
     if (elements.batchDispatchRepairCancelButton) elements.batchDispatchRepairCancelButton.addEventListener('click', closeBatchDispatchRepairPanel);
@@ -2869,10 +2886,34 @@
     return '';
   }
 
+  function setManagementCardLoadingV3_(card, loading, message) {
+    if (!card) return;
+    var banner = card.querySelector('[data-management-loading-banner]');
+    if (loading) {
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.setAttribute('data-management-loading-banner', 'true');
+        banner.className = 'management-loading-banner';
+        var heading = card.querySelector('.test-dispatch-heading');
+        if (heading && heading.nextSibling) card.insertBefore(banner, heading.nextSibling);
+        else if (heading) card.appendChild(banner);
+        else card.insertBefore(banner, card.firstChild);
+      }
+      banner.innerHTML = '<span class="management-loading-spinner" aria-hidden="true"></span><strong>' + escapeHtml(message || '資料載入中，完成後會自動更新。') + '</strong>';
+      card.classList.add('is-management-updating');
+      card.setAttribute('aria-busy', 'true');
+    } else {
+      card.classList.remove('is-management-updating');
+      card.removeAttribute('aria-busy');
+      if (banner) banner.remove();
+    }
+  }
+
   async function loadMonthlyPlanCenterV3_(options) {
     var settings = options || {};
     if (state.monthlyPlanLoading || !elements.monthlyPlanList) return;
     state.monthlyPlanLoading = true;
+    setManagementCardLoadingV3_(elements.monthlyPlanManagementCard, true, state.monthlyPlan ? '正在更新月份考核名單，現有資料會保留。' : '正在載入月份考核名單…');
     if (elements.monthlyPlanRefreshButton) elements.monthlyPlanRefreshButton.disabled = true;
     if (elements.monthlyPlanSearchButton) setButtonLoading(elements.monthlyPlanSearchButton, true, '查詢中');
     try {
@@ -2890,8 +2931,9 @@
       if (!settings.quiet) setMonthlyPlanMessageV3_('success', '月份考核名單已更新。');
     } catch (error) {
       setMonthlyPlanMessageV3_('error', friendlyError(error));
-      elements.monthlyPlanList.innerHTML = emptyStateHtml('月份名單載入失敗', friendlyError(error));
+      if (!state.monthlyPlan) elements.monthlyPlanList.innerHTML = emptyStateHtml('月份名單載入失敗', friendlyError(error));
     } finally {
+      setManagementCardLoadingV3_(elements.monthlyPlanManagementCard, false);
       state.monthlyPlanLoading = false;
       if (elements.monthlyPlanRefreshButton) elements.monthlyPlanRefreshButton.disabled = false;
       if (elements.monthlyPlanSearchButton) setButtonLoading(elements.monthlyPlanSearchButton, false, '查詢名單');
@@ -3076,6 +3118,7 @@
     var settings = options || {};
     if (state.notificationManagementLoading) return;
     state.notificationManagementLoading = true;
+    setManagementCardLoadingV3_(elements.notificationManagementCard, true, state.notificationManagement ? '正在更新待辦通知資料，現有資料會保留。' : '正在載入待辦通知資料…');
     if (!settings.quiet) setNotificationMessageV3_('info', '正在整理待辦人員與通知紀錄…');
     if (elements.notificationRefreshButton) elements.notificationRefreshButton.disabled = true;
     try {
@@ -3090,8 +3133,9 @@
       if (!settings.quiet) setNotificationMessageV3_('success', '待辦通知資料已更新。');
     } catch (error) {
       setNotificationMessageV3_('error', friendlyError(error));
-      if (elements.notificationRecipientList) elements.notificationRecipientList.innerHTML = emptyStateHtml('通知資料載入失敗', friendlyError(error));
+      if (!state.notificationManagement && elements.notificationRecipientList) elements.notificationRecipientList.innerHTML = emptyStateHtml('通知資料載入失敗', friendlyError(error));
     } finally {
+      setManagementCardLoadingV3_(elements.notificationManagementCard, false);
       state.notificationManagementLoading = false;
       if (elements.notificationRefreshButton) elements.notificationRefreshButton.disabled = false;
     }
@@ -3410,10 +3454,8 @@
     var settings = options || {};
     if (state.pdfManagementLoading) return;
     state.pdfManagementLoading = true;
-    if (!settings.quiet) {
-      setPdfManagementMessageV3_('info', '正在載入PDF處理狀態…');
-      if (elements.pdfManagementList) elements.pdfManagementList.innerHTML = '<div class="loading-list">正在查詢PDF資料…</div>';
-    }
+    setManagementCardLoadingV3_(elements.pdfManagementCard, true, state.pdfManagement ? '正在更新PDF處理資料，現有資料會保留。' : '正在載入PDF處理資料…');
+    if (!settings.quiet) setPdfManagementMessageV3_('info', '正在載入PDF處理狀態…');
     if (elements.pdfManagementRefreshButton) elements.pdfManagementRefreshButton.disabled = true;
     if (elements.pdfManagementSearchButton) setButtonLoading(elements.pdfManagementSearchButton, true, '查詢中');
     try {
@@ -3431,8 +3473,9 @@
       setPdfManagementMessageV3_('success', 'PDF處理資料已更新。');
     } catch (error) {
       if (!settings.quiet) setPdfManagementMessageV3_('error', friendlyError(error));
-      if (elements.pdfManagementList) elements.pdfManagementList.innerHTML = emptyStateHtml('PDF處理資料載入失敗', friendlyError(error));
+      if (!state.pdfManagement && elements.pdfManagementList) elements.pdfManagementList.innerHTML = emptyStateHtml('PDF處理資料載入失敗', friendlyError(error));
     } finally {
+      setManagementCardLoadingV3_(elements.pdfManagementCard, false);
       state.pdfManagementLoading = false;
       if (elements.pdfManagementRefreshButton) elements.pdfManagementRefreshButton.disabled = false;
       if (elements.pdfManagementSearchButton) setButtonLoading(elements.pdfManagementSearchButton, false, '查詢PDF');
@@ -3771,6 +3814,7 @@
       return;
     }
     state.accountManagementLoading = true;
+    setManagementCardLoadingV3_(elements.accountManagementCard, true, state.accountManagement ? '正在更新帳號資料，現有資料會保留。' : '正在查詢帳號資料…');
     state.accountManagementPageSize = Number(elements.accountManagementPageSize && elements.accountManagementPageSize.value) === 15 ? 15 : 10;
     setButtonLoading(elements.accountManagementSearchButton, true, '查詢中');
     elements.accountManagementRefreshButton.disabled = true;
@@ -3792,8 +3836,9 @@
       if (!settings.quiet) showAccountManagementMessage('success', '帳號資料已更新；本頁顯示' + state.accountManagementPageSize + '人。');
     } catch (error) {
       showAccountManagementMessage('error', friendlyError(error));
-      if (!settings.quiet) elements.accountManagementList.innerHTML = emptyStateHtml('帳號資料讀取失敗', friendlyError(error));
+      if (!state.accountManagement && !settings.quiet) elements.accountManagementList.innerHTML = emptyStateHtml('帳號資料讀取失敗', friendlyError(error));
     } finally {
+      setManagementCardLoadingV3_(elements.accountManagementCard, false);
       state.accountManagementLoading = false;
       setButtonLoading(elements.accountManagementSearchButton, false, '查詢帳號');
       elements.accountManagementRefreshButton.disabled = false;
@@ -4076,7 +4121,7 @@
   }
 
   function cacheModificationElementsV3_() {
-    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendSelectedButton','notificationSendAllButton','notificationSendOverdueButton','notificationSelectVisibleButton','notificationClearSelectedButton','notificationSelectedCount','notificationRunWorkerButton','notificationScheduleConfirm','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText','notificationPreviewOverlay','notificationPreviewSummary','notificationPreviewList','notificationPreviewConfirm','notificationPreviewCancelButton','notificationPreviewRunButton','monthlyPlanManagementCard','monthlyPlanRefreshButton','monthlyPlanFilterForm','monthlyPlanMonth','monthlyPlanKeyword','monthlyPlanViewMode','monthlyPlanSearchButton','monthlyPlanMessage','monthlyPlanSummary','monthlyPlanLockStatus','monthlyPlanReason','monthlyPlanConfirm','monthlyPlanSaveButton','monthlyPlanLockButton','monthlyPlanReopenButton','monthlyPlanSelectPageButton','monthlyPlanClearPageButton','monthlyPlanRestorePageButton','monthlyPlanList','monthlyPlanPagination','monthlyPlanPreviousButton','monthlyPlanNextButton','monthlyPlanPageText'].forEach(function(id) {
+    ['dispatchManagementPageSize','dispatchAttemptPageSize','accountCreatePanel','accountCreateForm','accountCreateEmployeeId','accountCreatePassword','accountCreateEmployeeName','accountCreateRole','accountCreateStoreCode','accountCreateDepartment','accountCreateArea','accountCreateTransferDate','accountCreateNeedsEvaluation','accountCreateEmploymentStatus','accountCreateAccountStatus','accountCreateNotificationEmail','accountCreateNote','accountCreateReason','accountCreateConfirm','accountCreateResetButton','accountCreateSubmitButton','accountCreateMessage','accountCreateResult','accountAuditPageSize','accountAuditPagination','accountAuditPreviousButton','accountAuditNextButton','accountAuditPageText','accountActionEmailGroup','accountActionEmail','pdfManagementYear','pdfManagementMonthNumber','pdfManagementAbnormalButton','notificationManagementCard','notificationSettingsForm','notificationEnabled','notificationSystemUrl','notificationDailyHour','notificationOverdueDays','notificationBatchSize','notificationSaveButton','notificationMessage','notificationSummary','notificationScheduleStatus','notificationRefreshButton','notificationForceResend','notificationSendSelectedButton','notificationSendAllButton','notificationSendOverdueButton','notificationSelectVisibleButton','notificationClearSelectedButton','notificationSelectedCount','notificationRunWorkerButton','notificationScheduleConfirm','notificationInstallScheduleButton','notificationDisableScheduleButton','notificationRecipientList','notificationRecipientPagination','notificationRecipientPreviousButton','notificationRecipientNextButton','notificationRecipientPageText','notificationLogPanel','notificationLogList','notificationLogPagination','notificationLogPreviousButton','notificationLogNextButton','notificationLogPageText','notificationPreviewOverlay','notificationPreviewSummary','notificationPreviewList','notificationPreviewConfirm','notificationPreviewCancelButton','notificationPreviewRunButton','monthlyPlanManagementCard','monthlyPlanRefreshButton','monthlyPlanFilterForm','monthlyPlanMonth','monthlyPlanKeyword','monthlyPlanViewMode','monthlyPlanSearchButton','monthlyPlanMessage','monthlyPlanSummary','monthlyPlanLockStatus','monthlyPlanReason','monthlyPlanConfirm','monthlyPlanSaveButton','monthlyPlanLockButton','monthlyPlanReopenButton','monthlyPlanSelectPageButton','monthlyPlanClearPageButton','monthlyPlanRestorePageButton','monthlyPlanList','monthlyPlanPagination','monthlyPlanPreviousButton','monthlyPlanNextButton','monthlyPlanPageText'].forEach(function(id) {
       elements[id] = document.getElementById(id);
     });
   }
@@ -4232,6 +4277,7 @@
     if (!elements.dispatchManagementCard || state.dispatchManagementLoading) return;
     var settings = options || {};
     state.dispatchManagementLoading = true;
+    setManagementCardLoadingV3_(elements.dispatchManagementCard, true, state.dispatchManagement ? '正在更新月考核派發資料，現有資料會保留。' : '正在載入月考核派發資料…');
     if (!settings.quiet) showDispatchManagementMessage('info', '正在整理派發狀態與異常分類…');
     setButtonLoading(elements.dispatchManagementSearchButton, true, '查詢中');
     elements.dispatchManagementRefreshButton.disabled = true;
@@ -4269,8 +4315,9 @@
       if (!settings.quiet) showDispatchManagementMessage('success', '派發管理資料已更新。');
     } catch (error) {
       showDispatchManagementMessage('error', friendlyError(error));
-      if (!settings.quiet) elements.dispatchManagementPersons.innerHTML = emptyStateHtml('派發管理資料讀取失敗', friendlyError(error));
+      if (!state.dispatchManagement && !settings.quiet) elements.dispatchManagementPersons.innerHTML = emptyStateHtml('派發管理資料讀取失敗', friendlyError(error));
     } finally {
+      setManagementCardLoadingV3_(elements.dispatchManagementCard, false);
       state.dispatchManagementLoading = false;
       setButtonLoading(elements.dispatchManagementSearchButton, false, '查詢派發狀態');
       elements.dispatchManagementRefreshButton.disabled = false;
@@ -4334,8 +4381,9 @@
         actions += '<button type="button" class="secondary-button secondary-button--small" data-open-evaluation="' + escapeHtml(row.evaluationNo) + '">查看月考核表</button>';
       }
       if (isCurrentMonth && row.canBatchSelect) {
-        batchControl = '<label class="confirm-row"><input type="checkbox" data-batch-dispatch="' + escapeHtml(row.employeeId) + '"' +
-          (state.batchDispatchSelectedEmployees[row.employeeId] ? ' checked' : '') + '><span>選取人工派發／補派</span></label>';
+        state.batchDispatchSelectionRequirements[row.employeeId] = String(row.requiredEvaluationVersion || '');
+        batchControl = '<label class="confirm-row"><input type="checkbox" data-batch-dispatch="' + escapeHtml(row.employeeId) + '" data-required-version="' + escapeHtml(row.requiredEvaluationVersion || '') + '"' +
+          (state.batchDispatchSelectedEmployees[row.employeeId] ? ' checked' : '') + '><span>選取人工派發／補派' + (row.requiredEvaluationVersion === 'B' ? '（需店副理進階月考核表）' : '') + '</span></label>';
       }
       var rowVersionTag = row.evaluationNo
         ? (String(row.evaluationVersion || 'A').toUpperCase() === 'B'
@@ -4358,8 +4406,19 @@
     Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
       checkbox.addEventListener('change', function () {
         var employeeId = checkbox.getAttribute('data-batch-dispatch');
-        if (checkbox.checked) state.batchDispatchSelectedEmployees[employeeId] = true;
-        else delete state.batchDispatchSelectedEmployees[employeeId];
+        var requiredVersion = String(checkbox.getAttribute('data-required-version') || '');
+        if (checkbox.checked) {
+          state.batchDispatchSelectedEmployees[employeeId] = true;
+          state.batchDispatchSelectionRequirements[employeeId] = requiredVersion;
+          if (requiredVersion === 'B' && elements.batchDispatchEvaluationVersion && elements.batchDispatchEvaluationVersion.value !== 'B') {
+            elements.batchDispatchEvaluationVersion.value = 'B';
+            closeBatchDispatchRepairPanel();
+            showDispatchManagementMessage('info', '已選取門市店主管，考核表類型已自動切換為店副理進階月考核表。');
+          }
+        } else {
+          delete state.batchDispatchSelectedEmployees[employeeId];
+          delete state.batchDispatchSelectionRequirements[employeeId];
+        }
         updateBatchDispatchSelectionState(isCurrentMonth);
       });
     });
@@ -4445,15 +4504,22 @@
 
   function selectVisibleBatchDispatchEmployees() {
     if (!elements.dispatchManagementPersons) return;
+    var requiresB = false;
     Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
       checkbox.checked = true;
-      state.batchDispatchSelectedEmployees[checkbox.getAttribute('data-batch-dispatch')] = true;
+      var employeeId = checkbox.getAttribute('data-batch-dispatch');
+      var requiredVersion = String(checkbox.getAttribute('data-required-version') || '');
+      state.batchDispatchSelectedEmployees[employeeId] = true;
+      state.batchDispatchSelectionRequirements[employeeId] = requiredVersion;
+      if (requiredVersion === 'B') requiresB = true;
     });
+    if (requiresB && elements.batchDispatchEvaluationVersion) elements.batchDispatchEvaluationVersion.value = 'B';
     updateBatchDispatchSelectionState(Boolean(state.dispatchManagement && state.dispatchManagement.isCurrentMonth));
   }
 
   function clearBatchDispatchSelection() {
     state.batchDispatchSelectedEmployees = {};
+    state.batchDispatchSelectionRequirements = {};
     if (elements.dispatchManagementPersons) {
       Array.prototype.slice.call(elements.dispatchManagementPersons.querySelectorAll('[data-batch-dispatch]')).forEach(function (checkbox) {
         checkbox.checked = false;
@@ -5134,6 +5200,7 @@
     var settings = options || {};
     if (state.archiveManagementLoading) return;
     state.archiveManagementLoading = true;
+    setManagementCardLoadingV3_(elements.annualArchiveCard, true, state.archiveManagement ? '正在更新年度封存資料，現有資料會保留。' : '正在載入年度封存資料…');
     if (!settings.quiet) showAnnualArchiveMessageV3_('info', '正在載入年度封存資料…');
     try {
       var result = await window.V3WorkflowService.archiveManagementCenter({ year: getAnnualArchiveYearV3_() });
@@ -5149,6 +5216,7 @@
     } catch (error) {
       showAnnualArchiveMessageV3_('error', friendlyError(error));
     } finally {
+      setManagementCardLoadingV3_(elements.annualArchiveCard, false);
       state.archiveManagementLoading = false;
     }
   }
