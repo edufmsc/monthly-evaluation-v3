@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.8.0A-management-completion';
+  var APP_BUILD = '7.9.0A-b-manager-workflow-performance';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -11,7 +11,15 @@
   var state = {
     session: null,
     pending: [],
+    pendingPage: 1,
+    pendingPageSize: 10,
+    pendingTotal: 0,
+    pendingTotalPages: 1,
     progress: [],
+    progressPage: 1,
+    progressPageSize: 10,
+    progressTotal: 0,
+    progressTotalPages: 1,
     progressSummary: null,
     history: [],
     historyPage: 1,
@@ -191,7 +199,7 @@
     article.id = 'dispatchManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">正式營運工具｜7.8.0A</p><h3>月考核派發管理中心</h3>' +
+      '<p class="step-label">正式營運工具｜7.9.0A</p><h3>月考核派發管理中心</h3>' +
       '<p>教育中心共用人工派發入口；可派發與需處理人員優先排列，已存在R0不重複建立。</p></div>' +
       '<button id="dispatchManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<section class="detail-section dispatch-month-analysis-top"><div class="test-dispatch-heading"><div><h4>月份整體分析</h4>' +
@@ -229,7 +237,7 @@
     var article = document.createElement('article');
     article.id = 'accountManagementCard';
     article.className = 'card test-dispatch-card';
-    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.8.0A</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
+    article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div><p class="step-label">帳號與登入管理｜7.9.0A</p><h3>帳號管理中心</h3><p>可直接新增帳號與4碼密碼、設定是否需要考核，並保留查詢、解鎖、啟停與強制登出功能。</p></div><button id="accountManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<details id="accountCreatePanel" class="detail-section account-create-section"><summary>新增帳號／密碼</summary><form id="accountCreateForm" class="account-create-grid">' +
         '<label class="field-group"><span>員工工號</span><input id="accountCreateEmployeeId" required maxlength="40" autocomplete="off" placeholder="例如：0001"></label>' +
         '<label class="field-group"><span>4碼登入密碼</span><input id="accountCreatePassword" required inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="例如：0123"></label>' +
@@ -318,7 +326,7 @@
     article.id = 'monthlyPlanManagementCard';
     article.className = 'card test-dispatch-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">每月作業｜7.8.0A</p><h3>下月考核名單</h3>' +
+      '<p class="step-label">每月作業｜7.9.0A</p><h3>下月考核名單</h3>' +
       '<p>教育中心可逐月確認誰需要考核，並指定一般月考核表或店副理進階月考核表；鎖定後正式派發會依此名單執行。</p></div>' +
       '<button id="monthlyPlanRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<form id="monthlyPlanFilterForm" class="filter-grid monthly-plan-filter">' +
@@ -372,7 +380,7 @@
       hourOptions.push('<option value="' + hour + '"' + (hour === 9 ? ' selected' : '') + '>' + String(hour).padStart(2, '0') + ':00</option>');
     }
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">待辦Email通知｜7.8.0A</p><h3>待辦通知中心</h3>' +
+      '<p class="step-label">待辦Email通知｜7.9.0A</p><h3>待辦通知中心</h3>' +
       '<p>每日摘要會附上可直接開啟的月考核系統網址；待辦超過3天時加強逾期提醒。</p></div>' +
       '<button id="notificationRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新整理</button></div>' +
       '<form id="notificationSettingsForm" class="notification-settings-grid">' +
@@ -612,6 +620,14 @@
   }
 
   function bindEvents() {
+    document.addEventListener('click', function(event) {
+      var button = event.target.closest('[data-list-page-scope]');
+      if (!button || button.disabled) return;
+      var page = Number(button.getAttribute('data-list-page') || 1);
+      var scope = button.getAttribute('data-list-page-scope');
+      if (scope === 'pending') { state.pendingPage = page; loadPending(); }
+      if (scope === 'progress') { state.progressPage = page; loadProgress(); }
+    });
     elements.loginForm.addEventListener('submit', handleLogin);
     elements.togglePassword.addEventListener('click', togglePasswordVisibility);
     elements.password.addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0, 4); });
@@ -681,6 +697,7 @@
     elements.refreshProgressButton.addEventListener('click', loadProgress);
     elements.progressFilterForm.addEventListener('submit', function (event) {
       event.preventDefault();
+      state.progressPage = 1;
       loadProgress();
     });
     elements.historyFilterForm.addEventListener('submit', function (event) {
@@ -777,10 +794,13 @@
 
   async function loadBootstrap() {
     setDashboardMessage('info', '正在載入待辦資料…');
-    var result = await window.V3WorkflowService.bootstrap(100);
+    var result = await window.V3WorkflowService.bootstrap(10);
     var data = result.data || {};
     state.session = window.V3AuthService.updateSessionData(data) || state.session;
     state.pending = data.pending && Array.isArray(data.pending.items) ? data.pending.items : [];
+    state.pendingTotal = Number(data.pending && data.pending.total || state.pending.length);
+    state.pendingPage = Number(data.pending && data.pending.page || 1);
+    state.pendingTotalPages = Number(data.pending && data.pending.totalPages || 1);
     state.pendingRenderSignature = createListRenderSignature(state.pending, { total: data.counts && data.counts.pending || state.pending.length });
     renderPending();
     elements.pendingCountBadge.textContent = String(data.counts && data.counts.pending || state.pending.length);
@@ -793,14 +813,17 @@
     if (!settings.quiet) elements.pendingList.innerHTML = '<div class="loading-list">正在重新整理待辦…</div>';
     elements.refreshPendingButton.disabled = true;
     try {
-      var result = await window.V3WorkflowService.listPending(100);
+      var result = await window.V3WorkflowService.listPending({ page: state.pendingPage, pageSize: state.pendingPageSize });
       var rawItems = result.data && Array.isArray(result.data.items) ? result.data.items : [];
       var nextItems = rawItems.filter(function (item) { return !isPendingMutationLocked(item.evaluationNo); });
       var nextSignature = createListRenderSignature(nextItems, { total: nextItems.length });
       state.pending = nextItems;
+      state.pendingTotal = Number(result.data && result.data.total || nextItems.length);
+      state.pendingPage = Number(result.data && result.data.page || state.pendingPage || 1);
+      state.pendingTotalPages = Number(result.data && result.data.totalPages || 1);
       if (!settings.quiet || nextSignature !== state.pendingRenderSignature) renderPending();
       state.pendingRenderSignature = nextSignature;
-      elements.pendingCountBadge.textContent = String(state.pending.length);
+      elements.pendingCountBadge.textContent = String(state.pendingTotal);
     } catch (error) {
       if (!settings.quiet) elements.pendingList.innerHTML = emptyStateHtml('待辦載入失敗', friendlyError(error));
     } finally {
@@ -814,7 +837,8 @@
     elements.refreshProgressButton.disabled = true;
     try {
       var result = await window.V3WorkflowService.listProgress({
-        limit: 500,
+        page: state.progressPage,
+        pageSize: state.progressPageSize,
         month: String(elements.progressMonth.value || '').trim(),
         employeeId: String(elements.progressEmployeeId.value || '').trim().toUpperCase(),
         department: String(elements.progressDepartment.value || '').trim(),
@@ -827,6 +851,9 @@
       var nextSignature = createListRenderSignature(nextItems, nextSummary);
       state.progress = nextItems;
       state.progressSummary = nextSummary;
+      state.progressTotal = Number(data.total || nextItems.length);
+      state.progressPage = Number(data.page || state.progressPage || 1);
+      state.progressTotalPages = Number(data.totalPages || 1);
       elements.progressCountBadge.textContent = String(data.total || state.progress.length);
       if (!settings.quiet || nextSignature !== state.progressRenderSignature) renderProgress();
       state.progressRenderSignature = nextSignature;
@@ -872,10 +899,17 @@
     return JSON.stringify({
       items: (items || []).map(function(item) {
         return [item.evaluationNo, item.status, item.assignedRole, item.assignedEmployeeId, item.dataVersion,
-          item.updatedAt, item.evaluationVersion, item.pdfStatus, item.pdfPublicStatus, item.pdfPublicViewToken, item.pdfHasFile, item.isVoid, item.isException];
+          item.updatedAt, item.evaluationVersion, item.workflowVersion, item.pdfStatus, item.pdfPublicStatus, item.pdfPublicViewToken, item.pdfHasFile, item.isVoid, item.isException];
       }),
       summary: summary || {}
     });
+  }
+
+  function listPagerHtmlV3_(scope, page, totalPages, total) {
+    if (!total) return '';
+    return '<div class="pager-row"><button type="button" class="secondary-button" data-list-page-scope="' + scope + '" data-list-page="' + Math.max(1, page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>上一頁</button>' +
+      '<strong>第' + page + '頁／共' + totalPages + '頁（' + total + '筆）</strong>' +
+      '<button type="button" class="secondary-button" data-list-page-scope="' + scope + '" data-list-page="' + Math.min(totalPages, page + 1) + '"' + (page >= totalPages ? ' disabled' : '') + '>下一頁</button></div>';
   }
 
   function renderPending() {
@@ -884,7 +918,7 @@
       return;
     }
     var launcher = continuousReviewLauncherHtml();
-    elements.pendingList.innerHTML = launcher + state.pending.map(function (item) { return evaluationCardHtml(item, 'pending'); }).join('');
+    elements.pendingList.innerHTML = launcher + state.pending.map(function (item) { return evaluationCardHtml(item, 'pending'); }).join('') + listPagerHtmlV3_('pending', state.pendingPage, state.pendingTotalPages, state.pendingTotal);
     bindEvaluationCards(elements.pendingList);
   }
 
@@ -904,7 +938,7 @@
       elements.progressList.innerHTML = emptyStateHtml('目前沒有符合條件的流程', '請調整月份、營業處、區域或狀態條件後重新查詢。');
       return;
     }
-    elements.progressList.innerHTML = state.progress.map(function (item) { return evaluationCardHtml(item, 'progress'); }).join('');
+    elements.progressList.innerHTML = state.progress.map(function (item) { return evaluationCardHtml(item, 'progress'); }).join('') + listPagerHtmlV3_('progress', state.progressPage, state.progressTotalPages, state.progressTotal);
     bindEvaluationCards(elements.progressList);
     schedulePdfStatusPollingV3_();
   }
@@ -2142,6 +2176,7 @@
 
 
   function renderBManagerReviewSectionHtml(record, bItems) {
+    var specialBManager = String(record['考核流程版本'] || '').trim() === 'B_STORE_MANAGER_V1';
     var rows = (bItems || []).map(function(item) {
       var grade = String(record[item[1]] || '').trim().toUpperCase();
       var detail = window.V3EvaluationForm && window.V3EvaluationForm.getBManagerReviewDetail
@@ -2157,14 +2192,14 @@
         '<div class="b-manager-review-main">' +
           '<div class="b-manager-review-competency"><h4>' + escapeHtml(label) + '</h4>' +
             '<p>' + escapeHtml(definition || '—') + '</p></div>' +
-          '<div class="b-manager-review-rating"><span>店主管評核</span><strong>' + escapeHtml(gradeText) + '</strong>' +
+          '<div class="b-manager-review-rating"><span>' + escapeHtml(specialBManager ? '區主管評核' : '店主管評核') + '</span><strong>' + escapeHtml(gradeText) + '</strong>' +
             '<p>' + escapeHtml(standard || '—') + '</p></div>' +
         '</div>' +
         (explanation ? '<div class="b-manager-review-comment"><span>A級得分說明</span><p>' + escapeHtml(explanation) + '</p></div>' : '') +
       '</section>';
     }).join('');
     var managerComment = String(record['門市店主管評語'] || '').trim();
-    return '<article class="detail-section b-manager-review-section"><div class="b-manager-review-heading"><div><p class="step-label">店副理進階月考核表</p><h3>門市店主管評核</h3></div>' +
+    return '<article class="detail-section b-manager-review-section"><div class="b-manager-review-heading"><div><p class="step-label">店副理進階月考核表</p><h3>' + escapeHtml(specialBManager ? '區主管六大評核' : '門市店主管評核') + '</h3></div>' +
       '<strong>小計 ' + escapeHtml(record['門市店主管小計'] === '' ? '—' : record['門市店主管小計']) + '／60</strong></div>' +
       '<div class="b-manager-review-list">' + rows + '</div>' +
       (managerComment ? '<div class="b-manager-overall-comment"><span>門市店主管評語</span><p>' + escapeHtml(managerComment) + '</p></div>' : '') +
@@ -2795,14 +2830,20 @@
 
   function adminSystemResultHtml(data) {
     var missing = Array.isArray(data.missingSheets) ? data.missingSheets : [];
+    var performance = data.performanceOptimization || {};
+    var warnings = Array.isArray(performance.warnings) ? performance.warnings : [];
+    var maintenance = performance.maintenance || {};
     return '<h3>系統健檢結果</h3><div class="admin-result-grid">' +
       metaItem('檢查狀態', data.status === 'ok' ? '正常' : '需注意') +
       metaItem('檢查時間', data.checkedAt) +
       metaItem('必要工作表', data.requiredSheetCount) +
       metaItem('缺少工作表', missing.length ? missing.join('、') : '0') +
       metaItem('考核資料筆數', data.evaluationCount) +
+      metaItem('進行中案件索引', Number(performance.activeIndexCount || 0) + '筆') +
       metaItem('停留超過24小時', data.claimedOver24Hours) +
       metaItem('PDF失敗數', data.pdfFailedCount) +
+      metaItem('日常整理排程', maintenance.installed ? '已安裝' : '未安裝') +
+      metaItem('排程提醒', warnings.length ? warnings.join('、') : '0') +
     '</div><p class="section-help">此健檢只讀取資料，不會修改、清空或刪除任何工作表內容。</p>';
   }
   function routeRowHtml(label, person) {
@@ -2870,13 +2911,17 @@
     } else {
       elements.monthlyPlanList.innerHTML = '<div class="monthly-plan-grid">' + rows.map(function(item) {
         var checked = item.shouldEvaluate === '是';
+        var isManagerSubject = String(item.systemRole || '').trim() === '門市店主管';
+        var selectedVersion = isManagerSubject ? 'B' : String(item.evaluationVersion || 'A').toUpperCase();
         var disabled = data.locked ? ' disabled' : '';
-        return '<article class="monthly-plan-row" data-monthly-plan-row data-employee-id="' + escapeHtml(item.employeeId) + '">' +
+        return '<article class="monthly-plan-row" data-monthly-plan-row data-employee-id="' + escapeHtml(item.employeeId) + '" data-subject-role="' + escapeHtml(item.systemRole || '') + '">' +
           '<label class="monthly-plan-check"><input class="monthly-plan-evaluate" type="checkbox"' + (checked ? ' checked' : '') + disabled + '><span>本月需要考核</span></label>' +
-          '<div class="monthly-plan-person"><strong>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '｜' + escapeHtml(joinText(item.area, item.department)) + '</small></div>' +
-          '<label class="field-group monthly-plan-version-field"><span>考核表類型</span><select class="monthly-plan-version"' + ((!checked || data.locked) ? ' disabled' : '') + '>' +
-            '<option value="A"' + (item.evaluationVersion === 'B' ? '' : ' selected') + '>一般月考核表</option>' +
-            '<option value="B"' + (item.evaluationVersion === 'B' ? ' selected' : '') + '>店副理進階月考核表</option></select></label>' +
+          '<div class="monthly-plan-person"><strong>' + escapeHtml(joinText(item.employeeId, item.employeeName)) + '</strong><small>' + escapeHtml(joinStore(item.storeCode, item.storeName)) + '｜' + escapeHtml(joinText(item.area, item.department)) + '</small>' +
+            '<span class="monthly-plan-role-tag">' + escapeHtml(item.systemRole || '未設定角色') + '</span></div>' +
+          '<label class="field-group monthly-plan-version-field"><span>考核表類型</span><select class="monthly-plan-version"' + ((!checked || data.locked || isManagerSubject) ? ' disabled' : '') + '>' +
+            '<option value="A"' + (selectedVersion === 'B' ? '' : ' selected') + '>一般月考核表</option>' +
+            '<option value="B"' + (selectedVersion === 'B' ? ' selected' : '') + '>店副理進階月考核表</option></select>' +
+            (isManagerSubject ? '<small class="field-hint">門市店主管作為受評人時固定使用店副理進階月考核表。</small>' : '') + '</label>' +
           '<div class="monthly-plan-origin"><span>員工主檔預設</span><strong>' + escapeHtml(item.masterNeedsEvaluation || '否') + '</strong></div>' +
         '</article>';
       }).join('') + '</div>';
@@ -2895,10 +2940,13 @@
     return Array.prototype.slice.call(elements.monthlyPlanList.querySelectorAll('[data-monthly-plan-row]')).map(function(row) {
       var checkbox = row.querySelector('.monthly-plan-evaluate');
       var select = row.querySelector('.monthly-plan-version');
+      var subjectRole = String(row.getAttribute('data-subject-role') || '');
       return {
         employeeId: String(row.getAttribute('data-employee-id') || '').trim(),
         shouldEvaluate: checkbox && checkbox.checked ? '是' : '否',
-        evaluationVersion: checkbox && checkbox.checked && select ? String(select.value || 'A') : 'A'
+        evaluationVersion: checkbox && checkbox.checked
+          ? (subjectRole === '門市店主管' ? 'B' : (select ? String(select.value || 'A') : 'A'))
+          : 'A'
       };
     });
   }
@@ -4053,7 +4101,7 @@
     if (elements.monthlyPlanReopenButton) elements.monthlyPlanReopenButton.addEventListener('click', reopenMonthlyPlanV3_);
     if (elements.monthlyPlanPreviousButton) elements.monthlyPlanPreviousButton.addEventListener('click', function() { if (state.monthlyPlanPage > 1) { state.monthlyPlanPage -= 1; loadMonthlyPlanCenterV3_(); } });
     if (elements.monthlyPlanNextButton) elements.monthlyPlanNextButton.addEventListener('click', function() { var pages = Number(state.monthlyPlan && state.monthlyPlan.pagination && state.monthlyPlan.pagination.totalPages || 1); if (state.monthlyPlanPage < pages) { state.monthlyPlanPage += 1; loadMonthlyPlanCenterV3_(); } });
-    if (elements.monthlyPlanList) elements.monthlyPlanList.addEventListener('change', function(event) { var row = event.target && event.target.closest ? event.target.closest('[data-monthly-plan-row]') : null; if (!row) return; var checkbox = row.querySelector('.monthly-plan-evaluate'); var select = row.querySelector('.monthly-plan-version'); if (select) { select.disabled = !checkbox.checked || Boolean(state.monthlyPlan && state.monthlyPlan.locked); if (!checkbox.checked) select.value = 'A'; } });
+    if (elements.monthlyPlanList) elements.monthlyPlanList.addEventListener('change', function(event) { var row = event.target && event.target.closest ? event.target.closest('[data-monthly-plan-row]') : null; if (!row) return; var checkbox = row.querySelector('.monthly-plan-evaluate'); var select = row.querySelector('.monthly-plan-version'); var managerSubject = String(row.getAttribute('data-subject-role') || '') === '門市店主管'; if (select) { if (managerSubject) select.value = 'B'; else if (!checkbox.checked) select.value = 'A'; select.disabled = !checkbox.checked || Boolean(state.monthlyPlan && state.monthlyPlan.locked) || managerSubject; } });
     if (elements.pdfManagementAbnormalButton) elements.pdfManagementAbnormalButton.addEventListener('click', function() { applyPdfAbnormalFilterV3_('ABNORMAL'); });
   }
 
