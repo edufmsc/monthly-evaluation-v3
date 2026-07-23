@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var APP_BUILD = '7.9.0A-HF2-schema-plan-layout';
+  var APP_BUILD = '7.9.0A-HF3-schema-compat-admin-home';
   var IDLE_WARNING_MS = 4 * 60 * 1000;
   var IDLE_LOGOUT_MS = 5 * 60 * 1000;
   var IDLE_DRAFT_WAIT_MS = 8000;
@@ -2833,6 +2833,8 @@
   function adminSystemResultHtml(data) {
     var missing = Array.isArray(data.missingSheets) ? data.missingSheets : [];
     var performance = data.performanceOptimization || {};
+    var schema = data.evaluationIndexSchema || {};
+    var repairedFields = Array.isArray(data.repairedIndexFields) ? data.repairedIndexFields : [];
     var warnings = Array.isArray(performance.warnings) ? performance.warnings : [];
     var maintenance = performance.maintenance || {};
     return '<h3>系統健檢結果</h3><div class="admin-result-grid">' +
@@ -2844,9 +2846,11 @@
       metaItem('進行中案件索引', Number(performance.activeIndexCount || 0) + '筆') +
       metaItem('停留超過24小時', data.claimedOver24Hours) +
       metaItem('PDF失敗數', data.pdfFailedCount) +
+      metaItem('考核索引欄位', schema.valid ? '正常' : ('缺少：' + (schema.missingFields || []).join('、'))) +
+      metaItem('本次自動補欄', repairedFields.length ? repairedFields.join('、') : '0') +
       metaItem('日常整理排程', maintenance.installed ? '已安裝' : '未安裝') +
       metaItem('排程提醒', warnings.length ? warnings.join('、') : '0') +
-    '</div><p class="section-help">此健檢只讀取資料，不會修改、清空或刪除任何工作表內容。</p>';
+    '</div><p class="section-help">健檢僅在缺少必要索引欄位時將欄位補到考核紀錄表最右側；不會移動、覆寫、清空或刪除既有資料。</p>';
   }
   function routeRowHtml(label, person) {
     var item = person || {};
@@ -5344,7 +5348,8 @@
     }
     document.body.classList.toggle('system-management-active', tab === 'system');
     if (tab === 'system') {
-      switchSystemManagementPageV3_(resolveSystemManagementPageFromHashV3_(), { skipHash: true });
+      // 每次進入系統管理都先停留在管理首頁；只有使用者點選功能後才載入該頁資料。
+      switchSystemManagementPageV3_('home', { skipHash: false, skipLoad: true });
     }
   }
 
