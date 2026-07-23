@@ -576,16 +576,16 @@
     article.id = 'schemaManagementCard';
     article.className = 'card test-dispatch-card schema-management-card';
     article.innerHTML = '<div class="test-dispatch-heading management-card-heading"><div>' +
-      '<p class="step-label">介面控制試算表｜7.9.0A-HF8</p><h3>資料結構管理中心</h3>' +
+      '<p class="step-label">介面控制試算表｜7.9.0A-HF10.1</p><h3>資料結構管理中心</h3>' +
       '<p>教育中心可從介面檢查並安全補齊後台工作表；不需要直接打開Excel或Google試算表調整欄位。</p></div>' +
       '<button id="schemaManagementRefreshButton" class="secondary-button secondary-button--small management-refresh-button" type="button">重新檢查</button></div>' +
       '<div id="schemaManagementMessage" class="form-message" role="status" aria-live="polite" hidden></div>' +
       '<div id="schemaManagementSummary"></div>' +
       '<section class="detail-section schema-safety-section"><h4>安全規則</h4><div id="schemaSafetyRules" class="schema-safety-list"></div></section>' +
-      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>工作表健康狀態</h4><p class="section-help">自訂欄位會保留；靜態參考表內容不一致時只提示人工確認。</p></div><button id="schemaRepairPreviewButton" class="secondary-button secondary-button--small" type="button">預覽安全補齊</button></div><div id="schemaSheetList"></div></section>' +
+      '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>工作表健康狀態</h4><p class="section-help">自訂欄位會保留；已確認同義的舊欄名可安全標準化，其餘靜態參考表差異仍只提示人工確認。</p></div><button id="schemaRepairPreviewButton" class="secondary-button secondary-button--small" type="button">預覽安全補齊</button></div><div id="schemaSheetList"></div></section>' +
       '<section id="schemaRepairPanel" class="detail-section schema-repair-panel" hidden><div id="schemaRepairPreviewContent"></div>' +
         '<label class="field-group"><span>執行原因</span><textarea id="schemaRepairReason" rows="3" maxlength="300" placeholder="例如：依HF9版本安全補齊缺少工作表與欄位"></textarea></label>' +
-        '<label class="confirm-row"><input id="schemaRepairConfirm" type="checkbox"><span>我確認只建立缺少工作表、初始化空白表及在最右側補欄，不刪除、不清空、不改名、不重排既有資料。</span></label>' +
+        '<label class="confirm-row"><input id="schemaRepairConfirm" type="checkbox"><span>我確認只建立缺少工作表、初始化空白表、在最右側補欄，並將已確認同義的「副總簽核」更新為「營業處主管簽核」；不刪除、不清空、不移動既有資料。</span></label>' +
         '<div class="test-dispatch-actions"><button id="schemaRepairCancelButton" class="secondary-button" type="button">取消</button><button id="schemaRepairRunButton" class="primary-button" type="button" disabled><span class="button-label">執行安全補齊</span><span class="button-spinner" aria-hidden="true"></span></button></div>' +
         '<article id="schemaRepairResult" class="card admin-result-card" hidden></article></section>' +
       '<details class="detail-section"><summary>查看最近資料結構版本紀錄</summary><div id="schemaVersionList"></div></details>';
@@ -5545,8 +5545,8 @@
     var summary = source.summary || {};
     if (elements.schemaManagementSummary) elements.schemaManagementSummary.innerHTML = '<div class="admin-result-grid">' +
       archiveSummaryCardV3_('全部工作表', summary.total || 0, '目前定義的資料表') + archiveSummaryCardV3_('正常', summary.ok || 0, '必要欄位完整') +
-      archiveSummaryCardV3_('缺少／空白', Number(summary.missing || 0) + Number(summary.empty || 0), '可安全建立或初始化') + archiveSummaryCardV3_('需處理', summary.mismatch || 0, '缺欄或需人工確認') +
-      archiveSummaryCardV3_('缺少欄位', summary.missingHeaders || 0, '只會附加到最右側') + '</div><p class="section-help">資料結構版本：<strong>' + escapeHtml(source.schemaVersion || '') + '</strong>｜檢查時間：' + escapeHtml(source.generatedAt || '') + '</p>';
+      archiveSummaryCardV3_('缺少／空白', Number(summary.missing || 0) + Number(summary.empty || 0), '可安全建立或初始化') + archiveSummaryCardV3_('需處理', summary.mismatch || 0, '缺欄、欄名標準化或需人工確認') +
+      archiveSummaryCardV3_('缺少欄位', summary.missingHeaders || 0, '只會附加到最右側') + archiveSummaryCardV3_('待標準化欄名', summary.approvedRenames || 0, '只更新已確認同義的欄名') + '</div><p class="section-help">資料結構版本：<strong>' + escapeHtml(source.schemaVersion || '') + '</strong>｜檢查時間：' + escapeHtml(source.generatedAt || '') + '</p>';
     if (elements.schemaSafetyRules) elements.schemaSafetyRules.innerHTML = (source.safetyRules || []).map(function(rule) { return '<div><span aria-hidden="true">✓</span><p>' + escapeHtml(rule) + '</p></div>'; }).join('');
     renderSchemaSheetListV3_(source.sheets || []);
     if (elements.schemaVersionList) elements.schemaVersionList.innerHTML = (source.recentVersions || []).length ? '<div class="management-data-table-wrap"><table class="management-data-table"><thead><tr><th>版本</th><th>時間／執行人</th><th>原因</th><th>結果</th></tr></thead><tbody>' + source.recentVersions.map(function(item) { return '<tr><td data-label="版本"><strong>' + escapeHtml(item.version || '') + '</strong></td><td data-label="時間／執行人"><span>' + escapeHtml(item.executedAt || '') + '</span><small>' + escapeHtml(item.executedBy || '') + '</small></td><td data-label="原因">' + escapeHtml(item.action || '') + '</td><td data-label="結果">' + escapeHtml(item.summary || '') + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="section-help">尚無資料結構維護紀錄。</p>';
@@ -5556,7 +5556,7 @@
     if (!elements.schemaSheetList) return;
     elements.schemaSheetList.innerHTML = rows.length ? '<div class="management-data-table-wrap"><table class="management-data-table schema-table"><colgroup><col class="col-schema-name"><col class="col-schema-status"><col class="col-schema-size"><col class="col-schema-missing"><col class="col-schema-message"></colgroup><thead><tr><th>工作表</th><th>狀態</th><th>列／欄</th><th>缺少欄位</th><th>處理說明</th></tr></thead><tbody>' + rows.map(function(item) {
       var group = item.status === 'OK' ? 'SUCCESS' : (item.status === 'MISSING' || item.status === 'EMPTY' ? 'PENDING' : 'FAILED');
-      return '<tr><td data-label="工作表"><strong>' + escapeHtml(item.sheetName || '') + '</strong></td><td data-label="狀態"><span class="tag ' + backgroundStatusTagClassV3_(group) + '">' + escapeHtml(item.statusLabel || item.status || '') + '</span></td><td data-label="列／欄">' + Number(item.rows || 0) + '／' + Number(item.columns || 0) + '</td><td data-label="缺少欄位"><span>' + (item.missingHeaders && item.missingHeaders.length ? escapeHtml(item.missingHeaders.join('、')) : '—') + '</span>' + (item.extraHeaders && item.extraHeaders.length ? '<small>保留自訂欄位：' + escapeHtml(item.extraHeaders.slice(0, 5).join('、')) + (item.extraHeaders.length > 5 ? '…' : '') + '</small>' : '') + '</td><td data-label="處理說明">' + escapeHtml(item.message || '') + '</td></tr>';
+      return '<tr><td data-label="工作表"><strong>' + escapeHtml(item.sheetName || '') + '</strong></td><td data-label="狀態"><span class="tag ' + backgroundStatusTagClassV3_(group) + '">' + escapeHtml(item.statusLabel || item.status || '') + '</span></td><td data-label="列／欄">' + Number(item.rows || 0) + '／' + Number(item.columns || 0) + '</td><td data-label="缺少欄位"><span>' + (item.missingHeaders && item.missingHeaders.length ? escapeHtml(item.missingHeaders.join('、')) : '—') + '</span>' + (item.headerMigrations && item.headerMigrations.length ? '<small>欄名標準化：' + escapeHtml(item.headerMigrations.map(function(change) { return (change.from || '') + ' → ' + (change.to || ''); }).join('、')) + '</small>' : '') + (item.extraHeaders && item.extraHeaders.length ? '<small>保留自訂欄位：' + escapeHtml(item.extraHeaders.slice(0, 5).join('、')) + (item.extraHeaders.length > 5 ? '…' : '') + '</small>' : '') + '</td><td data-label="處理說明">' + escapeHtml(item.message || '') + '</td></tr>';
     }).join('') + '</tbody></table></div>' : '<p class="section-help">沒有可檢查的工作表定義。</p>';
   }
 
@@ -5583,7 +5583,7 @@
     var actions = data.actions || [];
     elements.schemaRepairPreviewContent.innerHTML = '<h4>安全補齊預覽</h4><p class="section-help">' + escapeHtml(data.message || '') + '</p>' +
       '<div class="schema-repair-summary"><span>可執行 <strong>' + Number(data.executableCount || 0) + '</strong>項</span><span>僅人工確認 <strong>' + Number(data.reviewOnlyCount || 0) + '</strong>項</span></div>' +
-      (actions.length ? '<div class="schema-action-list">' + actions.map(function(item) { return '<article><span class="tag ' + (item.action === 'REVIEW_ONLY' ? 'tag-warning' : 'tag-success') + '">' + escapeHtml(item.action === 'REVIEW_ONLY' ? '人工確認' : '安全補齊') + '</span><div><strong>' + escapeHtml(item.sheetName || '') + '</strong><p>' + escapeHtml(item.label || '') + '</p>' + (item.headers && item.headers.length ? '<small>' + escapeHtml(item.headers.join('、')) + '</small>' : '') + '</div></article>'; }).join('') + '</div>' : '<p class="section-help">目前沒有需要補齊的項目。</p>');
+      (actions.length ? '<div class="schema-action-list">' + actions.map(function(item) { return '<article><span class="tag ' + (item.action === 'REVIEW_ONLY' ? 'tag-warning' : 'tag-success') + '">' + escapeHtml(item.action === 'REVIEW_ONLY' ? '人工確認' : '安全補齊') + '</span><div><strong>' + escapeHtml(item.sheetName || '') + '</strong><p>' + escapeHtml(item.label || '') + '</p>' + (item.headers && item.headers.length ? '<small>' + escapeHtml(item.headers.join('、')) + '</small>' : '') + (item.migrations && item.migrations.length ? '<small>' + escapeHtml(item.migrations.map(function(change) { return (change.from || '') + ' → ' + (change.to || ''); }).join('、')) + '</small>' : '') + '</div></article>'; }).join('') + '</div>' : '<p class="section-help">目前沒有需要補齊的項目。</p>');
   }
 
   function updateSchemaRepairActionStateV3_() {
@@ -5606,10 +5606,10 @@
       var response = await window.V3WorkflowService.schemaRepair({ reason: String(elements.schemaRepairReason.value || '').trim(), confirmed: true }, window.V3ApiClient.createRequestId());
       var data = response.data || {};
       elements.schemaRepairResult.hidden = false;
-      elements.schemaRepairResult.innerHTML = '<strong>安全補齊完成</strong><p>' + escapeHtml(data.message || '') + '</p><div class="admin-result-grid">' + archiveSummaryCardV3_('新增工作表', data.result && data.result.created && data.result.created.length || 0, '只建立原本不存在的工作表') + archiveSummaryCardV3_('初始化空白表', data.result && data.result.initialized && data.result.initialized.length || 0, '既有資料表不會清空') + archiveSummaryCardV3_('安全補欄表數', data.result && data.result.appended && data.result.appended.length || 0, '欄位附加於最右側') + archiveSummaryCardV3_('略過', data.result && data.result.skipped && data.result.skipped.length || 0, '需人工確認或無定義') + '</div>';
+      elements.schemaRepairResult.innerHTML = '<strong>安全補齊完成</strong><p>' + escapeHtml(data.message || '') + '</p><div class="admin-result-grid">' + archiveSummaryCardV3_('新增工作表', data.result && data.result.created && data.result.created.length || 0, '只建立原本不存在的工作表') + archiveSummaryCardV3_('初始化空白表', data.result && data.result.initialized && data.result.initialized.length || 0, '既有資料表不會清空') + archiveSummaryCardV3_('安全補欄表數', data.result && data.result.appended && data.result.appended.length || 0, '欄位附加於最右側') + archiveSummaryCardV3_('標準化欄名', data.result && data.result.renamed && data.result.renamed.length || 0, '只更新核准的同義欄名') + archiveSummaryCardV3_('略過', data.result && data.result.skipped && data.result.skipped.length || 0, '需人工確認或無定義') + '</div>';
       state.schemaRepairPreview = null;
       await loadSchemaManagementCenterV3_({ quiet: true });
-      showGlobalNotice('success', '資料結構補齊完成', data.message || '未刪除或覆寫任何既有資料。', true);
+      showGlobalNotice('success', '資料結構補齊完成', data.message || '未刪除、清空或移動任何既有資料。', true);
     } catch (error) {
       elements.schemaRepairResult.hidden = false;
       elements.schemaRepairResult.innerHTML = '<strong>安全補齊失敗</strong><p>' + escapeHtml(friendlyError(error)) + '</p>';
