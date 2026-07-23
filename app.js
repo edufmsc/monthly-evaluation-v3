@@ -420,8 +420,8 @@
         '<article class="detail-section"><h4>區域平均排名</h4><div id="outcomeAreaRanking"></div></article></section>' +
       '<section class="detail-section"><h4>分數區間分布</h4><p class="section-help">點選區間可查看人員，再點選人員可開啟完整唯讀評分資料。</p><div id="outcomeScoreDistribution"></div></section>' +
       '<section class="detail-section"><h4>六項評核平均</h4><p class="section-help">點選評核項目可查看低分人員、該項分數與相關評語。</p><div id="outcomeItemGroups"></div></section>' +
-      '<section class="detail-section outcome-comparison-section"><div class="test-dispatch-heading"><div><h4>成果比較模式</h4><p class="section-help">可比較去年同期、兩個月份、兩個店別或兩個區域；不會新增或修改考核資料。</p></div></div>' +
-        '<form id="outcomeCompareForm" class="filter-grid outcome-compare-grid"><label class="field-group"><span>比較方式</span><select id="outcomeCompareMode"><option value="YEAR_OVER_YEAR">去年同期</option><option value="MONTHS">兩個月份</option><option value="STORES">兩個店別</option><option value="AREAS">兩個區域</option></select></label><label class="field-group"><span id="outcomeCompareLeftLabel">目前期間</span><input id="outcomeCompareLeft" type="text" placeholder="由上方期間自動帶入"></label><label class="field-group"><span id="outcomeCompareRightLabel">去年同期</span><input id="outcomeCompareRight" type="text" placeholder="系統自動計算"></label><div class="test-dispatch-actions"><button id="outcomeCompareButton" class="secondary-button" type="submit"><span class="button-label">產生比較</span><span class="button-spinner"></span></button></div></form><div id="outcomeCompareMessage" class="form-message" hidden></div><div id="outcomeCompareResult"></div>' +
+      '<section class="detail-section outcome-comparison-section"><div class="test-dispatch-heading"><div><h4>成果比較模式</h4><p class="section-help">可比較去年同期、兩個月份、兩個店別、兩個區域，或一次比較全部轄區；不會新增或修改考核資料。</p></div></div>' +
+        '<form id="outcomeCompareForm" class="filter-grid outcome-compare-grid"><label class="field-group"><span>比較方式</span><select id="outcomeCompareMode"><option value="YEAR_OVER_YEAR">去年同期</option><option value="MONTHS">兩個月份</option><option value="STORES">兩個店別</option><option value="AREAS">兩個區域</option><option value="ALL_AREAS">全部轄區比較</option></select></label><label class="field-group"><span id="outcomeCompareLeftLabel">目前期間</span><input id="outcomeCompareLeft" type="text" placeholder="由上方期間自動帶入"></label><label class="field-group"><span id="outcomeCompareRightLabel">去年同期</span><input id="outcomeCompareRight" type="text" placeholder="系統自動計算"></label><div class="test-dispatch-actions"><button id="outcomeCompareButton" class="secondary-button" type="submit"><span class="button-label">產生比較</span><span class="button-spinner"></span></button></div></form><div id="outcomeCompareMessage" class="form-message" hidden></div><div id="outcomeCompareResult"></div>' +
       '</section>' +
       '<section class="detail-section"><div class="test-dispatch-heading"><div><h4>已結案考核明細</h4><p class="section-help">每頁固定10筆；點選人員或按鈕可開啟完整唯讀評分資料。</p></div></div><div id="outcomeDetailList"></div>' +
         '<div id="outcomePagination" class="account-management-pagination" hidden><button id="outcomePreviousButton" class="secondary-button secondary-button--small" type="button">上一頁</button><strong id="outcomePageText">第1頁</strong><button id="outcomeNextButton" class="secondary-button secondary-button--small" type="button">下一頁</button></div></section>';
@@ -4668,6 +4668,7 @@
     if (elements.outcomeMetricList) elements.outcomeMetricList.addEventListener('click', function(event){var target=event.target&&event.target.closest?event.target.closest('[data-open-outcome-evaluation]'):null;if(target)openOutcomeEvaluationV3_(target.getAttribute('data-open-outcome-evaluation'));});
     if (elements.outcomeCompareMode) elements.outcomeCompareMode.addEventListener('change',updateOutcomeCompareFieldsV3_);
     if (elements.outcomeCompareForm) elements.outcomeCompareForm.addEventListener('submit',function(event){event.preventDefault();loadOutcomeComparisonV3_();});
+    if (elements.outcomeCompareResult) elements.outcomeCompareResult.addEventListener('click', handleOutcomeDrilldownClickV3_);
     if (elements.monthlyPlanSummary) elements.monthlyPlanSummary.addEventListener('click', function(event) { var button = event.target && event.target.closest ? event.target.closest('[data-management-scope="monthly-plan"]') : null; if (!button) return; var metric = button.getAttribute('data-management-metric'); elements.monthlyPlanViewMode.value = metric; state.monthlyPlanPage = 1; loadMonthlyPlanCenterV3_({ quiet: true }); });
     if (elements.outcomeMetricCloseButton) elements.outcomeMetricCloseButton.addEventListener('click', closeOutcomeMetricV3_);
     if (elements.outcomeMetricOverlay) elements.outcomeMetricOverlay.addEventListener('click', function(event) { if (event.target === elements.outcomeMetricOverlay) closeOutcomeMetricV3_(); });
@@ -5623,6 +5624,26 @@
     return '<button type="button" class="management-metric-button" data-management-metric="' + escapeHtml(metric || '') + '" data-management-scope="' + escapeHtml(scope || '') + '"><span>' + escapeHtml(label || '') + '</span><strong>' + escapeHtml(value == null ? '0' : String(value)) + '</strong><small>點擊查看內容</small></button>';
   }
 
+  function normalizeOutcomeRowVersionV3_(row) {
+    var raw = String(row && (row.version || row.evaluationVersion || row.evaluationType) || '').trim().toUpperCase();
+    if (/^B(?:\b|[-_./]|$)/.test(raw) || raw.indexOf('店副理') !== -1 || raw.indexOf('進階') !== -1) return 'B';
+    return 'A';
+  }
+
+  function filterOutcomeRowsByVersionV3_(rows, version) {
+    var target = String(version || 'ALL').trim().toUpperCase();
+    var source = (rows || []).slice();
+    if (target !== 'A' && target !== 'B') return source;
+    return source.filter(function(row) { return normalizeOutcomeRowVersionV3_(row) === target; });
+  }
+
+  function outcomeVersionLabelV3_(version) {
+    var value = String(version || 'ALL').trim().toUpperCase();
+    if (value === 'A') return '一般月考核表';
+    if (value === 'B') return '店副理進階月考核表';
+    return '全部考核表';
+  }
+
   function renderOutcomeAnalysisV3_(data) {
     var summary = data.summary || {};
     if (elements.outcomeSummary) elements.outcomeSummary.innerHTML = '<div class="admin-result-grid management-metric-grid">' +
@@ -5648,11 +5669,15 @@
         return managementMetricButtonV3_(item.label || '', Number(item.count || 0), item.key || '', 'outcome');
       }).join('') + '</div>';
     }
-    var details = data.details || [];
+    var activeOutcomeVersion = String(data.filters && data.filters.evaluationVersion || (elements.outcomeVersion && elements.outcomeVersion.value) || 'ALL').toUpperCase();
+    var details = filterOutcomeRowsByVersionV3_(data.details || [], activeOutcomeVersion);
+    var detailTotal = Number(data.pagination && data.pagination.total || details.length);
+    if (activeOutcomeVersion === 'A' || activeOutcomeVersion === 'B') detailTotal = details.length;
+    var detailCaption = '<p class="section-help"><strong>目前顯示：' + escapeHtml(outcomeVersionLabelV3_(activeOutcomeVersion)) + '</strong>｜共' + detailTotal + '筆。上方選擇「全部」時，明細會同時列出一般與店副理進階考核。</p>';
     if (elements.outcomeDetailList) {
-      elements.outcomeDetailList.innerHTML = details.length ? '<div class="management-data-table-wrap"><table class="management-data-table outcome-detail-table"><colgroup><col class="col-outcome-month"><col class="col-outcome-person"><col class="col-outcome-score"><col class="col-outcome-no"></colgroup><thead><tr><th>月份／考核表</th><th>受評人／店別</th><th>分數</th><th>結案時間／考核單號</th></tr></thead><tbody>' + details.map(function(row) {
+      elements.outcomeDetailList.innerHTML = detailCaption + (details.length ? '<div class="management-data-table-wrap"><table class="management-data-table outcome-detail-table"><colgroup><col class="col-outcome-month"><col class="col-outcome-person"><col class="col-outcome-score"><col class="col-outcome-no"></colgroup><thead><tr><th>月份／考核表</th><th>受評人／店別</th><th>分數</th><th>結案時間／考核單號</th></tr></thead><tbody>' + details.map(function(row) {
         return '<tr class="outcome-open-row" tabindex="0" data-open-outcome-evaluation="' + escapeHtml(row.evaluationNo || '') + '"><td data-label="月份／考核表"><strong>' + escapeHtml(row.month || '') + '</strong><small>' + escapeHtml(row.evaluationType || '') + '</small></td><td data-label="受評人／店別"><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) + '</strong><small>' + escapeHtml(row.store || '') + '｜' + escapeHtml(row.area || '') + '</small></td><td data-label="分數"><strong>總分 ' + escapeHtml(row.score == null ? '—' : String(row.score)) + '</strong><small>教育中心 ' + escapeHtml(row.educationScore == null ? '—' : String(row.educationScore)) + '｜區主管 ' + escapeHtml(row.supervisorScore == null ? '—' : String(row.supervisorScore)) + '</small></td><td data-label="結案時間／考核單號"><span>' + escapeHtml(row.completedAt || '—') + '</span><small>' + escapeHtml(row.evaluationNo || '') + '</small><button type="button" class="secondary-button secondary-button--small outcome-open-button" data-open-outcome-evaluation="' + escapeHtml(row.evaluationNo || '') + '">查看完整評分</button></td></tr>';
-      }).join('') + '</tbody></table></div>' : '<p class="section-help">目前篩選範圍沒有已結案考核。</p>';
+      }).join('') + '</tbody></table></div>' : '<p class="section-help">目前篩選範圍沒有已結案考核。</p>');
       bindOutcomeEvaluationRowsV3_(elements.outcomeDetailList);
     }
     updateSimplePaginationV3_(elements.outcomePagination, elements.outcomePageText, elements.outcomePreviousButton, elements.outcomeNextButton, data.pagination || {});
@@ -5711,12 +5736,18 @@
   }
 
   function renderOutcomeMetricDetailsV3_(data) {
-    var rows = data.items || [];
+    var rows = (data.items || []).slice();
+    var pagination = data.pagination || {};
+    if (state.outcomeMetric === 'DRILLDOWN' && state.outcomeMetricContext && String(state.outcomeMetricContext.dimension || '').toUpperCase() === 'VERSION') {
+      var expectedVersion = String(state.outcomeMetricContext.value || 'A').toUpperCase() === 'B' ? 'B' : 'A';
+      rows = filterOutcomeRowsByVersionV3_(rows, expectedVersion);
+      pagination = { page: 1, pageSize: Math.max(1, rows.length), total: rows.length, totalPages: 1 };
+    }
     elements.outcomeMetricList.innerHTML = rows.length ? '<div class="management-data-table-wrap"><table class="management-data-table outcome-metric-table"><colgroup><col class="col-metric-month"><col class="col-metric-person"><col class="col-metric-score"></colgroup><thead><tr><th>月份／狀態</th><th>受評人／店別</th><th>分數／考核單號</th></tr></thead><tbody>' + rows.map(function(row) {
       return '<tr class="outcome-open-row" tabindex="0" data-open-outcome-evaluation="' + escapeHtml(row.evaluationNo || '') + '"><td data-label="月份／狀態"><strong>' + escapeHtml(row.month || '') + '</strong><small>' + escapeHtml(row.status || row.evaluationType || '') + '</small></td><td data-label="受評人／店別"><strong>' + escapeHtml(joinText(row.employeeId, row.employeeName)) + '</strong><small>' + escapeHtml(row.store || '') + '｜' + escapeHtml(row.area || '') + '</small>' + (row.itemName ? '<small class="outcome-item-comment"><b>' + escapeHtml(row.itemName) + '：' + escapeHtml(row.itemScore == null ? '—' : String(row.itemScore)) + '分</b>' + (row.itemComment ? '<br>' + escapeHtml(row.itemComment) : '') + '</small>' : '') + '</td><td data-label="分數／考核單號"><strong>總分：' + escapeHtml(row.score == null ? '尚未計算' : String(row.score)) + '</strong><small>' + escapeHtml(row.evaluationNo || '') + (row.completedAt ? '<br>' + escapeHtml(row.completedAt) : '') + '</small><button type="button" class="secondary-button secondary-button--small outcome-open-button" data-open-outcome-evaluation="' + escapeHtml(row.evaluationNo || '') + '">查看完整評分</button></td></tr>';
     }).join('') + '</tbody></table></div>' : '<p class="section-help">沒有符合此統計條件的資料。</p>';
     bindOutcomeEvaluationRowsV3_(elements.outcomeMetricList);
-    updateSimplePaginationV3_(elements.outcomeMetricPagination, elements.outcomeMetricPageText, elements.outcomeMetricPreviousButton, elements.outcomeMetricNextButton, data.pagination || {});
+    updateSimplePaginationV3_(elements.outcomeMetricPagination, elements.outcomeMetricPageText, elements.outcomeMetricPreviousButton, elements.outcomeMetricNextButton, pagination);
   }
 
   function bindOutcomeEvaluationRowsV3_(container) {
@@ -5768,14 +5799,15 @@
   function updateOutcomeCompareFieldsV3_() {
     if (!elements.outcomeCompareMode) return;
     var mode = elements.outcomeCompareMode.value;
-    var map = { YEAR_OVER_YEAR: ['目前期間', '去年同期'], MONTHS: ['月份A（如115/06）', '月份B（如115/07）'], STORES: ['店號A', '店號B'], AREAS: ['區域A', '區域B'] };
+    var map = { YEAR_OVER_YEAR: ['目前期間', '去年同期'], MONTHS: ['月份A（如115/06）', '月份B（如115/07）'], STORES: ['店號A', '店號B'], AREAS: ['區域A', '區域B'], ALL_AREAS: ['目前分析期間', '全部轄區'] };
     var labels = map[mode] || map.YEAR_OVER_YEAR;
     elements.outcomeCompareLeftLabel.textContent = labels[0];
     elements.outcomeCompareRightLabel.textContent = labels[1];
-    var auto = mode === 'YEAR_OVER_YEAR';
+    var auto = mode === 'YEAR_OVER_YEAR' || mode === 'ALL_AREAS';
     elements.outcomeCompareLeft.disabled = auto;
     elements.outcomeCompareRight.disabled = auto;
-    if (auto) { elements.outcomeCompareLeft.value = elements.outcomeStartMonth.value + '～' + elements.outcomeEndMonth.value; elements.outcomeCompareRight.value = '系統自動往前12個月'; }
+    if (mode === 'YEAR_OVER_YEAR') { elements.outcomeCompareLeft.value = elements.outcomeStartMonth.value + '～' + elements.outcomeEndMonth.value; elements.outcomeCompareRight.value = '系統自動往前12個月'; }
+    else if (mode === 'ALL_AREAS') { elements.outcomeCompareLeft.value = elements.outcomeStartMonth.value + '～' + elements.outcomeEndMonth.value; elements.outcomeCompareRight.value = '依目前考核表類型比較全部轄區'; }
     else { elements.outcomeCompareLeft.value = ''; elements.outcomeCompareRight.value = ''; }
   }
 
@@ -5799,6 +5831,12 @@
 
   function renderOutcomeComparisonV3_(data) {
     if (!elements.outcomeCompareResult) return;
+    if (String(data.mode || '').toUpperCase() === 'ALL_AREAS') {
+      var areaRows = data.areaComparison || [];
+      var versionLabel = outcomeVersionLabelV3_(data.evaluationVersion || 'ALL');
+      elements.outcomeCompareResult.innerHTML = '<p class="section-help"><strong>' + escapeHtml(data.periodLabel || '') + '｜' + escapeHtml(versionLabel) + '</strong>。依平均分數排序；點「查看明細」可下鑽該轄區考核資料。</p>' + (areaRows.length ? '<div class="management-data-table-wrap"><table class="management-data-table"><thead><tr><th>排名／轄區</th><th>完成筆數</th><th>平均分數</th><th>最高／最低</th><th>低於70分</th><th>操作</th></tr></thead><tbody>' + areaRows.map(function(row) { return '<tr><td data-label="排名／轄區"><strong>第' + Number(row.rank || 0) + '名｜' + escapeHtml(row.area || '') + '</strong></td><td data-label="完成筆數">' + Number(row.completedCount || 0) + '筆</td><td data-label="平均分數"><strong>' + Number(row.averageScore || 0).toFixed(1) + '</strong></td><td data-label="最高／最低">' + escapeHtml(row.highestScore == null ? '—' : String(row.highestScore)) + '／' + escapeHtml(row.lowestScore == null ? '—' : String(row.lowestScore)) + '</td><td data-label="低於70分">' + Number(row.below70Count || 0) + '筆</td><td data-label="操作"><button type="button" class="secondary-button secondary-button--small" data-outcome-dimension="AREA" data-outcome-value="' + escapeHtml(row.area || '') + '">查看明細</button></td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="section-help">目前期間沒有可比較的轄區資料。</p>');
+      return;
+    }
     var left = data.left || {}, right = data.right || {}, diff = data.difference || {};
     function signed(value) { var n = Number(value || 0); return (n > 0 ? '+' : '') + n; }
     var rankRows = (data.storeRankChanges || []).slice(0, 5).concat((data.areaRankChanges || []).slice(0, 5));
